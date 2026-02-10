@@ -45,8 +45,13 @@ impl Preview {
 
         match fs::read(path) {
             Ok(bytes) => {
-                let sample = &bytes[..bytes.len().min(512)];
-                if sample.iter().any(|&b| b == 0) {
+                // Check larger sample for non-text bytes (NUL, 0x01-0x07, DEL)
+                let sample = &bytes[..bytes.len().min(8192)];
+                let non_text = sample
+                    .iter()
+                    .filter(|&&b| b == 0 || b < 0x08 || b == 0x7f)
+                    .count();
+                if non_text > 0 {
                     return Preview {
                         lines: vec!["[Binary file]".into()],
                         scroll: 0,

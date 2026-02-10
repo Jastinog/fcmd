@@ -21,6 +21,8 @@ pub enum OpRecord {
     Renamed { from: PathBuf, to: PathBuf },
 }
 
+const MAX_UNDO: usize = 50;
+
 pub struct UndoStack {
     entries: Vec<Vec<OpRecord>>,
 }
@@ -33,6 +35,9 @@ impl UndoStack {
     pub fn push(&mut self, records: Vec<OpRecord>) {
         if !records.is_empty() {
             self.entries.push(records);
+            if self.entries.len() > MAX_UNDO {
+                self.entries.remove(0);
+            }
         }
     }
 
@@ -137,22 +142,26 @@ fn move_path_progress(
     let name = filename(src)?;
     let dst = resolve_conflict(dst_dir, &name);
     let src_size = path_size(src);
-    if fs::rename(src, &dst).is_ok() {
-        // Same filesystem rename — instant, credit all bytes
-        ctx.bytes_done += src_size;
-        ctx.report();
-    } else {
-        // Cross-filesystem: copy then remove
-        if src.is_dir() {
-            ctx.report();
-            copy_dir_progress(src, &dst, ctx)?;
-            fs::remove_dir_all(src)?;
-        } else {
-            fs::copy(src, &dst)?;
+    match fs::rename(src, &dst) {
+        Ok(()) => {
+            // Same filesystem rename — instant, credit all bytes
             ctx.bytes_done += src_size;
             ctx.report();
-            fs::remove_file(src)?;
         }
+        Err(ref e) if is_cross_device(e) => {
+            // Cross-device: copy then remove
+            if src.is_dir() {
+                ctx.report();
+                copy_dir_progress(src, &dst, ctx)?;
+                fs::remove_dir_all(src)?;
+            } else {
+                fs::copy(src, &dst)?;
+                ctx.bytes_done += src_size;
+                ctx.report();
+                fs::remove_file(src)?;
+            }
+        }
+        Err(e) => return Err(e),
     }
     Ok(OpRecord::Moved {
         src: src.into(),
@@ -221,14 +230,19 @@ pub fn delete_path(path: &Path) -> std::io::Result<OpRecord> {
     let trash = trash_dir()?;
     let name = filename(path)?;
     let trash_path = unique_trash_name(&trash, &name);
-    if fs::rename(path, &trash_path).is_err() {
-        if path.is_dir() {
-            copy_dir(path, &trash_path)?;
-            fs::remove_dir_all(path)?;
-        } else {
-            fs::copy(path, &trash_path)?;
-            fs::remove_file(path)?;
+    match fs::rename(path, &trash_path) {
+        Ok(()) => {}
+        Err(e) if is_cross_device(&e) => {
+            // Cross-device: copy to trash then remove original
+            if path.is_dir() {
+                copy_dir(path, &trash_path)?;
+                fs::remove_dir_all(path)?;
+            } else {
+                fs::copy(path, &trash_path)?;
+                fs::remove_file(path)?;
+            }
         }
+        Err(e) => return Err(e),
     }
     Ok(OpRecord::Deleted {
         original: path.into(),
@@ -363,4 +377,232 @@ fn unique_trash_name(trash: &Path, name: &str) -> PathBuf {
         .unwrap_or_default()
         .as_nanos();
     trash.join(format!("{ts}_{name}"))
+}
+
+/// Check if an IO error is EXDEV (cross-device link).
+fn is_cross_device(e: &std::io::Error) -> bool {
+    // EXDEV = 18 on Linux and macOS
+    e.raw_os_error() == Some(18)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::fs;
+
+    use std::sync::atomic::{AtomicU32, Ordering};
+    static TEST_COUNTER: AtomicU32 = AtomicU32::new(0);
+
+    fn tmp_dir() -> PathBuf {
+        let n = TEST_COUNTER.fetch_add(1, Ordering::Relaxed);
+        let dir = std::env::temp_dir().join(format!(
+            "fc_test_{}_{n}",
+            std::process::id()
+        ));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).unwrap();
+        dir
+    }
+
+    // --- UndoStack ---
+
+    #[test]
+    fn undo_stack_push_pop() {
+        let mut stack = UndoStack::new();
+        assert!(stack.pop().is_none());
+
+        stack.push(vec![OpRecord::Created {
+            path: PathBuf::from("/tmp/test"),
+        }]);
+        assert!(stack.pop().is_some());
+        assert!(stack.pop().is_none());
+    }
+
+    #[test]
+    fn undo_stack_ignores_empty() {
+        let mut stack = UndoStack::new();
+        stack.push(vec![]);
+        assert!(stack.pop().is_none());
+    }
+
+    #[test]
+    fn undo_stack_max_limit() {
+        let mut stack = UndoStack::new();
+        for i in 0..MAX_UNDO + 20 {
+            stack.push(vec![OpRecord::Created {
+                path: PathBuf::from(format!("/tmp/{i}")),
+            }]);
+        }
+        assert_eq!(stack.entries.len(), MAX_UNDO);
+    }
+
+    // --- resolve_conflict ---
+
+    #[test]
+    fn resolve_conflict_no_conflict() {
+        let dir = tmp_dir();
+        let result = resolve_conflict(&dir, "newfile.txt");
+        assert_eq!(result, dir.join("newfile.txt"));
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn resolve_conflict_with_existing() {
+        let dir = tmp_dir();
+        fs::write(dir.join("file.txt"), "").unwrap();
+        let result = resolve_conflict(&dir, "file.txt");
+        assert_eq!(result, dir.join("file_1.txt"));
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn resolve_conflict_multiple() {
+        let dir = tmp_dir();
+        fs::write(dir.join("file.txt"), "").unwrap();
+        fs::write(dir.join("file_1.txt"), "").unwrap();
+        fs::write(dir.join("file_2.txt"), "").unwrap();
+        let result = resolve_conflict(&dir, "file.txt");
+        assert_eq!(result, dir.join("file_3.txt"));
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn resolve_conflict_no_extension() {
+        let dir = tmp_dir();
+        fs::write(dir.join("Makefile"), "").unwrap();
+        let result = resolve_conflict(&dir, "Makefile");
+        assert_eq!(result, dir.join("Makefile_1"));
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    // --- mkdir, touch, rename ---
+
+    #[test]
+    fn mkdir_creates_directory() {
+        let dir = tmp_dir();
+        let rec = mkdir(&dir, "subdir").unwrap();
+        assert!(dir.join("subdir").is_dir());
+        match rec {
+            OpRecord::Created { path } => assert_eq!(path, dir.join("subdir")),
+            _ => panic!("expected Created"),
+        }
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn touch_creates_file() {
+        let dir = tmp_dir();
+        let rec = touch(&dir, "newfile").unwrap();
+        assert!(dir.join("newfile").is_file());
+        match rec {
+            OpRecord::Created { path } => assert_eq!(path, dir.join("newfile")),
+            _ => panic!("expected Created"),
+        }
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn touch_rejects_existing() {
+        let dir = tmp_dir();
+        fs::write(dir.join("exists"), "").unwrap();
+        let err = touch(&dir, "exists");
+        assert!(err.is_err());
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn rename_works() {
+        let dir = tmp_dir();
+        fs::write(dir.join("old"), "content").unwrap();
+        let rec = rename_path(&dir.join("old"), "new").unwrap();
+        assert!(!dir.join("old").exists());
+        assert!(dir.join("new").is_file());
+        match rec {
+            OpRecord::Renamed { from, to } => {
+                assert_eq!(from, dir.join("old"));
+                assert_eq!(to, dir.join("new"));
+            }
+            _ => panic!("expected Renamed"),
+        }
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn rename_rejects_existing_target() {
+        let dir = tmp_dir();
+        fs::write(dir.join("a"), "").unwrap();
+        fs::write(dir.join("b"), "").unwrap();
+        let err = rename_path(&dir.join("a"), "b");
+        assert!(err.is_err());
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    // --- undo ---
+
+    #[test]
+    fn undo_created_file() {
+        let dir = tmp_dir();
+        let path = dir.join("file");
+        fs::write(&path, "").unwrap();
+        let records = vec![OpRecord::Created { path: path.clone() }];
+        undo(&records).unwrap();
+        assert!(!path.exists());
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn undo_renamed() {
+        let dir = tmp_dir();
+        let from = dir.join("old");
+        let to = dir.join("new");
+        fs::write(&to, "content").unwrap();
+        let records = vec![OpRecord::Renamed {
+            from: from.clone(),
+            to: to.clone(),
+        }];
+        undo(&records).unwrap();
+        assert!(!to.exists());
+        assert!(from.is_file());
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    // --- copy_dir ---
+
+    #[test]
+    fn copy_dir_recursive() {
+        let dir = tmp_dir();
+        let src = dir.join("src");
+        let dst = dir.join("dst");
+        fs::create_dir_all(src.join("sub")).unwrap();
+        fs::write(src.join("a.txt"), "hello").unwrap();
+        fs::write(src.join("sub/b.txt"), "world").unwrap();
+
+        copy_dir(&src, &dst).unwrap();
+
+        assert!(dst.join("a.txt").is_file());
+        assert!(dst.join("sub/b.txt").is_file());
+        assert_eq!(fs::read_to_string(dst.join("a.txt")).unwrap(), "hello");
+        assert_eq!(fs::read_to_string(dst.join("sub/b.txt")).unwrap(), "world");
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    // --- path_size ---
+
+    #[test]
+    fn path_size_file() {
+        let dir = tmp_dir();
+        let file = dir.join("test.dat");
+        fs::write(&file, "12345").unwrap();
+        assert_eq!(path_size(&file), 5);
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn path_size_dir() {
+        let dir = tmp_dir();
+        fs::write(dir.join("a"), "123").unwrap();
+        fs::write(dir.join("b"), "45678").unwrap();
+        assert_eq!(path_size(&dir), 8);
+        let _ = fs::remove_dir_all(&dir);
+    }
 }

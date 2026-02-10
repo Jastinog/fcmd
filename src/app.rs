@@ -122,6 +122,10 @@ pub struct App {
     pub db: Option<crate::db::Db>,
     // Paste progress
     pub paste_progress: Option<PasteProgress>,
+    // Tree cache invalidation
+    pub tree_dirty: bool,
+    pub tree_last_path: Option<PathBuf>,
+    pub tree_last_hidden: bool,
 }
 
 impl App {
@@ -206,6 +210,9 @@ impl App {
             visual_marks,
             db,
             paste_progress: None,
+            tree_dirty: true,
+            tree_last_path: None,
+            tree_last_hidden: false,
         })
     }
 
@@ -281,78 +288,30 @@ impl App {
         }
 
         if let Some(pending) = self.pending_key.take() {
-            match (pending, key.code) {
-                ('g', KeyCode::Char('g')) => {
-                    self.active_panel_mut().go_top();
-                    return;
-                }
-                ('g', KeyCode::Char('t')) => {
-                    self.next_tab();
-                    return;
-                }
-                ('g', KeyCode::Char('T')) => {
-                    self.prev_tab();
-                    return;
-                }
-                ('d', KeyCode::Char('d')) => {
-                    self.request_delete();
-                    return;
-                }
-                ('y', KeyCode::Char('y')) => {
-                    self.yank_targeted();
-                    return;
-                }
-                ('y', KeyCode::Char('p')) => {
-                    self.yank_path();
-                    return;
-                }
-                ('\'', KeyCode::Char(c)) if c.is_ascii_lowercase() => {
-                    self.goto_mark(c);
-                    return;
-                }
-                ('s', KeyCode::Char('n')) => {
-                    self.set_sort(SortMode::Name);
-                    return;
-                }
-                ('s', KeyCode::Char('s')) => {
-                    self.set_sort(SortMode::Size);
-                    return;
-                }
-                ('s', KeyCode::Char('d')) => {
-                    self.set_sort(SortMode::Date);
-                    return;
-                }
-                ('s', KeyCode::Char('e')) => {
-                    self.set_sort(SortMode::Extension);
-                    return;
-                }
-                ('s', KeyCode::Char('r')) => {
-                    let rev = !self.active_panel().sort_reverse;
-                    self.active_panel_mut().sort_reverse = rev;
-                    let _ = self.active_panel_mut().load_dir();
-                    let arrow = if rev { "\u{2191}" } else { "\u{2193}" };
-                    let label = self.active_panel().sort_mode.label();
-                    self.status_message = format!("Sort: {label}{arrow}");
-                    return;
-                }
-                _ => {}
+            if self.handle_pending_sequence(pending, key) {
+                return;
             }
         }
+
+        let ctrl = key.modifiers.contains(KeyModifiers::CONTROL);
 
         match key.code {
             KeyCode::Char('q') => self.should_quit = true,
 
-            // Focus navigation (Ctrl+h/l)
-            KeyCode::Char('l') if key.modifiers.contains(KeyModifiers::CONTROL) => {
-                self.focus_next();
-            }
-            KeyCode::Char('h') if key.modifiers.contains(KeyModifiers::CONTROL) => {
-                self.focus_prev();
-            }
-
-            // Navigation
+            // Focus & navigation
+            KeyCode::Char('l') if ctrl => self.focus_next(),
+            KeyCode::Char('h') if ctrl => self.focus_prev(),
             KeyCode::Char('j') | KeyCode::Down => self.active_panel_mut().move_down(),
             KeyCode::Char('k') | KeyCode::Up => self.active_panel_mut().move_up(),
+            KeyCode::Char('G') => self.active_panel_mut().go_bottom(),
+            KeyCode::Char('d') if ctrl => {
+                let half = self.visible_height / 2;
+                self.active_panel_mut().page_down(half);
+            }
+            KeyCode::Char('u') if ctrl => {
+                let half = self.visible_height / 2;
+                self.active_panel_mut().page_up(half);
+            }
             KeyCode::Char('l') | KeyCode::Right | KeyCode::Enter => {
                 if let Err(e) = self.active_panel_mut().enter_selected() {
                     self.status_message = format!("Error: {e}");
@@ -363,104 +322,46 @@ impl App {
                     self.status_message = format!("Error: {e}");
                 }
             }
-
-            // Pending sequences
-            KeyCode::Char('g') => self.pending_key = Some('g'),
-            KeyCode::Char('G') => self.active_panel_mut().go_bottom(),
-            KeyCode::Char('d') if key.modifiers.contains(KeyModifiers::CONTROL) => {
-                let half = self.visible_height / 2;
-                self.active_panel_mut().page_down(half);
-            }
-            KeyCode::Char('u') if key.modifiers.contains(KeyModifiers::CONTROL) => {
-                let half = self.visible_height / 2;
-                self.active_panel_mut().page_up(half);
-            }
-            KeyCode::Char('d') => self.pending_key = Some('d'),
-            KeyCode::Char('y') => self.pending_key = Some('y'),
-
-            // Paste
-            KeyCode::Char('p') if key.modifiers.contains(KeyModifiers::CONTROL) => {
-                self.open_find();
-            }
-            KeyCode::Char('p') => self.paste(false),
-            KeyCode::Char('P') => self.paste(true),
-
-            // Undo
-            KeyCode::Char('u') => self.undo(),
-
-            // Mark toggle
-            KeyCode::Char(' ') => self.active_panel_mut().toggle_mark(),
-
-            // Visual mode
-            KeyCode::Char('v') | KeyCode::Char('V') => {
-                self.mode = Mode::Visual;
-                let sel = self.active_panel().selected;
-                self.active_panel_mut().visual_anchor = Some(sel);
-            }
-
-            // Search
-            KeyCode::Char('/') => {
-                self.search_saved_cursor = self.active_panel().selected;
-                self.search_query.clear();
-                self.mode = Mode::Search;
-            }
-            KeyCode::Char('n') => self.search_next(),
-            KeyCode::Char('N') => self.search_prev(),
-
-            // Visual mark toggle
-            KeyCode::Char('m') => self.toggle_visual_mark(),
-            // Bookmarks
-            KeyCode::Char('\'') => self.pending_key = Some('\''),
-
-            // Panel switch
-            KeyCode::Tab => self.tab_mut().switch_panel(),
-
-            // Home
             KeyCode::Char('~') => {
                 if let Err(e) = self.active_panel_mut().go_home() {
                     self.status_message = format!("Error: {e}");
                 }
             }
+            KeyCode::Tab => self.tab_mut().switch_panel(),
 
-            // Refresh
-            KeyCode::Char('r') if key.modifiers.contains(KeyModifiers::CONTROL) => {
-                if let Err(e) = self.active_panel_mut().load_dir() {
-                    self.status_message = format!("Refresh error: {e}");
-                }
-            }
+            // Pending key sequences
+            KeyCode::Char('g') => self.pending_key = Some('g'),
+            KeyCode::Char('d') => self.pending_key = Some('d'),
+            KeyCode::Char('y') => self.pending_key = Some('y'),
+            KeyCode::Char('s') => self.pending_key = Some('s'),
+            KeyCode::Char('\'') => self.pending_key = Some('\''),
 
-            // Toggle hidden files
-            KeyCode::Char('.') => {
-                let hidden = !self.active_panel().show_hidden;
-                let tab = self.tab_mut();
-                tab.left.show_hidden = hidden;
-                tab.right.show_hidden = hidden;
-                let _ = tab.left.load_dir();
-                let _ = tab.right.load_dir();
-                self.status_message = if hidden {
-                    "Hidden files: shown".into()
-                } else {
-                    "Hidden files: hidden".into()
-                };
-            }
+            // File operations
+            KeyCode::Char('p') if ctrl => self.open_find(),
+            KeyCode::Char('p') => self.paste(false),
+            KeyCode::Char('P') => self.paste(true),
+            KeyCode::Char('u') => self.undo(),
+            KeyCode::Char(' ') => self.active_panel_mut().toggle_mark(),
 
-            // Toggle preview
-            KeyCode::Char('w') => {
-                self.preview_mode = !self.preview_mode;
-            }
+            // Mode switches
+            KeyCode::Char('v') | KeyCode::Char('V') => self.enter_visual(),
+            KeyCode::Char('/') => self.enter_search(),
+            KeyCode::Char(':') => self.enter_command(),
+            KeyCode::Char('?') => self.mode = Mode::Help,
 
-            // Toggle tree
-            KeyCode::Char('t') => {
-                self.show_tree = !self.show_tree;
-                if !self.show_tree {
-                    self.tree_focused = false;
-                }
-            }
+            // Search navigation
+            KeyCode::Char('n') => self.search_next(),
+            KeyCode::Char('N') => self.search_prev(),
 
-            // Shell
-            KeyCode::Char('S') => {
-                self.pending_shell = Some(String::new());
-            }
+            // Marks
+            KeyCode::Char('m') => self.toggle_visual_mark(),
+
+            // Toggles & settings
+            KeyCode::Char('r') if ctrl => self.refresh_current_panel(),
+            KeyCode::Char('.') => self.toggle_hidden(),
+            KeyCode::Char('w') => self.preview_mode = !self.preview_mode,
+            KeyCode::Char('t') => self.toggle_tree(),
+            KeyCode::Char('S') => self.pending_shell = Some(String::new()),
 
             // Preview scroll
             KeyCode::Char('J') => {
@@ -474,22 +375,83 @@ impl App {
                 }
             }
 
-            // Sort pending
-            KeyCode::Char('s') => self.pending_key = Some('s'),
-
-            // Help
-            KeyCode::Char('?') => {
-                self.mode = Mode::Help;
-            }
-
-            // Command mode
-            KeyCode::Char(':') => {
-                self.mode = Mode::Command;
-                self.command_input.clear();
-            }
-
             _ => {}
         }
+    }
+
+    /// Handle two-key sequences (gg, dd, yy, etc). Returns true if consumed.
+    fn handle_pending_sequence(&mut self, pending: char, key: KeyEvent) -> bool {
+        match (pending, key.code) {
+            ('g', KeyCode::Char('g')) => self.active_panel_mut().go_top(),
+            ('g', KeyCode::Char('t')) => self.next_tab(),
+            ('g', KeyCode::Char('T')) => self.prev_tab(),
+            ('d', KeyCode::Char('d')) => self.request_delete(),
+            ('y', KeyCode::Char('y')) => self.yank_targeted(),
+            ('y', KeyCode::Char('p')) => self.yank_path(),
+            ('\'', KeyCode::Char(c)) if c.is_ascii_lowercase() => self.goto_mark(c),
+            ('s', KeyCode::Char('n')) => self.set_sort(SortMode::Name),
+            ('s', KeyCode::Char('s')) => self.set_sort(SortMode::Size),
+            ('s', KeyCode::Char('d')) => self.set_sort(SortMode::Date),
+            ('s', KeyCode::Char('e')) => self.set_sort(SortMode::Extension),
+            ('s', KeyCode::Char('r')) => self.toggle_sort_reverse(),
+            _ => return false,
+        }
+        true
+    }
+
+    fn enter_visual(&mut self) {
+        self.mode = Mode::Visual;
+        let sel = self.active_panel().selected;
+        self.active_panel_mut().visual_anchor = Some(sel);
+    }
+
+    fn enter_search(&mut self) {
+        self.search_saved_cursor = self.active_panel().selected;
+        self.search_query.clear();
+        self.mode = Mode::Search;
+    }
+
+    fn enter_command(&mut self) {
+        self.mode = Mode::Command;
+        self.command_input.clear();
+    }
+
+    fn refresh_current_panel(&mut self) {
+        if let Err(e) = self.active_panel_mut().load_dir() {
+            self.status_message = format!("Refresh error: {e}");
+        }
+        self.tree_dirty = true;
+    }
+
+    fn toggle_hidden(&mut self) {
+        let hidden = !self.active_panel().show_hidden;
+        let tab = self.tab_mut();
+        tab.left.show_hidden = hidden;
+        tab.right.show_hidden = hidden;
+        let _ = tab.left.load_dir();
+        let _ = tab.right.load_dir();
+        self.tree_dirty = true;
+        self.status_message = if hidden {
+            "Hidden files: shown".into()
+        } else {
+            "Hidden files: hidden".into()
+        };
+    }
+
+    fn toggle_tree(&mut self) {
+        self.show_tree = !self.show_tree;
+        if !self.show_tree {
+            self.tree_focused = false;
+        }
+    }
+
+    fn toggle_sort_reverse(&mut self) {
+        let rev = !self.active_panel().sort_reverse;
+        self.active_panel_mut().sort_reverse = rev;
+        let _ = self.active_panel_mut().load_dir();
+        let arrow = if rev { "\u{2191}" } else { "\u{2193}" };
+        let label = self.active_panel().sort_mode.label();
+        self.status_message = format!("Sort: {label}{arrow}");
     }
 
     // --- Tree input ---
@@ -1190,6 +1152,12 @@ impl App {
         });
     }
 
+    pub fn poll_find(&mut self) {
+        if let Some(ref mut fs) = self.find_state {
+            fs.poll_entries();
+        }
+    }
+
     pub fn poll_progress(&mut self) {
         let progress = match self.paste_progress.as_mut() {
             Some(p) => p,
@@ -1312,6 +1280,7 @@ impl App {
         let tab = self.tab_mut();
         let _ = tab.left.load_dir();
         let _ = tab.right.load_dir();
+        self.tree_dirty = true;
     }
 
     // --- Command mode ---

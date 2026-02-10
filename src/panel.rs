@@ -37,7 +37,7 @@ pub struct Panel {
     pub selected: usize,
     pub offset: usize,
     pub visual_anchor: Option<usize>,
-    pub marked: HashSet<usize>,
+    pub marked: HashSet<PathBuf>,
     pub sort_mode: SortMode,
     pub sort_reverse: bool,
     pub show_hidden: bool,
@@ -62,7 +62,6 @@ impl Panel {
 
     pub fn load_dir(&mut self) -> std::io::Result<()> {
         self.entries.clear();
-        self.marked.clear();
 
         if let Some(parent) = self.path.parent() {
             self.entries.push(FileEntry {
@@ -189,6 +188,7 @@ impl Panel {
                 self.path = new_path;
                 self.selected = 0;
                 self.offset = 0;
+                self.marked.clear();
                 self.load_dir()?;
                 return Ok(true);
             }
@@ -202,6 +202,7 @@ impl Panel {
             self.path = parent;
             self.selected = 0;
             self.offset = 0;
+            self.marked.clear();
             self.load_dir()?;
 
             if let Some(name) = old_name {
@@ -219,6 +220,7 @@ impl Panel {
             self.path = home;
             self.selected = 0;
             self.offset = 0;
+            self.marked.clear();
             self.load_dir()?;
         }
         Ok(())
@@ -239,9 +241,9 @@ impl Panel {
     /// Filters out "..".
     pub fn targeted_paths(&self) -> Vec<PathBuf> {
         if !self.marked.is_empty() {
-            return self.marked.iter()
-                .filter_map(|&i| self.entries.get(i))
-                .filter(|e| e.name != "..")
+            return self.entries
+                .iter()
+                .filter(|e| e.name != ".." && self.marked.contains(&e.path))
                 .map(|e| e.path.clone())
                 .collect();
         }
@@ -262,9 +264,9 @@ impl Panel {
     /// Number of targeted entries (for status display).
     pub fn targeted_count(&self) -> usize {
         if !self.marked.is_empty() {
-            return self.marked.iter()
-                .filter_map(|&i| self.entries.get(i))
-                .filter(|e| e.name != "..")
+            return self.entries
+                .iter()
+                .filter(|e| e.name != ".." && self.marked.contains(&e.path))
                 .count();
         }
         match self.visual_range() {
@@ -284,9 +286,12 @@ impl Panel {
 
     /// Toggle mark on current entry and move cursor down.
     pub fn toggle_mark(&mut self) {
-        if self.entries.get(self.selected).is_some_and(|e| e.name != "..") {
-            if !self.marked.remove(&self.selected) {
-                self.marked.insert(self.selected);
+        if let Some(entry) = self.entries.get(self.selected) {
+            if entry.name != ".." {
+                let path = entry.path.clone();
+                if !self.marked.remove(&path) {
+                    self.marked.insert(path);
+                }
             }
         }
         self.move_down();

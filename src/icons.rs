@@ -28,13 +28,13 @@ pub fn file_icon(name: &str, is_dir: bool) -> &'static str {
         _ => {}
     }
 
-    // By extension
-    let ext = match name.rsplit_once('.') {
-        Some((_, e)) => e,
+    // By extension (case-insensitive)
+    let ext_lower = match name.rsplit_once('.') {
+        Some((_, e)) => e.to_ascii_lowercase(),
         None => return "\u{f016} ", //
     };
 
-    match ext {
+    match ext_lower.as_str() {
         "rs" => "\u{e7a8} ",                                           //
         "js" | "mjs" | "cjs" => "\u{e74e} ",                           //
         "ts" | "mts" | "cts" => "\u{e628} ",                           //

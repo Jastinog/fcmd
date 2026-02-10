@@ -58,6 +58,7 @@ fn run(
         }
 
         app.poll_progress();
+        app.poll_find();
 
         if let Some(cmd) = app.pending_shell.take() {
             run_shell(terminal, app, &cmd)?;

@@ -59,18 +59,23 @@ fn expand_dir(
     connector_state: &[bool],
     show_hidden: bool,
 ) {
-    let mut subdirs: Vec<(String, PathBuf)> = Vec::new();
+    let mut subdirs: Vec<(String, PathBuf, bool)> = Vec::new(); // (name, path, is_symlink)
     let mut files: Vec<(String, PathBuf)> = Vec::new();
 
     if let Ok(entries) = fs::read_dir(dir) {
         for entry in entries.flatten() {
             let is_dir = entry.metadata().map(|m| m.is_dir()).unwrap_or(false);
+            let is_symlink = entry
+                .path()
+                .symlink_metadata()
+                .map(|m| m.is_symlink())
+                .unwrap_or(false);
             let name = entry.file_name().to_string_lossy().into_owned();
             if !show_hidden && name.starts_with('.') {
                 continue;
             }
             if is_dir {
-                subdirs.push((name, entry.path()));
+                subdirs.push((name, entry.path(), is_symlink));
             } else {
                 files.push((name, entry.path()));
             }
@@ -88,7 +93,7 @@ fn expand_dir(
     let target = path_ahead.first();
     let mut idx = 0;
 
-    for (name, path) in &subdirs {
+    for (name, path, is_symlink) in &subdirs {
         idx += 1;
         let is_last = idx == total;
         let on_path = target.map(|t| t == name).unwrap_or(false);
@@ -106,7 +111,8 @@ fn expand_dir(
             depth: connector_state.len() + 1,
         });
 
-        if on_path {
+        // Expand on-path dirs, but skip symlinks to prevent cycles
+        if on_path && !is_symlink {
             let mut next_connectors = connector_state.to_vec();
             next_connectors.push(!is_last);
             if path_ahead.len() > 1 {

@@ -115,9 +115,19 @@ pub fn render(f: &mut Frame, app: &mut App) {
         fs.adjust_scroll(inner_h);
     }
 
-    // Rebuild tree data and render sidebar
+    // Rebuild tree data only when needed
     if app.show_tree {
-        app.rebuild_tree();
+        let current_path = app.tab().active_panel().path.clone();
+        let current_hidden = app.tab().active_panel().show_hidden;
+        let needs_rebuild = app.tree_dirty
+            || app.tree_last_path.as_ref() != Some(&current_path)
+            || app.tree_last_hidden != current_hidden;
+        if needs_rebuild {
+            app.rebuild_tree();
+            app.tree_last_path = Some(current_path);
+            app.tree_last_hidden = current_hidden;
+            app.tree_dirty = false;
+        }
         // If not focused, auto-position cursor on current dir
         if !app.tree_focused {
             if let Some(idx) = app.tree_data.iter().position(|l| l.is_current) {
@@ -322,7 +332,7 @@ fn render_panel(
             let in_visual = visual_range
                 .map(|(lo, hi)| i >= lo && i <= hi)
                 .unwrap_or(false);
-            let is_marked = panel.marked.contains(&i);
+            let is_marked = panel.marked.contains(&entry.path);
 
             let is_cursor = i == panel.selected;
             let is_active_cursor = is_cursor && is_active;
@@ -673,39 +683,7 @@ fn render_status(f: &mut Frame, app: &App, area: Rect) {
         Style::default().fg(mode_bg).bg(BG_LIGHT),
     );
 
-    // ── Info segment ────────────────
-    let info_text = if !app.status_message.is_empty() {
-        format!(" {} ", app.status_message)
-    } else if app.mode == Mode::Visual {
-        let count = panel.targeted_count();
-        format!("  {count} selected ")
-    } else if !panel.marked.is_empty() {
-        let count = panel.marked.len();
-        format!("  {count} marked ")
-    } else {
-        let file_count = panel.entries.iter().filter(|e| !e.is_dir).count();
-        let dir_count = panel
-            .entries
-            .iter()
-            .filter(|e| e.is_dir && e.name != "..")
-            .count();
-        let selected_name = panel
-            .selected_entry()
-            .map(|e| e.name.as_str())
-            .unwrap_or("");
-        format!(" {selected_name} \u{2502} {file_count} files, {dir_count} dirs ")
-    };
-
-    let info_span = Span::styled(
-        info_text.clone(),
-        Style::default().fg(FG).bg(BG_LIGHT),
-    );
-    let info_sep = Span::styled(
-        SEP_RIGHT,
-        Style::default().fg(BG_LIGHT).bg(STATUS_BG),
-    );
-
-    // ── Right side segments (built right-to-left) ────────────────
+    // ── Right side segments (built first to compute width) ────────────────
     let mut right_parts: Vec<(String, Color, Color)> = Vec::new();
 
     // Position segment (rightmost)
@@ -772,9 +750,59 @@ fn render_status(f: &mut Frame, app: &App, area: Rect) {
         ));
     }
 
-    // Calculate widths
-    let left_used: usize = mode_str.len() + 2 + 1 + info_text.len() + 1;
     let right_used: usize = right_spans.iter().map(|s| s.content.chars().count()).sum();
+
+    // ── Info segment (capped so right segments stay fixed) ────────────────
+    let info_text = if !app.status_message.is_empty() {
+        format!(" {} ", app.status_message)
+    } else if app.mode == Mode::Visual {
+        let count = panel.targeted_count();
+        format!("  {count} selected ")
+    } else if !panel.marked.is_empty() {
+        let count = panel.marked.len();
+        format!("  {count} marked ")
+    } else {
+        let file_count = panel.entries.iter().filter(|e| !e.is_dir).count();
+        let dir_count = panel
+            .entries
+            .iter()
+            .filter(|e| e.is_dir && e.name != "..")
+            .count();
+        let selected_name = panel
+            .selected_entry()
+            .map(|e| e.name.as_str())
+            .unwrap_or("");
+        format!(" {selected_name} \u{2502} {file_count} files, {dir_count} dirs ")
+    };
+
+    // Cap info width so right segments always stay at the right edge
+    let mode_width = mode_str.len() + 2 + 1; // " MODE " + SEP_RIGHT
+    let info_sep_width = 1;
+    let max_info = width.saturating_sub(mode_width + info_sep_width + right_used);
+
+    let info_chars: Vec<char> = info_text.chars().collect();
+    let info_display = if info_chars.len() > max_info {
+        if max_info > 1 {
+            let truncated: String = info_chars[..max_info - 1].iter().collect();
+            format!("{truncated}\u{2026}")
+        } else {
+            String::new()
+        }
+    } else {
+        info_text
+    };
+
+    let info_span = Span::styled(
+        info_display.clone(),
+        Style::default().fg(FG).bg(BG_LIGHT),
+    );
+    let info_sep = Span::styled(
+        SEP_RIGHT,
+        Style::default().fg(BG_LIGHT).bg(STATUS_BG),
+    );
+
+    // Calculate fill to push right segments to the edge
+    let left_used: usize = mode_width + info_display.chars().count() + info_sep_width;
     let fill = width.saturating_sub(left_used + right_used);
 
     let mut all_spans = vec![mode_span, mode_sep, info_span, info_sep];
@@ -928,8 +956,9 @@ fn render_find(f: &mut Frame, fs: &FindState, area: Rect) {
     let popup = centered_rect(60, 70, area);
     f.render_widget(Clear, popup);
 
+    let walk_indicator = if fs.walking { "\u{2026}" } else { "" };
     let title = format!(
-        "  Find ({}/{}) ",
+        "  Find ({}/{}{walk_indicator}) ",
         fs.filtered_count(),
         fs.total_count()
     );

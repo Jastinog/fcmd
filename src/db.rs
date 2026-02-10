@@ -70,11 +70,13 @@ impl Db {
     // --- Session persistence ---
 
     pub fn save_session(&self, tabs: &[SavedTab], active_tab: usize) -> rusqlite::Result<()> {
-        self.conn.execute("DELETE FROM session_tabs", [])?;
-        self.conn.execute("DELETE FROM session_meta", [])?;
+        let tx = self.conn.unchecked_transaction()?;
+
+        tx.execute("DELETE FROM session_tabs", [])?;
+        tx.execute("DELETE FROM session_meta", [])?;
 
         for (i, tab) in tabs.iter().enumerate() {
-            self.conn.execute(
+            tx.execute(
                 "INSERT INTO session_tabs (idx, left_path, right_path, active_side) VALUES (?1, ?2, ?3, ?4)",
                 params![
                     i as i64,
@@ -85,11 +87,12 @@ impl Db {
             )?;
         }
 
-        self.conn.execute(
+        tx.execute(
             "INSERT INTO session_meta (key, value) VALUES ('active_tab', ?1)",
             params![active_tab.to_string()],
         )?;
 
+        tx.commit()?;
         Ok(())
     }
 
