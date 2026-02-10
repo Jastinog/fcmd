@@ -392,40 +392,73 @@ fn render_tree(f: &mut Frame, app: &App, area: Rect) {
         .map(|(i, line)| {
             let icon = if line.depth == 0 {
                 " "
-            } else if line.is_current || line.is_on_path {
-                "󰝰 "
+            } else if line.is_dir {
+                if line.is_current || line.is_on_path {
+                    "󰝰 "
+                } else {
+                    "\u{f07b} "
+                }
             } else {
-                "\u{f07b} "
-            };
-
-            let display = format!("{}{}{}", line.prefix, icon, line.name);
-
-            // Truncate to fit width
-            let chars: Vec<char> = display.chars().collect();
-            let text = if chars.len() > width {
-                let mut s: String = chars[..width.saturating_sub(1)].iter().collect();
-                s.push('\u{2026}');
-                s
-            } else {
-                display
+                file_icon(&line.name, false)
             };
 
             let is_cursor = i == app.tree_selected;
 
-            let style = if is_cursor && is_focused {
-                Style::default().fg(BG).bg(BLUE)
-            } else if is_cursor {
-                // Not focused but cursor position (current dir)
-                Style::default().fg(YELLOW)
-            } else if line.is_current {
-                Style::default().fg(YELLOW)
+            // Cursor row: uniform style for the whole line
+            if is_cursor && is_focused {
+                let full = format!("{}{}{}", line.prefix, icon, line.name);
+                let chars: Vec<char> = full.chars().collect();
+                let text = if chars.len() > width {
+                    let mut s: String = chars[..width.saturating_sub(1)].iter().collect();
+                    s.push('\u{2026}');
+                    s
+                } else {
+                    full
+                };
+                return ListItem::new(Line::from(Span::styled(
+                    text,
+                    Style::default().fg(BG).bg(BLUE),
+                )));
+            }
+
+            // Colors matching panels: dirs=DIR_COLOR, file icons=FG_DIM, file names=FILE_COLOR
+            let (icon_style, name_style) = if is_cursor || line.is_current {
+                let s = Style::default().fg(YELLOW);
+                (s, s)
             } else if line.is_on_path {
-                Style::default().fg(BLUE)
+                let s = Style::default().fg(DIR_COLOR);
+                (s, s)
+            } else if line.is_dir {
+                let s = Style::default().fg(DIR_COLOR);
+                (s, s)
             } else {
-                Style::default().fg(FG_DIM)
+                (
+                    Style::default().fg(FG_DIM),
+                    Style::default().fg(FILE_COLOR),
+                )
             };
 
-            ListItem::new(Line::from(Span::styled(text, style)))
+            // Truncate name if needed
+            let prefix_chars: usize = line.prefix.chars().count();
+            let icon_chars: usize = icon.chars().count();
+            let name_chars: usize = line.name.chars().count();
+            let total = prefix_chars + icon_chars + name_chars;
+
+            let name_display = if total > width && width > prefix_chars + icon_chars {
+                let avail = width - prefix_chars - icon_chars;
+                let chars: Vec<char> = line.name.chars().collect();
+                let mut s: String = chars[..avail.saturating_sub(1)].iter().collect();
+                s.push('\u{2026}');
+                s
+            } else {
+                line.name.clone()
+            };
+
+            ListItem::new(Line::from(vec![
+                Span::styled(&line.prefix, Style::default().fg(BORDER_INACTIVE)),
+                Span::styled(icon.to_string(), icon_style),
+                Span::styled(name_display, name_style),
+            ]))
         })
         .collect();
 
