@@ -1,3 +1,4 @@
+use std::collections::HashSet;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::time::SystemTime;
@@ -36,6 +37,7 @@ pub struct Panel {
     pub selected: usize,
     pub offset: usize,
     pub visual_anchor: Option<usize>,
+    pub marked: HashSet<usize>,
     pub sort_mode: SortMode,
     pub sort_reverse: bool,
     pub show_hidden: bool,
@@ -49,6 +51,7 @@ impl Panel {
             selected: 0,
             offset: 0,
             visual_anchor: None,
+            marked: HashSet::new(),
             sort_mode: SortMode::Name,
             sort_reverse: false,
             show_hidden: false,
@@ -59,6 +62,7 @@ impl Panel {
 
     pub fn load_dir(&mut self) -> std::io::Result<()> {
         self.entries.clear();
+        self.marked.clear();
 
         if let Some(parent) = self.path.parent() {
             self.entries.push(FileEntry {
@@ -231,9 +235,16 @@ impl Panel {
         })
     }
 
-    /// Paths of currently "targeted" entries: visual range or single selected.
+    /// Paths of currently "targeted" entries: marked > visual range > single selected.
     /// Filters out "..".
     pub fn targeted_paths(&self) -> Vec<PathBuf> {
+        if !self.marked.is_empty() {
+            return self.marked.iter()
+                .filter_map(|&i| self.entries.get(i))
+                .filter(|e| e.name != "..")
+                .map(|e| e.path.clone())
+                .collect();
+        }
         match self.visual_range() {
             Some((lo, hi)) => self.entries[lo..=hi]
                 .iter()
@@ -250,6 +261,12 @@ impl Panel {
 
     /// Number of targeted entries (for status display).
     pub fn targeted_count(&self) -> usize {
+        if !self.marked.is_empty() {
+            return self.marked.iter()
+                .filter_map(|&i| self.entries.get(i))
+                .filter(|e| e.name != "..")
+                .count();
+        }
         match self.visual_range() {
             Some((lo, hi)) => self.entries[lo..=hi]
                 .iter()
@@ -263,6 +280,16 @@ impl Panel {
                 }
             }
         }
+    }
+
+    /// Toggle mark on current entry and move cursor down.
+    pub fn toggle_mark(&mut self) {
+        if self.entries.get(self.selected).is_some_and(|e| e.name != "..") {
+            if !self.marked.remove(&self.selected) {
+                self.marked.insert(self.selected);
+            }
+        }
+        self.move_down();
     }
 
     /// Select entry by name after refresh.

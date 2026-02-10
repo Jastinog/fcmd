@@ -14,6 +14,7 @@ mod icons;
 mod ops;
 mod panel;
 mod preview;
+mod tree;
 mod ui;
 
 fn main() -> io::Result<()> {

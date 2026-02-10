@@ -82,12 +82,26 @@ pub fn render(f: &mut Frame, app: &mut App) {
         render_tab_bar(f, app, area);
     }
 
-    let panel_area = Layout::default()
-        .direction(Direction::Horizontal)
-        .constraints([Constraint::Percentage(50), Constraint::Percentage(50)])
-        .split(panel_chunk);
+    // Build horizontal layout: optional tree + panels (or panel + preview)
+    let (tree_area, panel_areas) = if app.show_tree {
+        let cols = Layout::default()
+            .direction(Direction::Horizontal)
+            .constraints([
+                Constraint::Percentage(20),
+                Constraint::Percentage(40),
+                Constraint::Percentage(40),
+            ])
+            .split(panel_chunk);
+        (Some(cols[0]), vec![cols[1], cols[2]])
+    } else {
+        let cols = Layout::default()
+            .direction(Direction::Horizontal)
+            .constraints([Constraint::Percentage(50), Constraint::Percentage(50)])
+            .split(panel_chunk);
+        (None, vec![cols[0], cols[1]])
+    };
 
-    let vis_h = panel_area[0].height.saturating_sub(2) as usize;
+    let vis_h = panel_areas[0].height.saturating_sub(2) as usize;
     app.visible_height = vis_h;
 
     let tab = app.tab_mut();
@@ -101,25 +115,56 @@ pub fn render(f: &mut Frame, app: &mut App) {
         fs.adjust_scroll(inner_h);
     }
 
+    // Rebuild tree data and render sidebar
+    if app.show_tree {
+        app.rebuild_tree();
+        // If not focused, auto-position cursor on current dir
+        if !app.tree_focused {
+            if let Some(idx) = app.tree_data.iter().position(|l| l.is_current) {
+                app.tree_selected = idx;
+            }
+        }
+    }
+
+    if let Some(area) = tree_area {
+        // Adjust tree scroll
+        let tree_vis_h = area.height.saturating_sub(2) as usize;
+        if tree_vis_h > 0 {
+            let focus_idx = app.tree_selected;
+            if focus_idx < app.tree_scroll {
+                app.tree_scroll = focus_idx;
+            } else if focus_idx >= app.tree_scroll + tree_vis_h {
+                app.tree_scroll = focus_idx - tree_vis_h + 1;
+            }
+        }
+        render_tree(f, app, area);
+    }
+
+    let panels_active = !app.tree_focused;
     let tab = app.tab();
     if app.preview_mode {
         match tab.active {
             PanelSide::Left => {
-                render_panel(f, &tab.left, panel_area[0], true);
-                render_preview(f, &app.preview, panel_area[1]);
+                render_panel(f, &tab.left, panel_areas[0], panels_active);
+                render_preview(f, &app.preview, panel_areas[1]);
             }
             PanelSide::Right => {
-                render_preview(f, &app.preview, panel_area[0]);
-                render_panel(f, &tab.right, panel_area[1], true);
+                render_preview(f, &app.preview, panel_areas[0]);
+                render_panel(f, &tab.right, panel_areas[1], panels_active);
             }
         }
     } else {
-        render_panel(f, &tab.left, panel_area[0], tab.active == PanelSide::Left);
+        render_panel(
+            f,
+            &tab.left,
+            panel_areas[0],
+            panels_active && tab.active == PanelSide::Left,
+        );
         render_panel(
             f,
             &tab.right,
-            panel_area[1],
-            tab.active == PanelSide::Right,
+            panel_areas[1],
+            panels_active && tab.active == PanelSide::Right,
         );
     }
     render_status(f, app, status_area);
@@ -259,6 +304,7 @@ fn render_panel(f: &mut Frame, panel: &Panel, area: Rect, is_active: bool) {
             let in_visual = visual_range
                 .map(|(lo, hi)| i >= lo && i <= hi)
                 .unwrap_or(false);
+            let is_marked = panel.marked.contains(&i);
 
             let is_cursor = i == panel.selected;
             let is_active_cursor = is_cursor && is_active;
@@ -271,6 +317,9 @@ fn render_panel(f: &mut Frame, panel: &Panel, area: Rect, is_active: bool) {
                 (base, base, base)
             } else if in_visual && is_active {
                 let base = Style::default().bg(MAGENTA).fg(BG);
+                (base, base, base)
+            } else if is_marked {
+                let base = Style::default().fg(GREEN);
                 (base, base, base)
             } else if is_cursor {
                 // Inactive panel cursor
@@ -302,6 +351,81 @@ fn render_panel(f: &mut Frame, panel: &Panel, area: Rect, is_active: bool) {
                 Span::styled(meta_text, meta_style),
             ]);
             ListItem::new(line)
+        })
+        .collect();
+
+    f.render_widget(List::new(items), inner);
+}
+
+// ── Tree sidebar ────────────────────────────────────────────────────
+
+fn render_tree(f: &mut Frame, app: &App, area: Rect) {
+    let is_focused = app.tree_focused;
+    let border_color = if is_focused {
+        BORDER_ACTIVE
+    } else {
+        BORDER_INACTIVE
+    };
+
+    let block = Block::default()
+        .borders(Borders::ALL)
+        .border_style(Style::default().fg(border_color))
+        .title(" 󰙅 Tree ")
+        .title_style(Style::default().fg(if is_focused { WHITE } else { CYAN }));
+
+    let inner = block.inner(area);
+    f.render_widget(block, area);
+
+    let visible = inner.height as usize;
+    let width = inner.width as usize;
+
+    if visible == 0 || width == 0 || app.tree_data.is_empty() {
+        return;
+    }
+
+    let items: Vec<ListItem> = app
+        .tree_data
+        .iter()
+        .enumerate()
+        .skip(app.tree_scroll)
+        .take(visible)
+        .map(|(i, line)| {
+            let icon = if line.depth == 0 {
+                " "
+            } else if line.is_current || line.is_on_path {
+                "󰝰 "
+            } else {
+                "\u{f07b} "
+            };
+
+            let display = format!("{}{}{}", line.prefix, icon, line.name);
+
+            // Truncate to fit width
+            let chars: Vec<char> = display.chars().collect();
+            let text = if chars.len() > width {
+                let mut s: String = chars[..width.saturating_sub(1)].iter().collect();
+                s.push('\u{2026}');
+                s
+            } else {
+                display
+            };
+
+            let is_cursor = i == app.tree_selected;
+
+            let style = if is_cursor && is_focused {
+                Style::default().fg(BG).bg(BLUE)
+            } else if is_cursor {
+                // Not focused but cursor position (current dir)
+                Style::default().fg(YELLOW)
+            } else if line.is_current {
+                Style::default().fg(YELLOW)
+            } else if line.is_on_path {
+                Style::default().fg(BLUE)
+            } else {
+                Style::default().fg(FG_DIM)
+            };
+
+            ListItem::new(Line::from(Span::styled(text, style)))
         })
         .collect();
 
@@ -420,12 +544,16 @@ fn render_status(f: &mut Frame, app: &App, area: Rect) {
     let width = area.width as usize;
 
     // ── Mode segment ────────────────
-    let (mode_str, mode_bg) = match app.mode {
-        Mode::Normal => ("NORMAL", GREEN),
-        Mode::Visual => ("VISUAL", MAGENTA),
-        Mode::Find => ("FIND", CYAN),
-        Mode::Help => ("HELP", CYAN),
-        _ => ("", FG_DIM),
+    let (mode_str, mode_bg) = if app.tree_focused && app.mode == Mode::Normal {
+        ("TREE", CYAN)
+    } else {
+        match app.mode {
+            Mode::Normal => ("NORMAL", GREEN),
+            Mode::Visual => ("VISUAL", MAGENTA),
+            Mode::Find => ("FIND", CYAN),
+            Mode::Help => ("HELP", CYAN),
+            _ => ("", FG_DIM),
+        }
     };
 
     let mode_span = Span::styled(
@@ -445,6 +573,9 @@ fn render_status(f: &mut Frame, app: &App, area: Rect) {
     } else if app.mode == Mode::Visual {
         let count = panel.targeted_count();
         format!("  {count} selected ")
+    } else if !panel.marked.is_empty() {
+        let count = panel.marked.len();
+        format!("  {count} marked ")
     } else {
         let file_count = panel.entries.iter().filter(|e| !e.is_dir).count();
         let dir_count = panel
@@ -603,6 +734,7 @@ fn render_help(f: &mut Frame, area: Rect) {
                 ("h/l", "Parent / Enter dir"),
                 ("gg/G", "Top / Bottom"),
                 ("Ctrl-d/u", "Half page down/up"),
+                ("Ctrl-l/h", "Focus right/left"),
                 ("Tab", "Switch panel"),
                 ("~", "Go home"),
             ],
@@ -631,6 +763,7 @@ fn render_help(f: &mut Frame, area: Rect) {
             "󰒓 Preview & Sort",
             &[
                 ("w", "Toggle preview"),
+                ("t", "Toggle tree sidebar"),
                 ("J/K", "Scroll preview"),
                 (".", "Toggle hidden files"),
                 ("sn/ss/sd/se", "Sort name/size/date/ext"),

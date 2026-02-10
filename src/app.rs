@@ -92,6 +92,13 @@ pub struct App {
     pub preview_mode: bool,
     pub preview: Option<Preview>,
     preview_path: Option<PathBuf>,
+    // Tree
+    pub show_tree: bool,
+    pub tree_focused: bool,
+    pub tree_selected: usize,
+    pub tree_scroll: usize,
+    pub start_dir: PathBuf,
+    pub tree_data: Vec<crate::tree::TreeLine>,
     // Shell
     pub pending_shell: Option<String>,
 }
@@ -100,7 +107,7 @@ impl App {
     pub fn new() -> std::io::Result<Self> {
         let cwd = std::env::current_dir()?;
         Ok(App {
-            tabs: vec![Tab::new(cwd)?],
+            tabs: vec![Tab::new(cwd.clone())?],
             active_tab: 0,
             mode: Mode::Normal,
             command_input: String::new(),
@@ -118,6 +125,12 @@ impl App {
             preview_mode: false,
             preview: None,
             preview_path: None,
+            show_tree: false,
+            tree_focused: false,
+            tree_selected: 0,
+            tree_scroll: 0,
+            start_dir: cwd,
+            tree_data: Vec::new(),
             pending_shell: None,
         })
     }
@@ -161,6 +174,12 @@ impl App {
     // --- Normal mode ---
 
     fn handle_normal(&mut self, key: KeyEvent) {
+        // Delegate to tree handler when tree is focused
+        if self.tree_focused && self.show_tree {
+            self.handle_tree_input(key);
+            return;
+        }
+
         if let Some(pending) = self.pending_key.take() {
             match (pending, key.code) {
                 ('g', KeyCode::Char('g')) => {
@@ -176,10 +195,6 @@ impl App {
                     return;
                 }
                 ('d', KeyCode::Char('d')) => {
-                    self.cut_targeted();
-                    return;
-                }
-                ('d', KeyCode::Char('D')) => {
                     self.request_delete();
                     return;
                 }
@@ -231,6 +246,14 @@ impl App {
         match key.code {
             KeyCode::Char('q') => self.should_quit = true,
 
+            // Focus navigation (Ctrl+h/l)
+            KeyCode::Char('l') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                self.focus_next();
+            }
+            KeyCode::Char('h') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                self.focus_prev();
+            }
+
             // Navigation
             KeyCode::Char('j') | KeyCode::Down => self.active_panel_mut().move_down(),
             KeyCode::Char('k') | KeyCode::Up => self.active_panel_mut().move_up(),
@@ -268,6 +291,9 @@ impl App {
 
             // Undo
             KeyCode::Char('u') => self.undo(),
+
+            // Mark toggle
+            KeyCode::Char(' ') => self.active_panel_mut().toggle_mark(),
 
             // Visual mode
             KeyCode::Char('v') | KeyCode::Char('V') => {
@@ -326,6 +352,14 @@ impl App {
                 self.preview_mode = !self.preview_mode;
             }
 
+            // Toggle tree
+            KeyCode::Char('t') => {
+                self.show_tree = !self.show_tree;
+                if !self.show_tree {
+                    self.tree_focused = false;
+                }
+            }
+
             // Shell
             KeyCode::Char('S') => {
                 self.pending_shell = Some(String::new());
@@ -358,6 +392,158 @@ impl App {
             }
 
             _ => {}
+        }
+    }
+
+    // --- Tree input ---
+
+    fn handle_tree_input(&mut self, key: KeyEvent) {
+        // Handle pending key
+        if let Some(pending) = self.pending_key.take() {
+            if pending == 'g' && key.code == KeyCode::Char('g') {
+                self.tree_selected = 0;
+                return;
+            }
+        }
+
+        let ctrl = key.modifiers.contains(KeyModifiers::CONTROL);
+
+        match key.code {
+            // Focus navigation
+            KeyCode::Char('l') if ctrl => self.focus_next(),
+            KeyCode::Char('h') if ctrl => {} // already leftmost
+
+            // Half-page scroll
+            KeyCode::Char('d') if ctrl => {
+                let half = self.visible_height / 2;
+                let max = self.tree_data.len().saturating_sub(1);
+                self.tree_selected = (self.tree_selected + half).min(max);
+            }
+            KeyCode::Char('u') if ctrl => {
+                let half = self.visible_height / 2;
+                self.tree_selected = self.tree_selected.saturating_sub(half);
+            }
+
+            // Tree cursor movement
+            KeyCode::Char('j') | KeyCode::Down => {
+                if self.tree_selected + 1 < self.tree_data.len() {
+                    self.tree_selected += 1;
+                }
+            }
+            KeyCode::Char('k') | KeyCode::Up => {
+                self.tree_selected = self.tree_selected.saturating_sub(1);
+            }
+            KeyCode::Char('g') => self.pending_key = Some('g'),
+            KeyCode::Char('G') => {
+                if !self.tree_data.is_empty() {
+                    self.tree_selected = self.tree_data.len() - 1;
+                }
+            }
+
+            // Enter directory in active panel
+            KeyCode::Enter | KeyCode::Char('l') | KeyCode::Right => {
+                self.tree_enter_selected();
+            }
+
+            // Go to parent node in tree
+            KeyCode::Char('h') | KeyCode::Left => {
+                self.tree_go_parent();
+            }
+
+            // Exit tree focus
+            KeyCode::Tab => {
+                self.tree_focused = false;
+            }
+
+            // Global keys
+            KeyCode::Char('q') => self.should_quit = true,
+            KeyCode::Char('t') => {
+                self.show_tree = false;
+                self.tree_focused = false;
+            }
+            KeyCode::Char('?') => self.mode = Mode::Help,
+            KeyCode::Char(':') => {
+                self.mode = Mode::Command;
+                self.command_input.clear();
+            }
+
+            _ => {}
+        }
+    }
+
+    fn tree_enter_selected(&mut self) {
+        if let Some(line) = self.tree_data.get(self.tree_selected) {
+            let path = line.path.clone();
+            if path.is_dir() {
+                let panel = self.active_panel_mut();
+                panel.path = path;
+                panel.selected = 0;
+                panel.offset = 0;
+                let _ = panel.load_dir();
+                // Rebuild tree and try to position cursor on current dir
+                self.rebuild_tree();
+                if let Some(idx) = self.tree_data.iter().position(|l| l.is_current) {
+                    self.tree_selected = idx;
+                }
+            }
+        }
+    }
+
+    fn tree_go_parent(&mut self) {
+        if let Some(line) = self.tree_data.get(self.tree_selected) {
+            if line.depth == 0 {
+                return;
+            }
+            let target_depth = line.depth - 1;
+            for i in (0..self.tree_selected).rev() {
+                if self.tree_data[i].depth == target_depth {
+                    self.tree_selected = i;
+                    return;
+                }
+            }
+        }
+    }
+
+    pub fn rebuild_tree(&mut self) {
+        let current = self.active_panel().path.clone();
+        let show_hidden = self.active_panel().show_hidden;
+        self.tree_data = crate::tree::build_tree(&self.start_dir, &current, show_hidden);
+        if self.tree_data.is_empty() {
+            self.tree_selected = 0;
+        } else if self.tree_selected >= self.tree_data.len() {
+            self.tree_selected = self.tree_data.len() - 1;
+        }
+    }
+
+    // --- Focus navigation ---
+
+    fn focus_next(&mut self) {
+        if self.tree_focused && self.show_tree {
+            // Tree → active panel
+            self.tree_focused = false;
+        } else {
+            let tab = self.tab_mut();
+            match tab.active {
+                PanelSide::Left => tab.active = PanelSide::Right,
+                PanelSide::Right => {} // already rightmost
+            }
+        }
+    }
+
+    fn focus_prev(&mut self) {
+        if self.tree_focused {
+            return; // already leftmost
+        }
+        let current_side = self.tab().active;
+        match current_side {
+            PanelSide::Right => {
+                self.tab_mut().active = PanelSide::Left;
+            }
+            PanelSide::Left => {
+                if self.show_tree {
+                    self.tree_focused = true;
+                }
+            }
         }
     }
 
