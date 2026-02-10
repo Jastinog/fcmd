@@ -143,15 +143,17 @@ pub fn render(f: &mut Frame, app: &mut App) {
     let panels_active = !app.tree_focused;
     let tab = app.tab();
     let vm = &app.visual_marks;
+    let left_phantoms = app.phantoms_for(&tab.left.path);
+    let right_phantoms = app.phantoms_for(&tab.right.path);
     if app.preview_mode {
         match tab.active {
             PanelSide::Left => {
-                render_panel(f, &tab.left, panel_areas[0], panels_active, vm);
+                render_panel(f, &tab.left, panel_areas[0], panels_active, vm, left_phantoms);
                 render_preview(f, &app.preview, panel_areas[1]);
             }
             PanelSide::Right => {
                 render_preview(f, &app.preview, panel_areas[0]);
-                render_panel(f, &tab.right, panel_areas[1], panels_active, vm);
+                render_panel(f, &tab.right, panel_areas[1], panels_active, vm, right_phantoms);
             }
         }
     } else {
@@ -161,6 +163,7 @@ pub fn render(f: &mut Frame, app: &mut App) {
             panel_areas[0],
             panels_active && tab.active == PanelSide::Left,
             vm,
+            left_phantoms,
         );
         render_panel(
             f,
@@ -168,6 +171,7 @@ pub fn render(f: &mut Frame, app: &mut App) {
             panel_areas[1],
             panels_active && tab.active == PanelSide::Right,
             vm,
+            right_phantoms,
         );
     }
     render_status(f, app, status_area);
@@ -244,6 +248,7 @@ fn render_panel(
     area: Rect,
     is_active: bool,
     visual_marks: &std::collections::HashSet<std::path::PathBuf>,
+    phantoms: &[crate::app::PhantomEntry],
 ) {
     let border_color = if is_active {
         BORDER_ACTIVE
@@ -253,8 +258,11 @@ fn render_panel(
 
     let path_str = panel.path.to_string_lossy();
     let max_title = area.width.saturating_sub(4) as usize;
-    let title = if path_str.len() > max_title {
-        format!("\u{2026}{}", &path_str[path_str.len() - max_title + 1..])
+    let path_chars: Vec<char> = path_str.chars().collect();
+    let title = if path_chars.len() > max_title {
+        let start = path_chars.len() - max_title + 1;
+        let tail: String = path_chars[start..].iter().collect();
+        format!("\u{2026}{tail}")
     } else {
         path_str.into_owned()
     };
@@ -278,7 +286,7 @@ fn render_panel(
 
     let visual_range = panel.visual_range();
 
-    let items: Vec<ListItem> = panel
+    let mut items: Vec<ListItem> = panel
         .entries
         .iter()
         .enumerate()
@@ -291,13 +299,13 @@ fn render_panel(
             } else {
                 entry.name.clone()
             };
-            let name_col = if display_name.len() > name_width {
-                format!(
-                    "{}\u{2026}",
-                    &display_name[..name_width.saturating_sub(1)]
-                )
+            let name_chars = display_name.chars().count();
+            let name_col = if name_chars > name_width {
+                let truncated: String = display_name.chars().take(name_width.saturating_sub(1)).collect();
+                format!("{truncated}\u{2026}")
             } else {
-                format!("{:<w$}", display_name, w = name_width)
+                let pad = name_width.saturating_sub(name_chars);
+                format!("{display_name}{}", " ".repeat(pad))
             };
 
             let size_str = if entry.is_dir {
@@ -384,6 +392,40 @@ fn render_panel(
             ListItem::new(line)
         })
         .collect();
+
+    // Phantom entries for in-progress paste
+    let real_count = items.len();
+    let remaining_slots = visible_height.saturating_sub(real_count);
+    if remaining_slots > 0 && !phantoms.is_empty() {
+        let ghost_style = Style::default().fg(FG_DIM);
+        for ph in phantoms.iter().take(remaining_slots) {
+            let icon = if ph.is_dir {
+                "\u{f07b} "
+            } else {
+                file_icon(&ph.name, false)
+            };
+            let display = if ph.is_dir {
+                format!("{}/", ph.name)
+            } else {
+                ph.name.clone()
+            };
+            let name_chars = display.chars().count();
+            let name_col = if name_chars > name_width {
+                let truncated: String = display.chars().take(name_width.saturating_sub(1)).collect();
+                format!("{truncated}\u{2026}")
+            } else {
+                let pad = name_width.saturating_sub(name_chars);
+                format!("{display}{}", " ".repeat(pad))
+            };
+            let line = Line::from(vec![
+                Span::styled("\u{25cc} ", ghost_style),
+                Span::styled(icon, ghost_style),
+                Span::styled(name_col, ghost_style),
+                Span::styled(" ".repeat(meta_width), ghost_style),
+            ]);
+            items.push(ListItem::new(line));
+        }
+    }
 
     f.render_widget(List::new(items), inner);
 }
@@ -528,10 +570,10 @@ fn render_preview(f: &mut Frame, preview: &Option<Preview>, area: Rect) {
             let line_num = i + p.scroll + 1;
             let num_width = 4;
             let max_content = width.saturating_sub(num_width + 2);
-            let content = if line.len() > max_content {
-                &line[..max_content]
+            let content: String = if line.chars().count() > max_content {
+                line.chars().take(max_content).collect()
             } else {
-                line.as_str()
+                line.clone()
             };
             Line::from(vec![
                 Span::styled(
@@ -944,11 +986,11 @@ fn render_find(f: &mut Frame, fs: &FindState, area: Rect) {
             };
 
             let max_display = width.saturating_sub(4 + icon.chars().count());
-            let truncated = if display.len() > max_display {
-                format!(
-                    "\u{2026}{}",
-                    &display[display.len() - max_display.saturating_sub(1)..]
-                )
+            let display_chars: Vec<char> = display.chars().collect();
+            let truncated = if display_chars.len() > max_display {
+                let start = display_chars.len() - max_display.saturating_sub(1);
+                let tail: String = display_chars[start..].iter().collect();
+                format!("\u{2026}{tail}")
             } else {
                 display
             };

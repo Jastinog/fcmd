@@ -64,6 +64,7 @@ fn run(
         }
 
         if app.should_quit {
+            app.save_session();
             return Ok(());
         }
     }

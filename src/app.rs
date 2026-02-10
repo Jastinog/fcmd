@@ -10,10 +10,17 @@ use crate::ops::{self, ProgressMsg, Register, RegisterOp, UndoStack};
 use crate::panel::{Panel, SortMode};
 use crate::preview::Preview;
 
+pub struct PhantomEntry {
+    pub name: String,
+    pub is_dir: bool,
+}
+
 pub struct PasteProgress {
     pub rx: mpsc::Receiver<ProgressMsg>,
     pub op: RegisterOp,
     pub started_at: Instant,
+    pub dst_dir: PathBuf,
+    pub phantoms: Vec<PhantomEntry>,
 }
 
 #[derive(PartialEq, Eq)]
@@ -132,9 +139,47 @@ impl App {
             }
         };
 
+        // Restore session from DB
+        let (tabs, active_tab) = if let Some(ref db) = db {
+            match db.load_session() {
+                Ok((saved, at)) if !saved.is_empty() => {
+                    let mut tabs = Vec::new();
+                    for st in &saved {
+                        let left_path = if st.left_path.is_dir() {
+                            st.left_path.clone()
+                        } else {
+                            cwd.clone()
+                        };
+                        let right_path = if st.right_path.is_dir() {
+                            st.right_path.clone()
+                        } else {
+                            cwd.clone()
+                        };
+                        let mut tab = Tab {
+                            left: Panel::new(left_path)?,
+                            right: Panel::new(right_path)?,
+                            active: if st.active_side == "right" {
+                                PanelSide::Right
+                            } else {
+                                PanelSide::Left
+                            },
+                        };
+                        let _ = tab.left.load_dir();
+                        let _ = tab.right.load_dir();
+                        tabs.push(tab);
+                    }
+                    let at = at.min(tabs.len().saturating_sub(1));
+                    (tabs, at)
+                }
+                _ => (vec![Tab::new(cwd.clone())?], 0),
+            }
+        } else {
+            (vec![Tab::new(cwd.clone())?], 0)
+        };
+
         Ok(App {
-            tabs: vec![Tab::new(cwd.clone())?],
-            active_tab: 0,
+            tabs,
+            active_tab,
             mode: Mode::Normal,
             command_input: String::new(),
             should_quit: false,
@@ -162,6 +207,32 @@ impl App {
             db,
             paste_progress: None,
         })
+    }
+
+    pub fn save_session(&self) {
+        let Some(ref db) = self.db else { return };
+        let tabs: Vec<crate::db::SavedTab> = self
+            .tabs
+            .iter()
+            .map(|t| crate::db::SavedTab {
+                left_path: t.left.path.clone(),
+                right_path: t.right.path.clone(),
+                active_side: match t.active {
+                    PanelSide::Left => "left".into(),
+                    PanelSide::Right => "right".into(),
+                },
+            })
+            .collect();
+        if let Err(e) = db.save_session(&tabs, self.active_tab) {
+            eprintln!("Warning: failed to save session: {e}");
+        }
+    }
+
+    pub fn phantoms_for(&self, dir: &std::path::Path) -> &[PhantomEntry] {
+        match &self.paste_progress {
+            Some(p) if p.dst_dir == dir => &p.phantoms,
+            _ => &[],
+        }
     }
 
     pub fn tab(&self) -> &Tab {
@@ -1089,8 +1160,19 @@ impl App {
             self.active_panel().path.clone()
         };
 
+        let phantoms: Vec<PhantomEntry> = paths
+            .iter()
+            .map(|p| PhantomEntry {
+                name: p
+                    .file_name()
+                    .map(|n| n.to_string_lossy().into_owned())
+                    .unwrap_or_default(),
+                is_dir: p.is_dir(),
+            })
+            .collect();
+
         let (tx, rx) = mpsc::channel();
-        ops::paste_in_background(paths, dst_dir, op, tx);
+        ops::paste_in_background(paths, dst_dir.clone(), op, tx);
 
         let verb = if op == RegisterOp::Yank {
             "Copying"
@@ -1103,6 +1185,8 @@ impl App {
             rx,
             op,
             started_at: Instant::now(),
+            dst_dir,
+            phantoms,
         });
     }
 
