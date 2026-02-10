@@ -142,15 +142,16 @@ pub fn render(f: &mut Frame, app: &mut App) {
 
     let panels_active = !app.tree_focused;
     let tab = app.tab();
+    let vm = &app.visual_marks;
     if app.preview_mode {
         match tab.active {
             PanelSide::Left => {
-                render_panel(f, &tab.left, panel_areas[0], panels_active);
+                render_panel(f, &tab.left, panel_areas[0], panels_active, vm);
                 render_preview(f, &app.preview, panel_areas[1]);
             }
             PanelSide::Right => {
                 render_preview(f, &app.preview, panel_areas[0]);
-                render_panel(f, &tab.right, panel_areas[1], panels_active);
+                render_panel(f, &tab.right, panel_areas[1], panels_active, vm);
             }
         }
     } else {
@@ -159,12 +160,14 @@ pub fn render(f: &mut Frame, app: &mut App) {
             &tab.left,
             panel_areas[0],
             panels_active && tab.active == PanelSide::Left,
+            vm,
         );
         render_panel(
             f,
             &tab.right,
             panel_areas[1],
             panels_active && tab.active == PanelSide::Right,
+            vm,
         );
     }
     render_status(f, app, status_area);
@@ -235,7 +238,13 @@ fn render_tab_bar(f: &mut Frame, app: &App, area: Rect) {
 
 // ── Panel ───────────────────────────────────────────────────────────
 
-fn render_panel(f: &mut Frame, panel: &Panel, area: Rect, is_active: bool) {
+fn render_panel(
+    f: &mut Frame,
+    panel: &Panel,
+    area: Rect,
+    is_active: bool,
+    visual_marks: &std::collections::HashSet<std::path::PathBuf>,
+) {
     let border_color = if is_active {
         BORDER_ACTIVE
     } else {
@@ -263,8 +272,9 @@ fn render_panel(f: &mut Frame, panel: &Panel, area: Rect, is_active: bool) {
     let inner_width = inner.width as usize;
 
     let icon_width = 2;
+    let sign_width = 2;
     let meta_width = 16;
-    let name_width = inner_width.saturating_sub(meta_width + icon_width);
+    let name_width = inner_width.saturating_sub(meta_width + icon_width + sign_width);
 
     let visual_range = panel.visual_range();
 
@@ -344,8 +354,29 @@ fn render_panel(f: &mut Frame, panel: &Panel, area: Rect, is_active: bool) {
                 (ic, nc, mc)
             };
 
+            let is_vm = visual_marks.contains(&entry.path);
+            let row_bg = if is_active_cursor {
+                Some(BLUE)
+            } else if in_visual && is_active {
+                Some(MAGENTA)
+            } else if is_cursor {
+                Some(CURSOR_LINE)
+            } else {
+                None
+            };
+            let sign_text = if is_vm { "● " } else { "  " };
+            let mut sign_style = if is_vm {
+                Style::default().fg(YELLOW)
+            } else {
+                Style::default()
+            };
+            if let Some(bg) = row_bg {
+                sign_style = sign_style.bg(bg);
+            }
+
             let meta_text = format!(" {size_str} {date_str}");
             let line = Line::from(vec![
+                Span::styled(sign_text, sign_style),
                 Span::styled(icon, icon_style),
                 Span::styled(name_col, name_style),
                 Span::styled(meta_text, meta_style),

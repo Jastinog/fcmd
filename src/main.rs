@@ -9,6 +9,7 @@ use crossterm::{
 use ratatui::{backend::CrosstermBackend, Terminal};
 
 mod app;
+mod db;
 mod find;
 mod icons;
 mod ops;
@@ -55,6 +56,8 @@ fn run(
                 _ => {}
             }
         }
+
+        app.poll_progress();
 
         if let Some(cmd) = app.pending_shell.take() {
             run_shell(terminal, app, &cmd)?;

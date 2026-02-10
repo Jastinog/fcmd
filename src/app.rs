@@ -1,12 +1,20 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
+use std::sync::mpsc;
+use std::time::Instant;
 
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
 use crate::find::FindState;
-use crate::ops::{self, Register, RegisterOp, UndoStack};
+use crate::ops::{self, ProgressMsg, Register, RegisterOp, UndoStack};
 use crate::panel::{Panel, SortMode};
 use crate::preview::Preview;
+
+pub struct PasteProgress {
+    pub rx: mpsc::Receiver<ProgressMsg>,
+    pub op: RegisterOp,
+    pub started_at: Instant,
+}
 
 #[derive(PartialEq, Eq)]
 pub enum Mode {
@@ -101,11 +109,29 @@ pub struct App {
     pub tree_data: Vec<crate::tree::TreeLine>,
     // Shell
     pub pending_shell: Option<String>,
+    // Visual marks (persistent colored dots)
+    pub visual_marks: HashSet<PathBuf>,
+    // Database
+    pub db: Option<crate::db::Db>,
+    // Paste progress
+    pub paste_progress: Option<PasteProgress>,
 }
 
 impl App {
     pub fn new() -> std::io::Result<Self> {
         let cwd = std::env::current_dir()?;
+
+        let (db, visual_marks) = match crate::db::Db::init() {
+            Ok(db) => {
+                let marks = db.load_visual_marks().unwrap_or_default();
+                (Some(db), marks)
+            }
+            Err(e) => {
+                eprintln!("Warning: DB init failed: {e}");
+                (None, HashSet::new())
+            }
+        };
+
         Ok(App {
             tabs: vec![Tab::new(cwd.clone())?],
             active_tab: 0,
@@ -132,6 +158,9 @@ impl App {
             start_dir: cwd,
             tree_data: Vec::new(),
             pending_shell: None,
+            visual_marks,
+            db,
+            paste_progress: None,
         })
     }
 
@@ -204,10 +233,6 @@ impl App {
                 }
                 ('y', KeyCode::Char('p')) => {
                     self.yank_path();
-                    return;
-                }
-                ('m', KeyCode::Char(c)) if c.is_ascii_lowercase() => {
-                    self.set_mark(c);
                     return;
                 }
                 ('\'', KeyCode::Char(c)) if c.is_ascii_lowercase() => {
@@ -311,8 +336,9 @@ impl App {
             KeyCode::Char('n') => self.search_next(),
             KeyCode::Char('N') => self.search_prev(),
 
-            // Marks
-            KeyCode::Char('m') => self.pending_key = Some('m'),
+            // Visual mark toggle
+            KeyCode::Char('m') => self.toggle_visual_mark(),
+            // Bookmarks
             KeyCode::Char('\'') => self.pending_key = Some('\''),
 
             // Panel switch
@@ -610,11 +636,7 @@ impl App {
                 self.yank_targeted();
                 self.exit_visual();
             }
-            KeyCode::Char('d') => {
-                self.cut_targeted();
-                self.exit_visual();
-            }
-            KeyCode::Char('D') => {
+            KeyCode::Char('d') | KeyCode::Char('D') => {
                 self.request_delete();
                 if self.mode == Mode::Visual {
                     self.exit_visual();
@@ -814,7 +836,38 @@ impl App {
         }
     }
 
-    // --- Marks ---
+    // --- Visual marks ---
+
+    fn toggle_visual_mark(&mut self) {
+        let Some(entry) = self.active_panel().selected_entry() else {
+            return;
+        };
+        if entry.name == ".." {
+            return;
+        }
+        let path = entry.path.clone();
+        let name = entry.name.clone();
+        if self.visual_marks.remove(&path) {
+            if let Some(ref db) = self.db {
+                if let Err(e) = db.remove_visual_mark(&path) {
+                    self.status_message = format!("Unmarked: {name} (db error: {e})");
+                    return;
+                }
+            }
+            self.status_message = format!("Unmarked: {name}");
+        } else {
+            if let Some(ref db) = self.db {
+                if let Err(e) = db.add_visual_mark(&path) {
+                    self.status_message = format!("Mark failed: {e}");
+                    return;
+                }
+            }
+            self.visual_marks.insert(path);
+            self.status_message = format!("Marked: {name}");
+        }
+    }
+
+    // --- Bookmarks ---
 
     fn set_mark(&mut self, c: char) {
         let path = self.active_panel().path.clone();
@@ -986,20 +1039,6 @@ impl App {
         self.status_message = format!("Yanked {n} item(s)");
     }
 
-    fn cut_targeted(&mut self) {
-        let paths = self.active_panel().targeted_paths();
-        if paths.is_empty() {
-            self.status_message = "Nothing to cut".into();
-            return;
-        }
-        let n = paths.len();
-        self.register = Some(Register {
-            paths,
-            op: RegisterOp::Cut,
-        });
-        self.status_message = format!("Cut {n} item(s) \u{2014} paste with p");
-    }
-
     fn request_delete(&mut self) {
         let paths = self.active_panel().targeted_paths();
         if paths.is_empty() {
@@ -1031,6 +1070,11 @@ impl App {
     }
 
     fn paste(&mut self, to_other_panel: bool) {
+        if self.paste_progress.is_some() {
+            self.status_message = "Operation in progress".into();
+            return;
+        }
+
         let (paths, op) = match &self.register {
             Some(r) => (r.paths.clone(), r.op),
             None => {
@@ -1045,43 +1089,127 @@ impl App {
             self.active_panel().path.clone()
         };
 
-        let mut records = Vec::new();
-        for src in &paths {
-            let result = match op {
-                RegisterOp::Yank => ops::copy_path(src, &dst_dir),
-                RegisterOp::Cut => {
-                    if src.parent().map_or(false, |p| p == dst_dir) {
-                        self.status_message = "Cannot move to same directory".into();
-                        continue;
-                    }
-                    ops::move_path(src, &dst_dir)
+        let (tx, rx) = mpsc::channel();
+        ops::paste_in_background(paths, dst_dir, op, tx);
+
+        let verb = if op == RegisterOp::Yank {
+            "Copying"
+        } else {
+            "Moving"
+        };
+        self.status_message = format!("{verb}...");
+
+        self.paste_progress = Some(PasteProgress {
+            rx,
+            op,
+            started_at: Instant::now(),
+        });
+    }
+
+    pub fn poll_progress(&mut self) {
+        let progress = match self.paste_progress.as_mut() {
+            Some(p) => p,
+            None => return,
+        };
+
+        // Drain all pending messages, keep the last Progress for display
+        let mut last_progress = None;
+        let mut finished = None;
+
+        loop {
+            match progress.rx.try_recv() {
+                Ok(msg @ ProgressMsg::Progress { .. }) => {
+                    last_progress = Some(msg);
                 }
-            };
-            match result {
-                Ok(rec) => records.push(rec),
-                Err(e) => {
-                    self.status_message = format!("Paste error: {e}");
-                    self.undo_stack.push(records);
-                    self.refresh_panels();
-                    return;
+                Ok(msg @ ProgressMsg::Finished { .. }) => {
+                    finished = Some(msg);
+                    break;
                 }
+                Err(_) => break,
             }
         }
 
-        let n = records.len();
-        let verb = if op == RegisterOp::Yank {
-            "Copied"
-        } else {
-            "Moved"
-        };
-        self.undo_stack.push(records);
-        self.status_message = format!("{verb} {n} item(s)");
+        // Update status from latest progress
+        if let Some(ProgressMsg::Progress {
+            bytes_done,
+            bytes_total,
+            item_index,
+            item_total,
+        }) = last_progress
+        {
+            let verb = if progress.op == RegisterOp::Yank {
+                "Copying"
+            } else {
+                "Moving"
+            };
 
-        if op == RegisterOp::Cut {
-            self.register = None;
+            let pct = if bytes_total > 0 {
+                (bytes_done as f64 / bytes_total as f64 * 100.0) as u8
+            } else {
+                0
+            };
+
+            let bar = progress_bar(pct, 20);
+
+            let elapsed = progress.started_at.elapsed();
+            let eta = if bytes_done > 0 && bytes_total > bytes_done {
+                let rate = bytes_done as f64 / elapsed.as_secs_f64();
+                let remaining_bytes = bytes_total - bytes_done;
+                let eta_secs = remaining_bytes as f64 / rate;
+                format!(
+                    " ETA {}",
+                    format_duration(std::time::Duration::from_secs_f64(eta_secs))
+                )
+            } else {
+                String::new()
+            };
+
+            let size_text = format!(
+                "{}/{}",
+                format_bytes(bytes_done),
+                format_bytes(bytes_total)
+            );
+
+            self.status_message = format!(
+                "{verb} {bar} {pct}% ({size_text}){eta} [{}/{}]",
+                item_index + 1,
+                item_total,
+            );
         }
 
-        self.refresh_panels();
+        // Handle finish
+        if let Some(ProgressMsg::Finished {
+            records,
+            error,
+            bytes_total,
+        }) = finished
+        {
+            let n = records.len();
+            let op = progress.op;
+            let elapsed = progress.started_at.elapsed();
+            self.undo_stack.push(records);
+
+            if let Some(err) = error {
+                self.status_message = format!("Paste error: {err}");
+            } else {
+                let verb = if op == RegisterOp::Yank {
+                    "Copied"
+                } else {
+                    "Moved"
+                };
+                let dur = format_duration(elapsed);
+                let size = format_bytes(bytes_total);
+                self.status_message =
+                    format!("{verb} {n} item(s), {size} in {dur}");
+            }
+
+            if op == RegisterOp::Cut {
+                self.register = None;
+            }
+
+            self.paste_progress = None;
+            self.refresh_panels();
+        }
     }
 
     fn undo(&mut self) {
@@ -1293,6 +1421,16 @@ impl App {
             "tabnext" | "tabn" => self.next_tab(),
             "tabprev" | "tabp" | "tabN" => self.prev_tab(),
 
+            "mark" => {
+                let c = arg
+                    .and_then(|a| a.chars().next())
+                    .filter(|c| c.is_ascii_lowercase());
+                match c {
+                    Some(c) => self.set_mark(c),
+                    None => self.status_message = "Usage: :mark <a-z>".into(),
+                }
+            }
+
             "marks" => {
                 if self.marks.is_empty() {
                     self.status_message = "No marks set".into();
@@ -1310,6 +1448,37 @@ impl App {
                 self.status_message = format!("Unknown command: :{cmd}");
             }
         }
+    }
+}
+
+fn format_duration(d: std::time::Duration) -> String {
+    let secs = d.as_secs();
+    if secs < 60 {
+        format!("{secs}s")
+    } else {
+        format!("{}m{:02}s", secs / 60, secs % 60)
+    }
+}
+
+fn progress_bar(pct: u8, width: usize) -> String {
+    let filled = (pct as usize * width / 100).min(width);
+    let empty = width - filled;
+    format!(
+        "\u{2503}{}\u{2591}{}\u{2503}",
+        "\u{2588}".repeat(filled),
+        "\u{2591}".repeat(empty),
+    )
+}
+
+fn format_bytes(b: u64) -> String {
+    if b < 1024 {
+        format!("{b}B")
+    } else if b < 1024 * 1024 {
+        format!("{:.1}K", b as f64 / 1024.0)
+    } else if b < 1024 * 1024 * 1024 {
+        format!("{:.1}M", b as f64 / (1024.0 * 1024.0))
+    } else {
+        format!("{:.1}G", b as f64 / (1024.0 * 1024.0 * 1024.0))
     }
 }
 
