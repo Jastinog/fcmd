@@ -474,13 +474,30 @@ impl App {
     fn tree_enter_selected(&mut self) {
         if let Some(line) = self.tree_data.get(self.tree_selected) {
             let path = line.path.clone();
-            if path.is_dir() {
+            let is_dir = line.is_dir;
+            if is_dir {
                 let panel = self.active_panel_mut();
                 panel.path = path;
                 panel.selected = 0;
                 panel.offset = 0;
                 let _ = panel.load_dir();
-                // Rebuild tree and try to position cursor on current dir
+                self.rebuild_tree();
+                if let Some(idx) = self.tree_data.iter().position(|l| l.is_current) {
+                    self.tree_selected = idx;
+                }
+            } else if let Some(parent) = path.parent() {
+                // File: navigate panel to parent dir and select the file
+                let file_name = path
+                    .file_name()
+                    .map(|n| n.to_string_lossy().into_owned());
+                let panel = self.active_panel_mut();
+                panel.path = parent.to_path_buf();
+                panel.selected = 0;
+                panel.offset = 0;
+                let _ = panel.load_dir();
+                if let Some(name) = file_name {
+                    panel.select_by_name(&name);
+                }
                 self.rebuild_tree();
                 if let Some(idx) = self.tree_data.iter().position(|l| l.is_current) {
                     self.tree_selected = idx;
@@ -492,6 +509,16 @@ impl App {
     fn tree_go_parent(&mut self) {
         if let Some(line) = self.tree_data.get(self.tree_selected) {
             if line.depth == 0 {
+                // At root — expand tree upward
+                if let Some(parent) = self.start_dir.parent().map(|p| p.to_path_buf()) {
+                    let old_root = self.start_dir.clone();
+                    self.start_dir = parent;
+                    self.rebuild_tree();
+                    // Position cursor on the old root node
+                    if let Some(idx) = self.tree_data.iter().position(|l| l.path == old_root) {
+                        self.tree_selected = idx;
+                    }
+                }
                 return;
             }
             let target_depth = line.depth - 1;
@@ -507,6 +534,14 @@ impl App {
     pub fn rebuild_tree(&mut self) {
         let current = self.active_panel().path.clone();
         let show_hidden = self.active_panel().show_hidden;
+        // Auto-expand root upward if panel navigated above start_dir
+        while !current.starts_with(&self.start_dir) {
+            if let Some(parent) = self.start_dir.parent().map(|p| p.to_path_buf()) {
+                self.start_dir = parent;
+            } else {
+                break;
+            }
+        }
         self.tree_data = crate::tree::build_tree(&self.start_dir, &current, show_hidden);
         if self.tree_data.is_empty() {
             self.tree_selected = 0;
