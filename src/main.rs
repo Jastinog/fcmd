@@ -10,6 +10,7 @@ use ratatui::{backend::CrosstermBackend, Terminal};
 
 mod app;
 mod find;
+mod icons;
 mod ops;
 mod panel;
 mod preview;
