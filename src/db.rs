@@ -73,7 +73,7 @@ impl Db {
         let tx = self.conn.unchecked_transaction()?;
 
         tx.execute("DELETE FROM session_tabs", [])?;
-        tx.execute("DELETE FROM session_meta", [])?;
+        tx.execute("DELETE FROM session_meta WHERE key != 'theme'", [])?;
 
         for (i, tab) in tabs.iter().enumerate() {
             tx.execute(

@@ -297,6 +297,18 @@ impl Panel {
         self.move_down();
     }
 
+    pub fn toggle_mark_up(&mut self) {
+        if let Some(entry) = self.entries.get(self.selected) {
+            if entry.name != ".." {
+                let path = entry.path.clone();
+                if !self.marked.remove(&path) {
+                    self.marked.insert(path);
+                }
+            }
+        }
+        self.move_up();
+    }
+
     /// Select entry by name after refresh.
     pub fn select_by_name(&mut self, name: &str) {
         if let Some(pos) = self.entries.iter().position(|e| e.name == name) {

@@ -170,6 +170,10 @@ pub fn render(f: &mut Frame, app: &mut App) {
     if let Some(ref fs) = app.find_state {
         render_find(f, fs, &app.theme, full_area);
     }
+
+    if let Some(hints) = app.which_key_hints() {
+        render_which_key(f, hints, app.pending_key.unwrap_or(' '), &app.theme, full_area);
+    }
 }
 
 // ── Tab bar ─────────────────────────────────────────────────────────
@@ -827,6 +831,64 @@ fn render_status_input(f: &mut Frame, area: Rect, prefix: &str, input: &str, acc
 }
 
 // ── Help overlay ────────────────────────────────────────────────────
+
+fn render_which_key(
+    f: &mut Frame,
+    hints: &[(&str, &str)],
+    leader: char,
+    t: &Theme,
+    area: Rect,
+) {
+    let leader_label = match leader {
+        ' ' => "Space",
+        's' => "Sort",
+        'g' => "Go",
+        'y' => "Yank",
+        _ => return,
+    };
+
+    // Full-width bar, 1 row above status bar
+    let bar = Rect::new(area.x, area.y + area.height.saturating_sub(2), area.width, 1);
+    f.render_widget(Clear, bar);
+
+    let mut spans: Vec<Span> = Vec::new();
+
+    // Leader label
+    spans.push(Span::styled(
+        format!(" {leader_label} "),
+        Style::default().fg(t.bg).bg(t.orange),
+    ));
+    spans.push(Span::styled(" ", Style::default().bg(t.bg_light)));
+
+    // Hint pairs: key highlighted, then description
+    for (i, (key, desc)) in hints.iter().enumerate() {
+        spans.push(Span::styled(
+            format!(" {key} "),
+            Style::default().fg(t.bg).bg(t.cyan),
+        ));
+        spans.push(Span::styled(
+            format!(" {desc}", ),
+            Style::default().fg(t.fg).bg(t.bg_light),
+        ));
+        if i < hints.len() - 1 {
+            spans.push(Span::styled(
+                "  \u{2502}",
+                Style::default().fg(t.fg_dim).bg(t.bg_light),
+            ));
+        }
+    }
+
+    // Fill remaining width
+    let used: usize = spans.iter().map(|s| s.content.chars().count()).sum();
+    if (used) < bar.width as usize {
+        spans.push(Span::styled(
+            " ".repeat(bar.width as usize - used),
+            Style::default().bg(t.bg_light),
+        ));
+    }
+
+    f.render_widget(Paragraph::new(Line::from(spans)), bar);
+}
 
 fn render_help(f: &mut Frame, t: &Theme, area: Rect) {
     let popup = centered_rect(60, 80, area);

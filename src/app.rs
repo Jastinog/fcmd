@@ -93,6 +93,7 @@ pub struct App {
     pub should_quit: bool,
     pub status_message: String,
     pub pending_key: Option<char>,
+    pub pending_key_time: Option<Instant>,
     pub visible_height: usize,
     pub register: Option<Register>,
     pub undo_stack: UndoStack,
@@ -204,6 +205,7 @@ impl App {
             should_quit: false,
             status_message: String::new(),
             pending_key: None,
+            pending_key_time: None,
             visible_height: 20,
             register: None,
             undo_stack: UndoStack::new(),
@@ -305,16 +307,21 @@ impl App {
             return;
         }
 
-        if let Some(pending) = self.pending_key.take() {
+        if let Some(pending) = { self.pending_key_time = None; self.pending_key.take() } {
             if self.handle_pending_sequence(pending, key) {
                 return;
             }
         }
 
         let ctrl = key.modifiers.contains(KeyModifiers::CONTROL);
+        let shift = key.modifiers.contains(KeyModifiers::SHIFT);
 
         match key.code {
             KeyCode::Char('q') => self.should_quit = true,
+
+            // Selection with Shift+arrows
+            KeyCode::Down if shift => self.active_panel_mut().toggle_mark(),
+            KeyCode::Up if shift => self.active_panel_mut().toggle_mark_up(),
 
             // Focus & navigation
             KeyCode::Char('l') if ctrl => self.focus_next(),
@@ -348,24 +355,23 @@ impl App {
             KeyCode::Tab => self.tab_mut().switch_panel(),
 
             // Pending key sequences
-            KeyCode::Char('g') => self.pending_key = Some('g'),
-            KeyCode::Char('d') => self.pending_key = Some('d'),
-            KeyCode::Char('y') => self.pending_key = Some('y'),
-            KeyCode::Char('s') => self.pending_key = Some('s'),
-            KeyCode::Char('\'') => self.pending_key = Some('\''),
+            KeyCode::Char('g') => { self.pending_key = Some('g'); self.pending_key_time = Some(Instant::now()); },
+            KeyCode::Char('d') => { self.pending_key = Some('d'); self.pending_key_time = Some(Instant::now()); },
+            KeyCode::Char('y') => { self.pending_key = Some('y'); self.pending_key_time = Some(Instant::now()); },
+            KeyCode::Char('s') => { self.pending_key = Some('s'); self.pending_key_time = Some(Instant::now()); },
+            KeyCode::Char('\'') => { self.pending_key = Some('\''); self.pending_key_time = Some(Instant::now()); },
 
             // File operations
             KeyCode::Char('p') if ctrl => self.open_find(),
             KeyCode::Char('p') => self.paste(false),
             KeyCode::Char('P') => self.paste(true),
             KeyCode::Char('u') => self.undo(),
-            KeyCode::Char(' ') => self.active_panel_mut().toggle_mark(),
+            KeyCode::Char(' ') => { self.pending_key = Some(' '); self.pending_key_time = Some(Instant::now()); },
 
             // Mode switches
             KeyCode::Char('v') | KeyCode::Char('V') => self.enter_visual(),
             KeyCode::Char('/') => self.enter_search(),
             KeyCode::Char(':') => self.enter_command(),
-            KeyCode::Char('?') => self.mode = Mode::Help,
 
             // Search navigation
             KeyCode::Char('n') => self.search_next(),
@@ -376,11 +382,7 @@ impl App {
 
             // Toggles & settings
             KeyCode::Char('r') if ctrl => self.refresh_current_panel(),
-            KeyCode::Char('.') => self.toggle_hidden(),
-            KeyCode::Char('w') => self.preview_mode = !self.preview_mode,
-            KeyCode::Char('t') => self.toggle_tree(),
             KeyCode::Char('T') => self.cycle_theme(true),
-            KeyCode::Char('S') => self.pending_shell = Some(String::new()),
 
             // Preview scroll
             KeyCode::Char('J') => {
@@ -413,6 +415,12 @@ impl App {
             ('s', KeyCode::Char('d')) => self.set_sort(SortMode::Date),
             ('s', KeyCode::Char('e')) => self.set_sort(SortMode::Extension),
             ('s', KeyCode::Char('r')) => self.toggle_sort_reverse(),
+            // Space as leader key
+            (' ', KeyCode::Char('t')) => self.toggle_tree(),
+            (' ', KeyCode::Char('h')) => self.toggle_hidden(),
+            (' ', KeyCode::Char('p')) => self.preview_mode = !self.preview_mode,
+            (' ', KeyCode::Char('s')) => self.pending_shell = Some(String::new()),
+            (' ', KeyCode::Char('?')) => self.mode = Mode::Help,
             _ => return false,
         }
         true
@@ -440,6 +448,44 @@ impl App {
             self.status_message = format!("Refresh error: {e}");
         }
         self.tree_dirty = true;
+    }
+
+    pub fn which_key_hints(&self) -> Option<&[(&str, &str)]> {
+        const LEADER_HINTS: &[(&str, &str)] = &[
+            ("t", "tree"),
+            ("h", "hidden"),
+            ("p", "preview"),
+            ("s", "shell"),
+            ("?", "help"),
+        ];
+        const SORT_HINTS: &[(&str, &str)] = &[
+            ("n", "name"),
+            ("s", "size"),
+            ("d", "date"),
+            ("e", "extension"),
+            ("r", "reverse"),
+        ];
+        const GOTO_HINTS: &[(&str, &str)] = &[
+            ("g", "top"),
+            ("t", "next tab"),
+            ("T", "prev tab"),
+        ];
+        const YANK_HINTS: &[(&str, &str)] = &[
+            ("y", "yank"),
+            ("p", "yank path"),
+        ];
+        let pending = self.pending_key?;
+        let time = self.pending_key_time?;
+        if time.elapsed() < std::time::Duration::from_millis(400) {
+            return None;
+        }
+        match pending {
+            ' ' => Some(LEADER_HINTS),
+            's' => Some(SORT_HINTS),
+            'g' => Some(GOTO_HINTS),
+            'y' => Some(YANK_HINTS),
+            _ => None,
+        }
     }
 
     fn toggle_hidden(&mut self) {
@@ -510,7 +556,7 @@ impl App {
 
     fn handle_tree_input(&mut self, key: KeyEvent) {
         // Handle pending key
-        if let Some(pending) = self.pending_key.take() {
+        if let Some(pending) = { self.pending_key_time = None; self.pending_key.take() } {
             if pending == 'g' && key.code == KeyCode::Char('g') {
                 self.tree_selected = 0;
                 return;
@@ -544,7 +590,7 @@ impl App {
             KeyCode::Char('k') | KeyCode::Up => {
                 self.tree_selected = self.tree_selected.saturating_sub(1);
             }
-            KeyCode::Char('g') => self.pending_key = Some('g'),
+            KeyCode::Char('g') => { self.pending_key = Some('g'); self.pending_key_time = Some(Instant::now()); },
             KeyCode::Char('G') => {
                 if !self.tree_data.is_empty() {
                     self.tree_selected = self.tree_data.len() - 1;
@@ -696,7 +742,7 @@ impl App {
     // --- Visual mode ---
 
     fn handle_visual(&mut self, key: KeyEvent) {
-        if let Some('g') = self.pending_key.take() {
+        if let Some('g') = { self.pending_key_time = None; self.pending_key.take() } {
             if key.code == KeyCode::Char('g') {
                 self.active_panel_mut().go_top();
                 return;
@@ -707,7 +753,7 @@ impl App {
             KeyCode::Char('j') | KeyCode::Down => self.active_panel_mut().move_down(),
             KeyCode::Char('k') | KeyCode::Up => self.active_panel_mut().move_up(),
             KeyCode::Char('G') => self.active_panel_mut().go_bottom(),
-            KeyCode::Char('g') => self.pending_key = Some('g'),
+            KeyCode::Char('g') => { self.pending_key = Some('g'); self.pending_key_time = Some(Instant::now()); },
             KeyCode::Char('d') if key.modifiers.contains(KeyModifiers::CONTROL) => {
                 let half = self.visible_height / 2;
                 self.active_panel_mut().page_down(half);
