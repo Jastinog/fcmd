@@ -1,0 +1,24 @@
+# Tokyo Night — a clean dark theme inspired by Tokyo city lights
+# by Enkia
+
+bg = "#1A1B26"
+bg_light = "#24283B"
+fg = "#C0CAF5"
+fg_dim = "#565F89"
+
+red = "#F7768E"
+green = "#9ECE6A"
+yellow = "#E0AF68"
+blue = "#7AA2F7"
+magenta = "#BB9AF7"
+cyan = "#7DCFFF"
+orange = "#FF9E64"
+
+border_active = "blue"
+border_inactive = "#3B4261"
+status_bg = "#16161E"
+cursor_line = "#292E42"
+
+dir_color = "blue"
+symlink_color = "cyan"
+file_color = "fg"

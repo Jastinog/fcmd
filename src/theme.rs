@@ -1,0 +1,229 @@
+use ratatui::style::Color;
+use serde::Deserialize;
+
+#[derive(Deserialize)]
+struct RawTheme {
+    bg: String,
+    bg_light: String,
+    fg: String,
+    fg_dim: String,
+
+    red: String,
+    green: String,
+    yellow: String,
+    blue: String,
+    magenta: String,
+    cyan: String,
+    orange: String,
+
+    border_active: String,
+    border_inactive: String,
+    status_bg: String,
+    cursor_line: String,
+
+    dir_color: String,
+    symlink_color: String,
+    file_color: String,
+}
+
+pub struct Theme {
+    pub bg: Color,
+    pub bg_light: Color,
+    pub fg: Color,
+    pub fg_dim: Color,
+
+    pub red: Color,
+    pub green: Color,
+    pub yellow: Color,
+    pub blue: Color,
+    pub magenta: Color,
+    pub cyan: Color,
+    pub orange: Color,
+
+    pub border_active: Color,
+    pub border_inactive: Color,
+    pub status_bg: Color,
+    pub cursor_line: Color,
+
+    pub dir_color: Color,
+    pub symlink_color: Color,
+    pub file_color: Color,
+}
+
+fn parse_hex(s: &str) -> Option<Color> {
+    let s = s.strip_prefix('#')?;
+    if s.len() != 6 {
+        return None;
+    }
+    let r = u8::from_str_radix(&s[0..2], 16).ok()?;
+    let g = u8::from_str_radix(&s[2..4], 16).ok()?;
+    let b = u8::from_str_radix(&s[4..6], 16).ok()?;
+    Some(Color::Rgb(r, g, b))
+}
+
+impl RawTheme {
+    fn resolve_color(&self, value: &str) -> Color {
+        // Try hex first
+        if let Some(c) = parse_hex(value) {
+            return c;
+        }
+        // Otherwise treat as a reference to another field
+        match value {
+            "bg" => self.resolve_color(&self.bg),
+            "bg_light" => self.resolve_color(&self.bg_light),
+            "fg" => self.resolve_color(&self.fg),
+            "fg_dim" => self.resolve_color(&self.fg_dim),
+            "red" => self.resolve_color(&self.red),
+            "green" => self.resolve_color(&self.green),
+            "yellow" => self.resolve_color(&self.yellow),
+            "blue" => self.resolve_color(&self.blue),
+            "magenta" => self.resolve_color(&self.magenta),
+            "cyan" => self.resolve_color(&self.cyan),
+            "orange" => self.resolve_color(&self.orange),
+            _ => Color::White, // fallback
+        }
+    }
+
+    fn into_theme(self) -> Theme {
+        let bg = self.resolve_color(&self.bg);
+        let bg_light = self.resolve_color(&self.bg_light);
+        let fg = self.resolve_color(&self.fg);
+        let fg_dim = self.resolve_color(&self.fg_dim);
+        let red = self.resolve_color(&self.red);
+        let green = self.resolve_color(&self.green);
+        let yellow = self.resolve_color(&self.yellow);
+        let blue = self.resolve_color(&self.blue);
+        let magenta = self.resolve_color(&self.magenta);
+        let cyan = self.resolve_color(&self.cyan);
+        let orange = self.resolve_color(&self.orange);
+        let border_active = self.resolve_color(&self.border_active);
+        let border_inactive = self.resolve_color(&self.border_inactive);
+        let status_bg = self.resolve_color(&self.status_bg);
+        let cursor_line = self.resolve_color(&self.cursor_line);
+        let dir_color = self.resolve_color(&self.dir_color);
+        let symlink_color = self.resolve_color(&self.symlink_color);
+        let file_color = self.resolve_color(&self.file_color);
+
+        Theme {
+            bg,
+            bg_light,
+            fg,
+            fg_dim,
+            red,
+            green,
+            yellow,
+            blue,
+            magenta,
+            cyan,
+            orange,
+            border_active,
+            border_inactive,
+            status_bg,
+            cursor_line,
+            dir_color,
+            symlink_color,
+            file_color,
+        }
+    }
+}
+
+impl Theme {
+    pub fn default_theme() -> Self {
+        Theme {
+            bg: Color::Rgb(11, 14, 20),
+            bg_light: Color::Rgb(15, 19, 26),
+            fg: Color::Rgb(191, 189, 182),
+            fg_dim: Color::Rgb(86, 91, 102),
+            red: Color::Rgb(240, 113, 120),
+            green: Color::Rgb(170, 217, 76),
+            yellow: Color::Rgb(230, 180, 80),
+            blue: Color::Rgb(89, 194, 255),
+            magenta: Color::Rgb(210, 166, 255),
+            cyan: Color::Rgb(57, 186, 230),
+            orange: Color::Rgb(255, 143, 64),
+            border_active: Color::Rgb(89, 194, 255),
+            border_inactive: Color::Rgb(60, 65, 74),
+            status_bg: Color::Rgb(17, 21, 28),
+            cursor_line: Color::Rgb(27, 58, 91),
+            dir_color: Color::Rgb(89, 194, 255),
+            symlink_color: Color::Rgb(230, 182, 115),
+            file_color: Color::Rgb(191, 189, 182),
+        }
+    }
+
+    fn load(path: &std::path::Path) -> Option<Self> {
+        let content = std::fs::read_to_string(path).ok()?;
+        let raw: RawTheme = toml::from_str(&content).ok()?;
+        Some(raw.into_theme())
+    }
+
+    pub fn from_config() -> Self {
+        let config_dir = match dirs::config_dir() {
+            Some(d) => d.join("fc"),
+            None => return Self::default_theme(),
+        };
+
+        // Try loading config.toml for theme name
+        let config_path = config_dir.join("config.toml");
+        let theme_name = Self::read_theme_name(&config_path);
+
+        if let Some(name) = &theme_name {
+            let theme_path = config_dir.join("themes").join(format!("{name}.toml"));
+            if let Some(theme) = Self::load(&theme_path) {
+                return theme;
+            }
+        }
+
+        // Ensure default theme file exists as a template
+        Self::ensure_default_theme(&config_dir);
+
+        Self::default_theme()
+    }
+
+    fn read_theme_name(path: &std::path::Path) -> Option<String> {
+        let content = std::fs::read_to_string(path).ok()?;
+        let table: toml::Table = toml::from_str(&content).ok()?;
+        table.get("theme")?.as_str().map(|s| s.to_string())
+    }
+
+    fn ensure_default_theme(config_dir: &std::path::Path) {
+        let themes_dir = config_dir.join("themes");
+        let _ = std::fs::create_dir_all(&themes_dir);
+        for (name, content) in BUILTIN_THEMES {
+            let path = themes_dir.join(name);
+            if !path.exists() {
+                let _ = std::fs::write(&path, content);
+            }
+        }
+    }
+}
+
+const BUILTIN_THEMES: &[(&str, &str)] = &[
+    ("ayu-dark.toml", include_str!("../themes/ayu-dark.toml")),
+    ("gruvbox-dark.toml", include_str!("../themes/gruvbox-dark.toml")),
+    ("catppuccin-mocha.toml", include_str!("../themes/catppuccin-mocha.toml")),
+    ("tokyo-night.toml", include_str!("../themes/tokyo-night.toml")),
+    ("rose-pine.toml", include_str!("../themes/rose-pine.toml")),
+    ("dracula.toml", include_str!("../themes/dracula.toml")),
+    ("nord.toml", include_str!("../themes/nord.toml")),
+    ("kanagawa.toml", include_str!("../themes/kanagawa.toml")),
+    ("everforest-dark.toml", include_str!("../themes/everforest-dark.toml")),
+    ("solarized-dark.toml", include_str!("../themes/solarized-dark.toml")),
+    ("one-dark.toml", include_str!("../themes/one-dark.toml")),
+    ("gruvbox-light.toml", include_str!("../themes/gruvbox-light.toml")),
+    ("catppuccin-latte.toml", include_str!("../themes/catppuccin-latte.toml")),
+];
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn all_builtin_themes_parse() {
+        for (name, content) in BUILTIN_THEMES {
+            let raw: RawTheme = toml::from_str(content)
+                .unwrap_or_else(|e| panic!("{name}: TOML parse error: {e}"));
+            let _theme = raw.into_theme();
+        }
+    }
+}

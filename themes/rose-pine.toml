@@ -1,0 +1,24 @@
+# Rosé Pine — all natural pine, faux fur and a bit of soho vibes
+# rosepinetheme.com
+
+bg = "#191724"
+bg_light = "#26233A"
+fg = "#E0DEF4"
+fg_dim = "#6E6A86"
+
+red = "#EB6F92"
+green = "#9CCFD8"
+yellow = "#F6C177"
+blue = "#31748F"
+magenta = "#C4A7E7"
+cyan = "#9CCFD8"
+orange = "#EBBCBA"
+
+border_active = "magenta"
+border_inactive = "#403D52"
+status_bg = "#1F1D2E"
+cursor_line = "#26233A"
+
+dir_color = "magenta"
+symlink_color = "cyan"
+file_color = "fg"

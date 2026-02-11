@@ -13,34 +13,7 @@ use crate::find::FindState;
 use crate::icons::file_icon;
 use crate::panel::{Panel, SortMode};
 use crate::preview::Preview;
-
-// ── Ayu Dark palette ────────────────────────────────────────────────
-
-const BG: Color = Color::Rgb(11, 14, 20);        // #0B0E14 — for powerline contrast text
-const BG_LIGHT: Color = Color::Rgb(15, 19, 26);   // #0F131A — panel_bg
-const FG: Color = Color::Rgb(191, 189, 182);       // #BFBDB6
-const FG_DIM: Color = Color::Rgb(86, 91, 102);     // #565B66 — fg_idle
-const WHITE: Color = Color::Rgb(191, 189, 182);    // #BFBDB6
-
-// Accent colors
-const RED: Color = Color::Rgb(240, 113, 120);      // #F07178 — markup
-const GREEN: Color = Color::Rgb(170, 217, 76);     // #AAD94C — string
-const YELLOW: Color = Color::Rgb(230, 180, 80);    // #E6B450 — accent
-const BLUE: Color = Color::Rgb(89, 194, 255);      // #59C2FF — entity
-const MAGENTA: Color = Color::Rgb(210, 166, 255);  // #D2A6FF — constant
-const CYAN: Color = Color::Rgb(57, 186, 230);      // #39BAE6 — tag
-const ORANGE: Color = Color::Rgb(255, 143, 64);    // #FF8F40 — keyword
-
-// UI-specific
-const BORDER_ACTIVE: Color = BLUE;
-const BORDER_INACTIVE: Color = Color::Rgb(60, 65, 74);  // #3C414A — guide_active
-const STATUS_BG: Color = Color::Rgb(17, 21, 28);        // #11151C — line
-const CURSOR_LINE: Color = Color::Rgb(27, 58, 91);      // #1B3A5B — selection_bg
-
-// File colors
-const DIR_COLOR: Color = BLUE;
-const SYMLINK_COLOR: Color = Color::Rgb(230, 182, 115);  // #E6B673 — special
-const FILE_COLOR: Color = FG;
+use crate::theme::Theme;
 
 // Powerline separators
 const SEP_RIGHT: &str = "\u{e0b0}"; //
@@ -152,18 +125,19 @@ pub fn render(f: &mut Frame, app: &mut App) {
 
     let panels_active = !app.tree_focused;
     let tab = app.tab();
+    let t = &app.theme;
     let vm = &app.visual_marks;
     let left_phantoms = app.phantoms_for(&tab.left.path);
     let right_phantoms = app.phantoms_for(&tab.right.path);
     if app.preview_mode {
         match tab.active {
             PanelSide::Left => {
-                render_panel(f, &tab.left, panel_areas[0], panels_active, vm, left_phantoms);
-                render_preview(f, &app.preview, panel_areas[1]);
+                render_panel(f, &tab.left, panel_areas[0], panels_active, vm, left_phantoms, t);
+                render_preview(f, &app.preview, panel_areas[1], t);
             }
             PanelSide::Right => {
-                render_preview(f, &app.preview, panel_areas[0]);
-                render_panel(f, &tab.right, panel_areas[1], panels_active, vm, right_phantoms);
+                render_preview(f, &app.preview, panel_areas[0], t);
+                render_panel(f, &tab.right, panel_areas[1], panels_active, vm, right_phantoms, t);
             }
         }
     } else {
@@ -174,6 +148,7 @@ pub fn render(f: &mut Frame, app: &mut App) {
             panels_active && tab.active == PanelSide::Left,
             vm,
             left_phantoms,
+            t,
         );
         render_panel(
             f,
@@ -182,23 +157,25 @@ pub fn render(f: &mut Frame, app: &mut App) {
             panels_active && tab.active == PanelSide::Right,
             vm,
             right_phantoms,
+            t,
         );
     }
     render_status(f, app, status_area);
 
     // Overlays on top of everything
     if app.mode == Mode::Help {
-        render_help(f, full_area);
+        render_help(f, &app.theme, full_area);
     }
 
     if let Some(ref fs) = app.find_state {
-        render_find(f, fs, full_area);
+        render_find(f, fs, &app.theme, full_area);
     }
 }
 
 // ── Tab bar ─────────────────────────────────────────────────────────
 
 fn render_tab_bar(f: &mut Frame, app: &App, area: Rect) {
+    let t = &app.theme;
     let mut spans = Vec::new();
 
     for (i, tab) in app.tabs.iter().enumerate() {
@@ -215,22 +192,22 @@ fn render_tab_bar(f: &mut Frame, app: &App, area: Rect) {
             spans.push(Span::styled(
                 format!("  {}: {dir_name} ", i + 1),
                 Style::default()
-                    .fg(BG)
-                    .bg(BLUE),
+                    .fg(t.bg)
+                    .bg(t.blue),
             ));
             spans.push(Span::styled(
                 SEP_RIGHT,
-                Style::default().fg(BLUE).bg(STATUS_BG),
+                Style::default().fg(t.blue).bg(t.status_bg),
             ));
         } else {
             spans.push(Span::styled(
                 format!(" {}: {dir_name} ", i + 1),
-                Style::default().fg(FG_DIM).bg(STATUS_BG),
+                Style::default().fg(t.fg_dim).bg(t.status_bg),
             ));
             if i < app.tabs.len() - 1 {
                 spans.push(Span::styled(
                     "\u{2502}",
-                    Style::default().fg(BORDER_INACTIVE).bg(STATUS_BG),
+                    Style::default().fg(t.border_inactive).bg(t.status_bg),
                 ));
             }
         }
@@ -242,7 +219,7 @@ fn render_tab_bar(f: &mut Frame, app: &App, area: Rect) {
     if remaining > 0 {
         spans.push(Span::styled(
             " ".repeat(remaining),
-            Style::default().bg(STATUS_BG),
+            Style::default().bg(t.status_bg),
         ));
     }
 
@@ -259,11 +236,12 @@ fn render_panel(
     is_active: bool,
     visual_marks: &std::collections::HashSet<std::path::PathBuf>,
     phantoms: &[crate::app::PhantomEntry],
+    t: &Theme,
 ) {
     let border_color = if is_active {
-        BORDER_ACTIVE
+        t.border_active
     } else {
-        BORDER_INACTIVE
+        t.border_inactive
     };
 
     let path_str = panel.path.to_string_lossy();
@@ -281,7 +259,7 @@ fn render_panel(
         .borders(Borders::ALL)
         .border_style(Style::default().fg(border_color))
         .title(format!(" {title} "))
-        .title_style(Style::default().fg(if is_active { WHITE } else { FG_DIM }));
+        .title_style(Style::default().fg(if is_active { t.fg } else { t.fg_dim }));
 
     let inner = block.inner(area);
     f.render_widget(block, area);
@@ -340,51 +318,51 @@ fn render_panel(
             // Determine styles per segment
             let (icon_style, name_style, meta_style) = if is_active_cursor {
                 let base = Style::default()
-                    .bg(BLUE)
-                    .fg(BG);
+                    .bg(t.blue)
+                    .fg(t.bg);
                 (base, base, base)
             } else if in_visual && is_active {
-                let base = Style::default().bg(MAGENTA).fg(BG);
+                let base = Style::default().bg(t.magenta).fg(t.bg);
                 (base, base, base)
             } else if is_marked {
-                let base = Style::default().fg(GREEN);
+                let base = Style::default().fg(t.green);
                 (base, base, base)
             } else if is_cursor {
                 // Inactive panel cursor
-                let base = Style::default().bg(CURSOR_LINE).fg(WHITE);
+                let base = Style::default().bg(t.cursor_line).fg(t.fg);
                 (base, base, base)
             } else {
                 // Normal entry
                 let ic = if entry.is_dir {
-                    Style::default().fg(DIR_COLOR)
+                    Style::default().fg(t.dir_color)
                 } else {
-                    Style::default().fg(FG_DIM)
+                    Style::default().fg(t.fg_dim)
                 };
                 let nc = if entry.is_dir {
                     Style::default()
-                        .fg(DIR_COLOR)
+                        .fg(t.dir_color)
                                         } else if entry.is_symlink {
-                    Style::default().fg(SYMLINK_COLOR)
+                    Style::default().fg(t.symlink_color)
                 } else {
-                    Style::default().fg(FILE_COLOR)
+                    Style::default().fg(t.file_color)
                 };
-                let mc = Style::default().fg(FG_DIM);
+                let mc = Style::default().fg(t.fg_dim);
                 (ic, nc, mc)
             };
 
             let is_vm = visual_marks.contains(&entry.path);
             let row_bg = if is_active_cursor {
-                Some(BLUE)
+                Some(t.blue)
             } else if in_visual && is_active {
-                Some(MAGENTA)
+                Some(t.magenta)
             } else if is_cursor {
-                Some(CURSOR_LINE)
+                Some(t.cursor_line)
             } else {
                 None
             };
             let sign_text = if is_vm { "● " } else { "  " };
             let mut sign_style = if is_vm {
-                Style::default().fg(YELLOW)
+                Style::default().fg(t.yellow)
             } else {
                 Style::default()
             };
@@ -407,7 +385,7 @@ fn render_panel(
     let real_count = items.len();
     let remaining_slots = visible_height.saturating_sub(real_count);
     if remaining_slots > 0 && !phantoms.is_empty() {
-        let ghost_style = Style::default().fg(FG_DIM);
+        let ghost_style = Style::default().fg(t.fg_dim);
         for ph in phantoms.iter().take(remaining_slots) {
             let icon = if ph.is_dir {
                 "\u{f07b} "
@@ -443,18 +421,19 @@ fn render_panel(
 // ── Tree sidebar ────────────────────────────────────────────────────
 
 fn render_tree(f: &mut Frame, app: &App, area: Rect) {
+    let t = &app.theme;
     let is_focused = app.tree_focused;
     let border_color = if is_focused {
-        BORDER_ACTIVE
+        t.border_active
     } else {
-        BORDER_INACTIVE
+        t.border_inactive
     };
 
     let block = Block::default()
         .borders(Borders::ALL)
         .border_style(Style::default().fg(border_color))
         .title(" 󰙅 Tree ")
-        .title_style(Style::default().fg(if is_focused { WHITE } else { CYAN }));
+        .title_style(Style::default().fg(if is_focused { t.fg } else { t.cyan }));
 
     let inner = block.inner(area);
     f.render_widget(block, area);
@@ -500,24 +479,24 @@ fn render_tree(f: &mut Frame, app: &App, area: Rect) {
                 };
                 return ListItem::new(Line::from(Span::styled(
                     text,
-                    Style::default().fg(BG).bg(BLUE),
+                    Style::default().fg(t.bg).bg(t.blue),
                 )));
             }
 
-            // Colors matching panels: dirs=DIR_COLOR, file icons=FG_DIM, file names=FILE_COLOR
+            // Colors matching panels: dirs=dir_color, file icons=fg_dim, file names=file_color
             let (icon_style, name_style) = if is_cursor || line.is_current {
-                let s = Style::default().fg(YELLOW);
+                let s = Style::default().fg(t.yellow);
                 (s, s)
             } else if line.is_on_path {
-                let s = Style::default().fg(DIR_COLOR);
+                let s = Style::default().fg(t.dir_color);
                 (s, s)
             } else if line.is_dir {
-                let s = Style::default().fg(DIR_COLOR);
+                let s = Style::default().fg(t.dir_color);
                 (s, s)
             } else {
                 (
-                    Style::default().fg(FG_DIM),
-                    Style::default().fg(FILE_COLOR),
+                    Style::default().fg(t.fg_dim),
+                    Style::default().fg(t.file_color),
                 )
             };
 
@@ -538,7 +517,7 @@ fn render_tree(f: &mut Frame, app: &App, area: Rect) {
             };
 
             ListItem::new(Line::from(vec![
-                Span::styled(&line.prefix, Style::default().fg(BORDER_INACTIVE)),
+                Span::styled(&line.prefix, Style::default().fg(t.border_inactive)),
                 Span::styled(icon.to_string(), icon_style),
                 Span::styled(name_display, name_style),
             ]))
@@ -550,7 +529,7 @@ fn render_tree(f: &mut Frame, app: &App, area: Rect) {
 
 // ── Preview ─────────────────────────────────────────────────────────
 
-fn render_preview(f: &mut Frame, preview: &Option<Preview>, area: Rect) {
+fn render_preview(f: &mut Frame, preview: &Option<Preview>, area: Rect, t: &Theme) {
     let (title, info) = match preview {
         Some(p) => (p.title.as_str(), p.info.as_str()),
         None => ("Preview", ""),
@@ -558,9 +537,9 @@ fn render_preview(f: &mut Frame, preview: &Option<Preview>, area: Rect) {
 
     let block = Block::default()
         .borders(Borders::ALL)
-        .border_style(Style::default().fg(CYAN))
+        .border_style(Style::default().fg(t.cyan))
         .title(format!(" {title} [{info}] "))
-        .title_style(Style::default().fg(CYAN));
+        .title_style(Style::default().fg(t.cyan));
 
     let inner = block.inner(area);
     f.render_widget(block, area);
@@ -588,9 +567,9 @@ fn render_preview(f: &mut Frame, preview: &Option<Preview>, area: Rect) {
             Line::from(vec![
                 Span::styled(
                     format!("{line_num:>num_width$} ", num_width = num_width),
-                    Style::default().fg(FG_DIM),
+                    Style::default().fg(t.fg_dim),
                 ),
-                Span::styled(content.to_string(), Style::default().fg(FG)),
+                Span::styled(content.to_string(), Style::default().fg(t.fg)),
             ])
         })
         .map(ListItem::new)
@@ -602,19 +581,21 @@ fn render_preview(f: &mut Frame, preview: &Option<Preview>, area: Rect) {
 // ── Status bar (lualine style) ──────────────────────────────────────
 
 fn render_status(f: &mut Frame, app: &App, area: Rect) {
+    let t = &app.theme;
+
     // Fill background
     f.render_widget(
-        Block::default().style(Style::default().bg(STATUS_BG)),
+        Block::default().style(Style::default().bg(t.status_bg)),
         area,
     );
 
     // Input modes (Search / Command) get special treatment
     if app.mode == Mode::Search {
-        render_status_input(f, area, "/", &app.search_query, BLUE);
+        render_status_input(f, area, "/", &app.search_query, t.blue, t);
         return;
     }
     if app.mode == Mode::Command {
-        render_status_input(f, area, ":", &app.command_input, GREEN);
+        render_status_input(f, area, ":", &app.command_input, t.green, t);
         return;
     }
 
@@ -635,11 +616,11 @@ fn render_status(f: &mut Frame, app: &App, area: Rect) {
             Span::styled(
                 " CONFIRM ",
                 Style::default()
-                    .fg(BG)
-                    .bg(RED),
+                    .fg(t.bg)
+                    .bg(t.red),
             ),
-            Span::styled(SEP_RIGHT, Style::default().fg(RED).bg(BG_LIGHT)),
-            Span::styled(msg, Style::default().fg(RED).bg(BG_LIGHT)),
+            Span::styled(SEP_RIGHT, Style::default().fg(t.red).bg(t.bg_light)),
+            Span::styled(msg, Style::default().fg(t.red).bg(t.bg_light)),
         ];
 
         // Fill remaining
@@ -648,7 +629,7 @@ fn render_status(f: &mut Frame, app: &App, area: Rect) {
         if remaining > 0 {
             spans.push(Span::styled(
                 " ".repeat(remaining),
-                Style::default().bg(STATUS_BG),
+                Style::default().bg(t.status_bg),
             ));
         }
 
@@ -661,26 +642,26 @@ fn render_status(f: &mut Frame, app: &App, area: Rect) {
 
     // ── Mode segment ────────────────
     let (mode_str, mode_bg) = if app.tree_focused && app.mode == Mode::Normal {
-        ("TREE", CYAN)
+        ("TREE", t.cyan)
     } else {
         match app.mode {
-            Mode::Normal => ("NORMAL", GREEN),
-            Mode::Visual => ("VISUAL", MAGENTA),
-            Mode::Find => ("FIND", CYAN),
-            Mode::Help => ("HELP", CYAN),
-            _ => ("", FG_DIM),
+            Mode::Normal => ("NORMAL", t.green),
+            Mode::Visual => ("VISUAL", t.magenta),
+            Mode::Find => ("FIND", t.cyan),
+            Mode::Help => ("HELP", t.cyan),
+            _ => ("", t.fg_dim),
         }
     };
 
     let mode_span = Span::styled(
         format!(" {mode_str} "),
         Style::default()
-            .fg(BG)
+            .fg(t.bg)
             .bg(mode_bg),
     );
     let mode_sep = Span::styled(
         SEP_RIGHT,
-        Style::default().fg(mode_bg).bg(BG_LIGHT),
+        Style::default().fg(mode_bg).bg(t.bg_light),
     );
 
     // ── Right side segments (built first to compute width) ────────────────
@@ -692,15 +673,15 @@ fn render_status(f: &mut Frame, app: &App, area: Rect) {
         panel.selected + 1,
         panel.entries.len()
     );
-    right_parts.push((pos_text, BG, BLUE));
+    right_parts.push((pos_text, t.bg, t.blue));
 
     // Sort segment
     if panel.sort_mode != SortMode::Name || panel.sort_reverse {
         let arrow = if panel.sort_reverse { "\u{2191}" } else { "\u{2193}" };
         right_parts.push((
             format!(" {}{arrow} ", panel.sort_mode.label()),
-            FG,
-            BG_LIGHT,
+            t.fg,
+            t.bg_light,
         ));
     }
 
@@ -710,33 +691,33 @@ fn render_status(f: &mut Frame, app: &App, area: Rect) {
             crate::ops::RegisterOp::Yank => "y",
             crate::ops::RegisterOp::Cut => "d",
         };
-        right_parts.push((format!(" {op}:{} ", r.paths.len()), YELLOW, BG_LIGHT));
+        right_parts.push((format!(" {op}:{} ", r.paths.len()), t.yellow, t.bg_light));
     }
 
     // Search pattern
     if !app.search_query.is_empty() && app.mode == Mode::Normal {
         right_parts.push((
             format!(" /{} ", app.search_query),
-            YELLOW,
-            BG_LIGHT,
+            t.yellow,
+            t.bg_light,
         ));
     }
 
     // Preview indicator
     if app.preview_mode {
-        right_parts.push((" 󰈈 ".to_string(), CYAN, BG_LIGHT));
+        right_parts.push((" 󰈈 ".to_string(), t.cyan, t.bg_light));
     }
 
     // Pending key
     if let Some(c) = app.pending_key {
-        right_parts.push((format!(" {c} "), ORANGE, BG_LIGHT));
+        right_parts.push((format!(" {c} "), t.orange, t.bg_light));
     }
 
     // Build right spans (reverse order so rightmost is last)
     let mut right_spans: Vec<Span> = Vec::new();
     for (idx, (text, fg, seg_bg)) in right_parts.iter().enumerate().rev() {
         let prev_bg = if idx == right_parts.len() - 1 {
-            STATUS_BG
+            t.status_bg
         } else {
             right_parts[idx + 1].2
         };
@@ -794,11 +775,11 @@ fn render_status(f: &mut Frame, app: &App, area: Rect) {
 
     let info_span = Span::styled(
         info_display.clone(),
-        Style::default().fg(FG).bg(BG_LIGHT),
+        Style::default().fg(t.fg).bg(t.bg_light),
     );
     let info_sep = Span::styled(
         SEP_RIGHT,
-        Style::default().fg(BG_LIGHT).bg(STATUS_BG),
+        Style::default().fg(t.bg_light).bg(t.status_bg),
     );
 
     // Calculate fill to push right segments to the edge
@@ -808,29 +789,29 @@ fn render_status(f: &mut Frame, app: &App, area: Rect) {
     let mut all_spans = vec![mode_span, mode_sep, info_span, info_sep];
     all_spans.push(Span::styled(
         " ".repeat(fill),
-        Style::default().bg(STATUS_BG),
+        Style::default().bg(t.status_bg),
     ));
     all_spans.extend(right_spans);
 
     f.render_widget(Paragraph::new(Line::from(all_spans)), area);
 }
 
-fn render_status_input(f: &mut Frame, area: Rect, prefix: &str, input: &str, accent: Color) {
+fn render_status_input(f: &mut Frame, area: Rect, prefix: &str, input: &str, accent: Color, t: &Theme) {
     let label = if prefix == "/" { " SEARCH " } else { " CMD " };
 
     let mut spans = vec![
         Span::styled(
             label,
             Style::default()
-                .fg(BG)
+                .fg(t.bg)
                 .bg(accent),
         ),
-        Span::styled(SEP_RIGHT, Style::default().fg(accent).bg(BG_LIGHT)),
+        Span::styled(SEP_RIGHT, Style::default().fg(accent).bg(t.bg_light)),
         Span::styled(
             format!(" {prefix}{input} "),
-            Style::default().fg(WHITE).bg(BG_LIGHT),
+            Style::default().fg(t.fg).bg(t.bg_light),
         ),
-        Span::styled(SEP_RIGHT, Style::default().fg(BG_LIGHT).bg(STATUS_BG)),
+        Span::styled(SEP_RIGHT, Style::default().fg(t.bg_light).bg(t.status_bg)),
     ];
 
     let used: usize = spans.iter().map(|s| s.content.chars().count()).sum();
@@ -838,7 +819,7 @@ fn render_status_input(f: &mut Frame, area: Rect, prefix: &str, input: &str, acc
     if remaining > 0 {
         spans.push(Span::styled(
             " ".repeat(remaining),
-            Style::default().bg(STATUS_BG),
+            Style::default().bg(t.status_bg),
         ));
     }
 
@@ -847,15 +828,15 @@ fn render_status_input(f: &mut Frame, area: Rect, prefix: &str, input: &str, acc
 
 // ── Help overlay ────────────────────────────────────────────────────
 
-fn render_help(f: &mut Frame, area: Rect) {
+fn render_help(f: &mut Frame, t: &Theme, area: Rect) {
     let popup = centered_rect(60, 80, area);
     f.render_widget(Clear, popup);
 
     let block = Block::default()
         .borders(Borders::ALL)
-        .border_style(Style::default().fg(CYAN))
+        .border_style(Style::default().fg(t.cyan))
         .title(" 󰋖 Help \u{2014} press any key to close ")
-        .title_style(Style::default().fg(CYAN));
+        .title_style(Style::default().fg(t.cyan));
 
     let inner = block.inner(popup);
     f.render_widget(block, popup);
@@ -931,15 +912,15 @@ fn render_help(f: &mut Frame, area: Rect) {
         lines.push(ListItem::new(Line::from(Span::styled(
             format!(" {section}"),
             Style::default()
-                .fg(CYAN),
+                .fg(t.cyan),
         ))));
         for (key, desc) in *keys {
             let line = Line::from(vec![
                 Span::styled(
                     format!("   {key:<16}"),
-                    Style::default().fg(YELLOW),
+                    Style::default().fg(t.yellow),
                 ),
-                Span::styled(*desc, Style::default().fg(FG)),
+                Span::styled(*desc, Style::default().fg(t.fg)),
             ]);
             lines.push(ListItem::new(line));
         }
@@ -952,7 +933,7 @@ fn render_help(f: &mut Frame, area: Rect) {
 
 // ── Find overlay ────────────────────────────────────────────────────
 
-fn render_find(f: &mut Frame, fs: &FindState, area: Rect) {
+fn render_find(f: &mut Frame, fs: &FindState, t: &Theme, area: Rect) {
     let popup = centered_rect(60, 70, area);
     f.render_widget(Clear, popup);
 
@@ -964,9 +945,9 @@ fn render_find(f: &mut Frame, fs: &FindState, area: Rect) {
     );
     let block = Block::default()
         .borders(Borders::ALL)
-        .border_style(Style::default().fg(CYAN))
+        .border_style(Style::default().fg(t.cyan))
         .title(title)
-        .title_style(Style::default().fg(CYAN));
+        .title_style(Style::default().fg(t.cyan));
 
     let inner = block.inner(popup);
     f.render_widget(block, popup);
@@ -981,7 +962,7 @@ fn render_find(f: &mut Frame, fs: &FindState, area: Rect) {
     let input = Paragraph::new(Line::from(Span::styled(
         input_text,
         Style::default()
-            .fg(GREEN),
+            .fg(t.green),
     )));
     f.render_widget(input, input_area);
 
@@ -989,7 +970,7 @@ fn render_find(f: &mut Frame, fs: &FindState, area: Rect) {
     let sep_area = Rect::new(inner.x, inner.y + 1, inner.width, 1);
     let sep = Paragraph::new(Line::from(Span::styled(
         "\u{2500}".repeat(inner.width as usize),
-        Style::default().fg(BORDER_INACTIVE),
+        Style::default().fg(t.border_inactive),
     )));
     f.render_widget(sep, sep_area);
 
@@ -1028,18 +1009,18 @@ fn render_find(f: &mut Frame, fs: &FindState, area: Rect) {
 
             let style = if is_selected {
                 Style::default()
-                    .fg(WHITE)
-                    .bg(CYAN)
+                    .fg(t.fg)
+                    .bg(t.cyan)
                                 } else if is_dir {
-                Style::default().fg(DIR_COLOR)
+                Style::default().fg(t.dir_color)
             } else {
-                Style::default().fg(FG)
+                Style::default().fg(t.fg)
             };
 
             let icon_style = if is_selected {
                 style
             } else {
-                Style::default().fg(FG_DIM)
+                Style::default().fg(t.fg_dim)
             };
 
             let line = Line::from(vec![

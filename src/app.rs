@@ -9,6 +9,7 @@ use crate::find::FindState;
 use crate::ops::{self, ProgressMsg, Register, RegisterOp, UndoStack};
 use crate::panel::{Panel, SortMode};
 use crate::preview::Preview;
+use crate::theme::Theme;
 
 pub struct PhantomEntry {
     pub name: String,
@@ -126,6 +127,8 @@ pub struct App {
     pub tree_dirty: bool,
     pub tree_last_path: Option<PathBuf>,
     pub tree_last_hidden: bool,
+    // Theme
+    pub theme: Theme,
 }
 
 impl App {
@@ -213,6 +216,7 @@ impl App {
             tree_dirty: true,
             tree_last_path: None,
             tree_last_hidden: false,
+            theme: Theme::from_config(),
         })
     }
 

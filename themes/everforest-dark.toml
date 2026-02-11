@@ -1,0 +1,24 @@
+# Everforest Dark — comfortable & pleasant green-based palette
+# github.com/sainnhe/everforest
+
+bg = "#2D353B"
+bg_light = "#343F44"
+fg = "#D3C6AA"
+fg_dim = "#859289"
+
+red = "#E67E80"
+green = "#A7C080"
+yellow = "#DBBC7F"
+blue = "#7FBBB3"
+magenta = "#D699B6"
+cyan = "#83C092"
+orange = "#E69875"
+
+border_active = "green"
+border_inactive = "#475258"
+status_bg = "#232A2E"
+cursor_line = "#3D484D"
+
+dir_color = "green"
+symlink_color = "cyan"
+file_color = "fg"

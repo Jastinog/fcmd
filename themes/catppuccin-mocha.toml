@@ -1,0 +1,24 @@
+# Catppuccin Mocha — soothing pastel theme
+# catppuccin.com
+
+bg = "#1E1E2E"
+bg_light = "#313244"
+fg = "#CDD6F4"
+fg_dim = "#6C7086"
+
+red = "#F38BA8"
+green = "#A6E3A1"
+yellow = "#F9E2AF"
+blue = "#89B4FA"
+magenta = "#CBA6F7"
+cyan = "#89DCEB"
+orange = "#FAB387"
+
+border_active = "blue"
+border_inactive = "#45475A"
+status_bg = "#181825"
+cursor_line = "#313244"
+
+dir_color = "blue"
+symlink_color = "#F2CDCD"
+file_color = "fg"

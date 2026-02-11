@@ -1,0 +1,24 @@
+# Dracula — a dark theme for the masses
+# draculatheme.com
+
+bg = "#282A36"
+bg_light = "#44475A"
+fg = "#F8F8F2"
+fg_dim = "#6272A4"
+
+red = "#FF5555"
+green = "#50FA7B"
+yellow = "#F1FA8C"
+blue = "#BD93F9"
+magenta = "#FF79C6"
+cyan = "#8BE9FD"
+orange = "#FFB86C"
+
+border_active = "magenta"
+border_inactive = "#44475A"
+status_bg = "#21222C"
+cursor_line = "#44475A"
+
+dir_color = "blue"
+symlink_color = "cyan"
+file_color = "fg"

@@ -1,0 +1,24 @@
+# Kanagawa — inspired by Katsushika Hokusai's The Great Wave
+# github.com/rebelot/kanagawa.nvim
+
+bg = "#1F1F28"
+bg_light = "#2A2A37"
+fg = "#DCD7BA"
+fg_dim = "#727169"
+
+red = "#C34043"
+green = "#76946A"
+yellow = "#C0A36E"
+blue = "#7E9CD8"
+magenta = "#957FB8"
+cyan = "#7FB4CA"
+orange = "#FFA066"
+
+border_active = "blue"
+border_inactive = "#363646"
+status_bg = "#16161D"
+cursor_line = "#2A2A37"
+
+dir_color = "blue"
+symlink_color = "cyan"
+file_color = "fg"

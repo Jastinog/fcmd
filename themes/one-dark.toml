@@ -1,0 +1,24 @@
+# One Dark — Atom's iconic dark theme
+# atom.io
+
+bg = "#282C34"
+bg_light = "#2C313A"
+fg = "#ABB2BF"
+fg_dim = "#5C6370"
+
+red = "#E06C75"
+green = "#98C379"
+yellow = "#E5C07B"
+blue = "#61AFEF"
+magenta = "#C678DD"
+cyan = "#56B6C2"
+orange = "#D19A66"
+
+border_active = "blue"
+border_inactive = "#3E4451"
+status_bg = "#21252B"
+cursor_line = "#2C313A"
+
+dir_color = "blue"
+symlink_color = "cyan"
+file_color = "fg"

@@ -1,0 +1,24 @@
+# Ayu Dark — the default fc theme
+# Warm dark palette by Ike Ku
+
+bg = "#0B0E14"
+bg_light = "#0F131A"
+fg = "#BFBDB6"
+fg_dim = "#565B66"
+
+red = "#F07178"
+green = "#AAD94C"
+yellow = "#E6B450"
+blue = "#59C2FF"
+magenta = "#D2A6FF"
+cyan = "#39BAE6"
+orange = "#FF8F40"
+
+border_active = "blue"
+border_inactive = "#3C414A"
+status_bg = "#11151C"
+cursor_line = "#1B3A5B"
+
+dir_color = "blue"
+symlink_color = "#E6B673"
+file_color = "fg"

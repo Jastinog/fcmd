@@ -15,6 +15,7 @@ mod icons;
 mod ops;
 mod panel;
 mod preview;
+mod theme;
 mod tree;
 mod ui;
 

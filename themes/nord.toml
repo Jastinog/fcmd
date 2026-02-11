@@ -1,0 +1,24 @@
+# Nord — an arctic, north-bluish color palette
+# nordtheme.com
+
+bg = "#2E3440"
+bg_light = "#3B4252"
+fg = "#ECEFF4"
+fg_dim = "#4C566A"
+
+red = "#BF616A"
+green = "#A3BE8C"
+yellow = "#EBCB8B"
+blue = "#81A1C1"
+magenta = "#B48EAD"
+cyan = "#88C0D0"
+orange = "#D08770"
+
+border_active = "cyan"
+border_inactive = "#434C5E"
+status_bg = "#242933"
+cursor_line = "#3B4252"
+
+dir_color = "cyan"
+symlink_color = "magenta"
+file_color = "fg"
