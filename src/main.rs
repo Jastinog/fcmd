@@ -59,11 +59,8 @@ fn run(
         }
 
         app.poll_progress();
+        app.poll_du();
         app.poll_find();
-
-        if let Some(cmd) = app.pending_shell.take() {
-            run_shell(terminal, app, &cmd)?;
-        }
 
         if app.should_quit {
             app.save_session();
@@ -72,40 +69,3 @@ fn run(
     }
 }
 
-fn run_shell(
-    terminal: &mut Terminal<CrosstermBackend<io::Stdout>>,
-    app: &mut app::App,
-    cmd: &str,
-) -> io::Result<()> {
-    let cwd = app.active_panel().path.clone();
-
-    disable_raw_mode()?;
-    execute!(terminal.backend_mut(), LeaveAlternateScreen)?;
-    terminal.show_cursor()?;
-
-    let shell = std::env::var("SHELL").unwrap_or_else(|_| "sh".into());
-
-    if cmd.is_empty() {
-        let _ = std::process::Command::new(&shell)
-            .current_dir(&cwd)
-            .status();
-    } else {
-        let _ = std::process::Command::new(&shell)
-            .arg("-c")
-            .arg(cmd)
-            .current_dir(&cwd)
-            .status();
-        eprintln!("\n[Press Enter to continue]");
-        let _ = io::stdin().read_line(&mut String::new());
-    }
-
-    enable_raw_mode()?;
-    execute!(terminal.backend_mut(), EnterAlternateScreen)?;
-    terminal.clear()?;
-
-    let tab = app.tab_mut();
-    let _ = tab.left.load_dir();
-    let _ = tab.right.load_dir();
-
-    Ok(())
-}

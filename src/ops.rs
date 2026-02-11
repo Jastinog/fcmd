@@ -224,6 +224,40 @@ pub fn paste_in_background(
     });
 }
 
+// --- Directory size calculation ---
+
+pub enum DuMsg {
+    Progress {
+        done: usize,
+        total: usize,
+        current: String,
+    },
+    Finished {
+        sizes: Vec<(PathBuf, u64)>,
+    },
+}
+
+pub fn du_in_background(dirs: Vec<PathBuf>, tx: mpsc::Sender<DuMsg>) {
+    std::thread::spawn(move || {
+        let total = dirs.len();
+        let mut sizes = Vec::new();
+        for (i, dir) in dirs.iter().enumerate() {
+            let name = dir
+                .file_name()
+                .map(|n| n.to_string_lossy().into_owned())
+                .unwrap_or_default();
+            let _ = tx.send(DuMsg::Progress {
+                done: i,
+                total,
+                current: name,
+            });
+            let size = path_size(dir);
+            sizes.push((dir.clone(), size));
+        }
+        let _ = tx.send(DuMsg::Finished { sizes });
+    });
+}
+
 // --- Operations ---
 
 pub fn delete_path(path: &Path) -> std::io::Result<OpRecord> {

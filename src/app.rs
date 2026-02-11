@@ -6,7 +6,7 @@ use std::time::Instant;
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
 use crate::find::FindState;
-use crate::ops::{self, ProgressMsg, Register, RegisterOp, UndoStack};
+use crate::ops::{self, DuMsg, ProgressMsg, Register, RegisterOp, UndoStack};
 use crate::panel::{Panel, SortMode};
 use crate::preview::Preview;
 use crate::theme::Theme;
@@ -22,6 +22,11 @@ pub struct PasteProgress {
     pub started_at: Instant,
     pub dst_dir: PathBuf,
     pub phantoms: Vec<PhantomEntry>,
+}
+
+pub struct DuProgress {
+    pub rx: mpsc::Receiver<DuMsg>,
+    pub started_at: Instant,
 }
 
 #[derive(PartialEq, Eq)]
@@ -116,14 +121,16 @@ pub struct App {
     pub tree_scroll: usize,
     pub start_dir: PathBuf,
     pub tree_data: Vec<crate::tree::TreeLine>,
-    // Shell
-    pub pending_shell: Option<String>,
     // Visual marks (persistent colored dots)
     pub visual_marks: HashSet<PathBuf>,
     // Database
     pub db: Option<crate::db::Db>,
     // Paste progress
     pub paste_progress: Option<PasteProgress>,
+    // Directory sizes
+    pub dir_sizes: HashMap<PathBuf, u64>,
+    pub du_progress: Option<DuProgress>,
+    dir_sizes_loaded: HashSet<PathBuf>,
     // Tree cache invalidation
     pub tree_dirty: bool,
     pub tree_last_path: Option<PathBuf>,
@@ -223,10 +230,12 @@ impl App {
             tree_scroll: 0,
             start_dir: cwd,
             tree_data: Vec::new(),
-            pending_shell: None,
             visual_marks,
             db,
             paste_progress: None,
+            dir_sizes: HashMap::new(),
+            du_progress: None,
+            dir_sizes_loaded: HashSet::new(),
             tree_dirty: true,
             tree_last_path: None,
             tree_last_hidden: false,
@@ -419,7 +428,7 @@ impl App {
             (' ', KeyCode::Char('t')) => self.toggle_tree(),
             (' ', KeyCode::Char('h')) => self.toggle_hidden(),
             (' ', KeyCode::Char('p')) => self.preview_mode = !self.preview_mode,
-            (' ', KeyCode::Char('s')) => self.pending_shell = Some(String::new()),
+            (' ', KeyCode::Char('d')) => self.start_du(),
             (' ', KeyCode::Char('?')) => self.mode = Mode::Help,
             _ => return false,
         }
@@ -455,7 +464,7 @@ impl App {
             ("t", "tree"),
             ("h", "hidden"),
             ("p", "preview"),
-            ("s", "shell"),
+            ("d", "dir sizes"),
             ("?", "help"),
         ];
         const SORT_HINTS: &[(&str, &str)] = &[
@@ -1362,6 +1371,107 @@ impl App {
         }
     }
 
+    fn start_du(&mut self) {
+        if self.du_progress.is_some() {
+            self.status_message = "Directory size calculation already in progress".into();
+            return;
+        }
+        let panel = self.active_panel();
+        let dirs: Vec<PathBuf> = panel
+            .entries
+            .iter()
+            .filter(|e| e.is_dir && e.name != "..")
+            .map(|e| e.path.clone())
+            .collect();
+        if dirs.is_empty() {
+            self.status_message = "No subdirectories to measure".into();
+            return;
+        }
+        let n = dirs.len();
+        let (tx, rx) = mpsc::channel();
+        ops::du_in_background(dirs, tx);
+        self.du_progress = Some(DuProgress {
+            rx,
+            started_at: Instant::now(),
+        });
+        self.status_message = format!("Calculating sizes for {n} directories...");
+    }
+
+    pub fn poll_du(&mut self) {
+        self.ensure_dir_sizes_loaded();
+
+        let progress = match self.du_progress.as_ref() {
+            Some(p) => p,
+            None => return,
+        };
+
+        let mut last_progress = None;
+        let mut finished = None;
+
+        loop {
+            match progress.rx.try_recv() {
+                Ok(msg @ DuMsg::Progress { .. }) => {
+                    last_progress = Some(msg);
+                }
+                Ok(msg @ DuMsg::Finished { .. }) => {
+                    finished = Some(msg);
+                    break;
+                }
+                Err(_) => break,
+            }
+        }
+
+        if let Some(DuMsg::Progress {
+            done,
+            total,
+            current,
+        }) = last_progress
+        {
+            self.status_message =
+                format!("Calculating sizes... [{}/{}] {current}", done + 1, total);
+        }
+
+        if let Some(DuMsg::Finished { sizes }) = finished {
+            let elapsed = self.du_progress.as_ref().unwrap().started_at.elapsed();
+            let count = sizes.len();
+            let total: u64 = sizes.iter().map(|(_, s)| s).sum();
+
+            // Update in-memory cache
+            for &(ref path, size) in &sizes {
+                self.dir_sizes.insert(path.clone(), size);
+            }
+
+            // Save to DB
+            if let Some(ref db) = self.db {
+                if let Err(e) = db.save_dir_sizes(&sizes) {
+                    self.status_message = format!("Sizes calculated but DB save failed: {e}");
+                    self.du_progress = None;
+                    return;
+                }
+            }
+
+            let secs = elapsed.as_secs_f64();
+            let total_str = format_bytes(total);
+            self.status_message =
+                format!("{count} dirs measured: {total_str} total ({secs:.1}s)");
+            self.du_progress = None;
+        }
+    }
+
+    fn ensure_dir_sizes_loaded(&mut self) {
+        let Some(ref db) = self.db else { return };
+        let left = self.tab().left.path.clone();
+        let right = self.tab().right.path.clone();
+        for dir in [left, right] {
+            if !self.dir_sizes_loaded.contains(&dir) {
+                if let Ok(sizes) = db.load_dir_sizes(&dir) {
+                    self.dir_sizes.extend(sizes);
+                }
+                self.dir_sizes_loaded.insert(dir);
+            }
+        }
+    }
+
     fn undo(&mut self) {
         if let Some(records) = self.undo_stack.pop() {
             match ops::undo(&records) {
@@ -1410,16 +1520,6 @@ impl App {
     fn execute_command(&mut self) {
         let input = self.command_input.trim().to_string();
         self.command_input.clear();
-
-        // Shell command: :!<cmd>
-        if let Some(shell_cmd) = input.strip_prefix('!') {
-            if shell_cmd.is_empty() {
-                self.status_message = "Usage: :!<command>".into();
-            } else {
-                self.pending_shell = Some(shell_cmd.to_string());
-            }
-            return;
-        }
 
         let (cmd, arg) = match input.split_once(' ') {
             Some((c, a)) => (c.trim(), Some(a.trim())),
@@ -1563,10 +1663,6 @@ impl App {
                 };
             }
 
-            "shell" | "sh" => {
-                self.pending_shell = Some(String::new());
-            }
-
             "tabnew" => self.new_tab(),
             "tabclose" | "tabc" => self.close_tab(),
             "tabnext" | "tabn" => self.next_tab(),
@@ -1604,6 +1700,8 @@ impl App {
                     }
                 }
             },
+
+            "du" => self.start_du(),
 
             "marks" => {
                 if self.marks.is_empty() {

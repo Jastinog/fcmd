@@ -1,5 +1,5 @@
-use std::collections::HashSet;
-use std::path::PathBuf;
+use std::collections::{HashMap, HashSet};
+use std::path::{Path, PathBuf};
 
 use rusqlite::{Connection, params};
 
@@ -31,6 +31,10 @@ impl Db {
              CREATE TABLE IF NOT EXISTS session_meta (
                  key TEXT PRIMARY KEY,
                  value TEXT NOT NULL
+             );
+             CREATE TABLE IF NOT EXISTS dir_sizes (
+                 path TEXT PRIMARY KEY,
+                 size_bytes INTEGER NOT NULL
              );",
         )?;
         Ok(Db { conn })
@@ -112,6 +116,39 @@ impl Db {
                 |row| row.get::<_, String>(0),
             )
             .ok()
+    }
+
+    // --- Directory sizes ---
+
+    pub fn save_dir_sizes(&self, entries: &[(PathBuf, u64)]) -> rusqlite::Result<()> {
+        let tx = self.conn.unchecked_transaction()?;
+        for (path, size) in entries {
+            tx.execute(
+                "INSERT OR REPLACE INTO dir_sizes (path, size_bytes) VALUES (?1, ?2)",
+                params![path.to_string_lossy().as_ref(), *size as i64],
+            )?;
+        }
+        tx.commit()?;
+        Ok(())
+    }
+
+    pub fn load_dir_sizes(&self, dir: &Path) -> rusqlite::Result<HashMap<PathBuf, u64>> {
+        let pattern = format!("{}/%", dir.to_string_lossy());
+        let mut stmt = self
+            .conn
+            .prepare("SELECT path, size_bytes FROM dir_sizes WHERE path LIKE ?1")?;
+        let rows = stmt.query_map(params![pattern], |row| {
+            let p: String = row.get(0)?;
+            let s: i64 = row.get(1)?;
+            Ok((PathBuf::from(p), s as u64))
+        })?;
+        let mut map = HashMap::new();
+        for row in rows {
+            if let Ok((p, s)) = row {
+                map.insert(p, s);
+            }
+        }
+        Ok(map)
     }
 
     pub fn load_session(&self) -> rusqlite::Result<(Vec<SavedTab>, usize)> {

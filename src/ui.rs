@@ -127,17 +127,18 @@ pub fn render(f: &mut Frame, app: &mut App) {
     let tab = app.tab();
     let t = &app.theme;
     let vm = &app.visual_marks;
+    let ds = &app.dir_sizes;
     let left_phantoms = app.phantoms_for(&tab.left.path);
     let right_phantoms = app.phantoms_for(&tab.right.path);
     if app.preview_mode {
         match tab.active {
             PanelSide::Left => {
-                render_panel(f, &tab.left, panel_areas[0], panels_active, vm, left_phantoms, t);
+                render_panel(f, &tab.left, panel_areas[0], panels_active, vm, ds, left_phantoms, t);
                 render_preview(f, &app.preview, panel_areas[1], t);
             }
             PanelSide::Right => {
                 render_preview(f, &app.preview, panel_areas[0], t);
-                render_panel(f, &tab.right, panel_areas[1], panels_active, vm, right_phantoms, t);
+                render_panel(f, &tab.right, panel_areas[1], panels_active, vm, ds, right_phantoms, t);
             }
         }
     } else {
@@ -147,6 +148,7 @@ pub fn render(f: &mut Frame, app: &mut App) {
             panel_areas[0],
             panels_active && tab.active == PanelSide::Left,
             vm,
+            ds,
             left_phantoms,
             t,
         );
@@ -156,6 +158,7 @@ pub fn render(f: &mut Frame, app: &mut App) {
             panel_areas[1],
             panels_active && tab.active == PanelSide::Right,
             vm,
+            ds,
             right_phantoms,
             t,
         );
@@ -239,6 +242,7 @@ fn render_panel(
     area: Rect,
     is_active: bool,
     visual_marks: &std::collections::HashSet<std::path::PathBuf>,
+    dir_sizes: &std::collections::HashMap<std::path::PathBuf, u64>,
     phantoms: &[crate::app::PhantomEntry],
     t: &Theme,
 ) {
@@ -301,7 +305,11 @@ fn render_panel(
             };
 
             let size_str = if entry.is_dir {
-                "  <DIR>".into()
+                if let Some(&sz) = dir_sizes.get(&entry.path) {
+                    format!("{:>7}", format_size(sz))
+                } else {
+                    "  <DIR>".into()
+                }
             } else {
                 format!("{:>7}", format_size(entry.size))
             };
@@ -364,7 +372,7 @@ fn render_panel(
             } else {
                 None
             };
-            let sign_text = if is_vm { "● " } else { "  " };
+            let sign_text = if is_vm { "\u{2588} " } else { "  " };
             let mut sign_style = if is_vm {
                 Style::default().fg(t.yellow)
             } else {
@@ -960,7 +968,6 @@ fn render_help(f: &mut Frame, t: &Theme, area: Rect) {
             &[
                 ("m{a-z}", "Set mark"),
                 ("'{a-z}", "Go to mark"),
-                ("S", "Open shell"),
                 ("Ctrl-r", "Refresh"),
             ],
         ),
