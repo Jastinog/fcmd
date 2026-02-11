@@ -1,0 +1,24 @@
+# Poimandres — a minimal, dark blue-tinted theme
+# by drcmda
+
+bg = "#1B1E28"
+bg_light = "#252B37"
+fg = "#E4F0FB"
+fg_dim = "#506477"
+
+red = "#D0679D"
+green = "#5DE4C7"
+yellow = "#FFFAC2"
+blue = "#89DDFF"
+magenta = "#FCC5E9"
+cyan = "#89DDFF"
+orange = "#91B4D5"
+
+border_active = "green"
+border_inactive = "#303340"
+status_bg = "#151720"
+cursor_line = "#252B37"
+
+dir_color = "blue"
+symlink_color = "green"
+file_color = "fg"

@@ -1,0 +1,24 @@
+# Horizon — a beautifully warm dark theme
+# by jolaleye
+
+bg = "#1C1E26"
+bg_light = "#232530"
+fg = "#D5D8DA"
+fg_dim = "#6C6F93"
+
+red = "#E95678"
+green = "#29D398"
+yellow = "#FAB795"
+blue = "#26BBD9"
+magenta = "#EE64AC"
+cyan = "#59E3E3"
+orange = "#F09383"
+
+border_active = "red"
+border_inactive = "#2E303E"
+status_bg = "#16171F"
+cursor_line = "#272937"
+
+dir_color = "blue"
+symlink_color = "cyan"
+file_color = "fg"

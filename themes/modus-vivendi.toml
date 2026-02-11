@@ -1,0 +1,24 @@
+# Modus Vivendi — a highly accessible dark theme (WCAG AAA)
+# by Protesilaos Stavrou, part of GNU Emacs
+
+bg = "#000000"
+bg_light = "#1E1E1E"
+fg = "#FFFFFF"
+fg_dim = "#989898"
+
+red = "#FF5F59"
+green = "#44BC44"
+yellow = "#D0BC00"
+blue = "#2FAFFF"
+magenta = "#FEACD0"
+cyan = "#00D3D0"
+orange = "#FFA00F"
+
+border_active = "blue"
+border_inactive = "#3D3D3D"
+status_bg = "#0A0A0A"
+cursor_line = "#1A1A1A"
+
+dir_color = "blue"
+symlink_color = "cyan"
+file_color = "fg"

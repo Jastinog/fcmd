@@ -1,0 +1,24 @@
+# Nightfox — a highly customizable Neovim theme
+# by EdenEast
+
+bg = "#192330"
+bg_light = "#212E3F"
+fg = "#CDCECF"
+fg_dim = "#71839B"
+
+red = "#C94F6D"
+green = "#81B29A"
+yellow = "#DBC074"
+blue = "#719CD6"
+magenta = "#9D79D6"
+cyan = "#63CDCF"
+orange = "#F4A261"
+
+border_active = "blue"
+border_inactive = "#2B3B51"
+status_bg = "#131A24"
+cursor_line = "#29394F"
+
+dir_color = "blue"
+symlink_color = "cyan"
+file_color = "fg"

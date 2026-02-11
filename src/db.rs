@@ -96,6 +96,24 @@ impl Db {
         Ok(())
     }
 
+    pub fn save_theme(&self, name: &str) -> rusqlite::Result<()> {
+        self.conn.execute(
+            "INSERT OR REPLACE INTO session_meta (key, value) VALUES ('theme', ?1)",
+            params![name],
+        )?;
+        Ok(())
+    }
+
+    pub fn load_theme(&self) -> Option<String> {
+        self.conn
+            .query_row(
+                "SELECT value FROM session_meta WHERE key = 'theme'",
+                [],
+                |row| row.get::<_, String>(0),
+            )
+            .ok()
+    }
+
     pub fn load_session(&self) -> rusqlite::Result<(Vec<SavedTab>, usize)> {
         let mut stmt = self.conn.prepare(
             "SELECT left_path, right_path, active_side FROM session_tabs ORDER BY idx",

@@ -1,0 +1,24 @@
+# Synthwave '84 — retro-futuristic neon theme
+# by Robb Owen
+
+bg = "#262335"
+bg_light = "#34294F"
+fg = "#FFFFFF"
+fg_dim = "#848BBD"
+
+red = "#FE4450"
+green = "#72F1B8"
+yellow = "#FEDE5D"
+blue = "#36F9F6"
+magenta = "#FF7EDB"
+cyan = "#36F9F6"
+orange = "#F97E72"
+
+border_active = "magenta"
+border_inactive = "#3B3556"
+status_bg = "#1E1A31"
+cursor_line = "#34294F"
+
+dir_color = "cyan"
+symlink_color = "magenta"
+file_color = "fg"

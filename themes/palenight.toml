@@ -1,0 +1,24 @@
+# Palenight — Material Theme Palenight variant
+# by Mattia Astorino
+
+bg = "#292D3E"
+bg_light = "#34324A"
+fg = "#A6ACCD"
+fg_dim = "#676E95"
+
+red = "#F07178"
+green = "#C3E88D"
+yellow = "#FFCB6B"
+blue = "#82AAFF"
+magenta = "#C792EA"
+cyan = "#89DDFF"
+orange = "#F78C6C"
+
+border_active = "blue"
+border_inactive = "#3A3F58"
+status_bg = "#232738"
+cursor_line = "#32374D"
+
+dir_color = "blue"
+symlink_color = "cyan"
+file_color = "fg"

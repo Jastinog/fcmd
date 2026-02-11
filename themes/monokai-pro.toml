@@ -1,0 +1,24 @@
+# Monokai Pro — the iconic dark theme by Monokai
+# monokai.pro
+
+bg = "#2D2A2E"
+bg_light = "#403E41"
+fg = "#FCFCFA"
+fg_dim = "#727072"
+
+red = "#FF6188"
+green = "#A9DC76"
+yellow = "#FFD866"
+blue = "#78DCE8"
+magenta = "#AB9DF2"
+cyan = "#78DCE8"
+orange = "#FC9867"
+
+border_active = "magenta"
+border_inactive = "#403E41"
+status_bg = "#221F22"
+cursor_line = "#363337"
+
+dir_color = "blue"
+symlink_color = "cyan"
+file_color = "fg"

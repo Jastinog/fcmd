@@ -1,0 +1,24 @@
+# Spaceduck — an intergalactic space-themed dark color scheme
+# by pineapplegiant
+
+bg = "#0F111B"
+bg_light = "#1B1C36"
+fg = "#ECF0C1"
+fg_dim = "#686F9A"
+
+red = "#E33400"
+green = "#5CCC96"
+yellow = "#F2CE00"
+blue = "#7A5CCC"
+magenta = "#B3A1E6"
+cyan = "#00A3CC"
+orange = "#E39400"
+
+border_active = "green"
+border_inactive = "#30365F"
+status_bg = "#0A0B16"
+cursor_line = "#1B1C36"
+
+dir_color = "blue"
+symlink_color = "cyan"
+file_color = "fg"

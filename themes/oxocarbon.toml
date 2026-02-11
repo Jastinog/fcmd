@@ -1,0 +1,24 @@
+# Oxocarbon — IBM Carbon Design inspired dark theme
+# by nyoom-engineering
+
+bg = "#161616"
+bg_light = "#262626"
+fg = "#F2F4F8"
+fg_dim = "#525252"
+
+red = "#EE5396"
+green = "#42BE65"
+yellow = "#FDDC69"
+blue = "#33B1FF"
+magenta = "#BE95FF"
+cyan = "#3DDBD9"
+orange = "#FF7EB6"
+
+border_active = "magenta"
+border_inactive = "#353535"
+status_bg = "#0F0F0F"
+cursor_line = "#262626"
+
+dir_color = "blue"
+symlink_color = "cyan"
+file_color = "fg"

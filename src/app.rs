@@ -129,6 +129,8 @@ pub struct App {
     pub tree_last_hidden: bool,
     // Theme
     pub theme: Theme,
+    pub theme_list: Vec<String>,
+    pub theme_index: Option<usize>,
 }
 
 impl App {
@@ -184,6 +186,16 @@ impl App {
             (vec![Tab::new(cwd.clone())?], 0)
         };
 
+        let saved_theme_name = db.as_ref().and_then(|d| d.load_theme());
+        let theme = match saved_theme_name.as_deref().and_then(Theme::load_by_name) {
+            Some(t) => t,
+            None => Theme::from_config(),
+        };
+        let theme_index = saved_theme_name.and_then(|name| {
+            let list = Theme::list_available();
+            list.iter().position(|n| n == &name)
+        });
+
         Ok(App {
             tabs,
             active_tab,
@@ -216,7 +228,9 @@ impl App {
             tree_dirty: true,
             tree_last_path: None,
             tree_last_hidden: false,
-            theme: Theme::from_config(),
+            theme,
+            theme_list: Vec::new(),
+            theme_index,
         })
     }
 
@@ -365,6 +379,7 @@ impl App {
             KeyCode::Char('.') => self.toggle_hidden(),
             KeyCode::Char('w') => self.preview_mode = !self.preview_mode,
             KeyCode::Char('t') => self.toggle_tree(),
+            KeyCode::Char('T') => self.cycle_theme(true),
             KeyCode::Char('S') => self.pending_shell = Some(String::new()),
 
             // Preview scroll
@@ -440,6 +455,39 @@ impl App {
         } else {
             "Hidden files: hidden".into()
         };
+    }
+
+    fn cycle_theme(&mut self, forward: bool) {
+        if self.theme_list.is_empty() {
+            self.theme_list = Theme::list_available();
+            if self.theme_list.is_empty() {
+                self.status_message = "No themes found".into();
+                return;
+            }
+        }
+        let len = self.theme_list.len();
+        let idx = match self.theme_index {
+            Some(i) => {
+                if forward {
+                    (i + 1) % len
+                } else {
+                    (i + len - 1) % len
+                }
+            }
+            None => 0,
+        };
+        let name = &self.theme_list[idx];
+        match Theme::load_by_name(name) {
+            Some(t) => {
+                self.theme = t;
+                self.theme_index = Some(idx);
+                self.status_message = format!("Theme [{}/{}]: {name}", idx + 1, len);
+                if let Some(ref db) = self.db {
+                    let _ = db.save_theme(name);
+                }
+            }
+            None => self.status_message = format!("Failed to load theme: {name}"),
+        }
     }
 
     fn toggle_tree(&mut self) {
@@ -1487,6 +1535,29 @@ impl App {
                     None => self.status_message = "Usage: :mark <a-z>".into(),
                 }
             }
+
+            "theme" => match arg.filter(|a| !a.is_empty()) {
+                Some(name) => match Theme::load_by_name(name) {
+                    Some(t) => {
+                        self.theme = t;
+                        self.theme_list = Theme::list_available();
+                        self.theme_index = self.theme_list.iter().position(|n| n == name);
+                        if let Some(ref db) = self.db {
+                            let _ = db.save_theme(name);
+                        }
+                        self.status_message = format!("Theme: {name}");
+                    }
+                    None => self.status_message = format!("Theme not found: {name}"),
+                },
+                None => {
+                    let themes = Theme::list_available();
+                    if themes.is_empty() {
+                        self.status_message = "No themes found".into();
+                    } else {
+                        self.status_message = themes.join(", ");
+                    }
+                }
+            },
 
             "marks" => {
                 if self.marks.is_empty() {

@@ -1,0 +1,24 @@
+# Zenburn — low-contrast theme designed for long coding sessions
+# by Jani Nurminen
+
+bg = "#3F3F3F"
+bg_light = "#4F4F4F"
+fg = "#DCDCCC"
+fg_dim = "#7F9F7F"
+
+red = "#CC9393"
+green = "#7F9F7F"
+yellow = "#F0DFAF"
+blue = "#8CD0D3"
+magenta = "#DC8CC3"
+cyan = "#93E0E3"
+orange = "#DFAF8F"
+
+border_active = "cyan"
+border_inactive = "#5F5F5F"
+status_bg = "#2B2B2B"
+cursor_line = "#4A4A4A"
+
+dir_color = "blue"
+symlink_color = "cyan"
+file_color = "fg"

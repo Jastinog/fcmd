@@ -157,6 +157,32 @@ impl Theme {
         Some(raw.into_theme())
     }
 
+    pub fn load_by_name(name: &str) -> Option<Self> {
+        let themes_dir = dirs::config_dir()?.join("fc").join("themes");
+        let path = themes_dir.join(format!("{name}.toml"));
+        Self::load(&path)
+    }
+
+    pub fn list_available() -> Vec<String> {
+        let themes_dir = match dirs::config_dir() {
+            Some(d) => d.join("fc").join("themes"),
+            None => return Vec::new(),
+        };
+        let mut names = Vec::new();
+        if let Ok(entries) = std::fs::read_dir(&themes_dir) {
+            for entry in entries.flatten() {
+                let path = entry.path();
+                if path.extension().is_some_and(|e| e == "toml") {
+                    if let Some(stem) = path.file_stem().and_then(|s| s.to_str()) {
+                        names.push(stem.to_string());
+                    }
+                }
+            }
+        }
+        names.sort();
+        names
+    }
+
     pub fn from_config() -> Self {
         let config_dir = match dirs::config_dir() {
             Some(d) => d.join("fc"),
@@ -212,6 +238,21 @@ const BUILTIN_THEMES: &[(&str, &str)] = &[
     ("one-dark.toml", include_str!("../themes/one-dark.toml")),
     ("gruvbox-light.toml", include_str!("../themes/gruvbox-light.toml")),
     ("catppuccin-latte.toml", include_str!("../themes/catppuccin-latte.toml")),
+    ("monokai-pro.toml", include_str!("../themes/monokai-pro.toml")),
+    ("palenight.toml", include_str!("../themes/palenight.toml")),
+    ("horizon.toml", include_str!("../themes/horizon.toml")),
+    ("nightfox.toml", include_str!("../themes/nightfox.toml")),
+    ("moonlight.toml", include_str!("../themes/moonlight.toml")),
+    ("oxocarbon.toml", include_str!("../themes/oxocarbon.toml")),
+    ("vesper.toml", include_str!("../themes/vesper.toml")),
+    ("poimandres.toml", include_str!("../themes/poimandres.toml")),
+    ("modus-vivendi.toml", include_str!("../themes/modus-vivendi.toml")),
+    ("github-dark.toml", include_str!("../themes/github-dark.toml")),
+    ("zenburn.toml", include_str!("../themes/zenburn.toml")),
+    ("synthwave84.toml", include_str!("../themes/synthwave84.toml")),
+    ("moonfly.toml", include_str!("../themes/moonfly.toml")),
+    ("sonokai.toml", include_str!("../themes/sonokai.toml")),
+    ("spaceduck.toml", include_str!("../themes/spaceduck.toml")),
 ];
 
 #[cfg(test)]

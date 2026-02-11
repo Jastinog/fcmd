@@ -1,0 +1,24 @@
+# Vesper — a calm, warm dark theme
+# by raunofreiberg
+
+bg = "#101010"
+bg_light = "#1C1C1C"
+fg = "#B7B7B7"
+fg_dim = "#585858"
+
+red = "#F5A191"
+green = "#90B99F"
+yellow = "#E6B99D"
+blue = "#ACA1CF"
+magenta = "#E8B4B8"
+cyan = "#9ACDCE"
+orange = "#D1A375"
+
+border_active = "orange"
+border_inactive = "#2A2A2A"
+status_bg = "#0A0A0A"
+cursor_line = "#1C1C1C"
+
+dir_color = "blue"
+symlink_color = "cyan"
+file_color = "fg"

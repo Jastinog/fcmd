@@ -1,0 +1,24 @@
+# Moonfly — a dark charcoal theme for Vim/Neovim
+# by bluz71
+
+bg = "#080808"
+bg_light = "#1C1C1C"
+fg = "#B2B2B2"
+fg_dim = "#626262"
+
+red = "#FF5454"
+green = "#8CC85F"
+yellow = "#E3C78A"
+blue = "#80A0FF"
+magenta = "#CF87E8"
+cyan = "#79DAC8"
+orange = "#DE935F"
+
+border_active = "blue"
+border_inactive = "#303030"
+status_bg = "#000000"
+cursor_line = "#1C1C1C"
+
+dir_color = "blue"
+symlink_color = "cyan"
+file_color = "fg"

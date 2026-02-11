@@ -1,0 +1,24 @@
+# Sonokai — a vivid Monokai-inspired theme (default "shusia" style)
+# by sainnhe
+
+bg = "#2C2E34"
+bg_light = "#33353F"
+fg = "#E2E2E3"
+fg_dim = "#7F8490"
+
+red = "#FC5D7C"
+green = "#9ED072"
+yellow = "#E7C664"
+blue = "#76CCE0"
+magenta = "#B39DF3"
+cyan = "#76CCE0"
+orange = "#F39660"
+
+border_active = "green"
+border_inactive = "#414550"
+status_bg = "#232428"
+cursor_line = "#363944"
+
+dir_color = "blue"
+symlink_color = "cyan"
+file_color = "fg"
