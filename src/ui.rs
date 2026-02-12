@@ -132,18 +132,19 @@ pub fn render(f: &mut Frame, app: &mut App) {
     let t = &app.theme;
     let vm = &app.visual_marks;
     let ds = &app.dir_sizes;
+    let gs = &app.git_statuses;
     let reg = app.register.as_ref();
     let left_phantoms = app.phantoms_for(&tab.left.path);
     let right_phantoms = app.phantoms_for(&tab.right.path);
     if app.preview_mode {
         match tab.active {
             PanelSide::Left => {
-                render_panel(f, &tab.left, panel_areas[0], panels_active, vm, ds, reg, left_phantoms, t);
+                render_panel(f, &tab.left, panel_areas[0], panels_active, vm, ds, reg, left_phantoms, gs, t);
                 render_preview(f, &app.preview, panel_areas[1], t);
             }
             PanelSide::Right => {
                 render_preview(f, &app.preview, panel_areas[0], t);
-                render_panel(f, &tab.right, panel_areas[1], panels_active, vm, ds, reg, right_phantoms, t);
+                render_panel(f, &tab.right, panel_areas[1], panels_active, vm, ds, reg, right_phantoms, gs, t);
             }
         }
     } else {
@@ -156,6 +157,7 @@ pub fn render(f: &mut Frame, app: &mut App) {
             ds,
             reg,
             left_phantoms,
+            gs,
             t,
         );
         render_panel(
@@ -167,6 +169,7 @@ pub fn render(f: &mut Frame, app: &mut App) {
             ds,
             reg,
             right_phantoms,
+            gs,
             t,
         );
     }
@@ -175,6 +178,10 @@ pub fn render(f: &mut Frame, app: &mut App) {
     // Overlays on top of everything
     if app.mode == Mode::Help {
         render_help(f, &app.theme, full_area);
+    }
+
+    if app.mode == Mode::Sort {
+        render_sort(f, app, full_area);
     }
 
     if let Some(ref fs) = app.find_state {
@@ -252,6 +259,7 @@ fn render_panel(
     dir_sizes: &std::collections::HashMap<std::path::PathBuf, u64>,
     register: Option<&Register>,
     phantoms: &[crate::app::PhantomEntry],
+    git_statuses: &std::collections::HashMap<std::path::PathBuf, char>,
     t: &Theme,
 ) {
     let border_color = if is_active {
@@ -284,7 +292,7 @@ fn render_panel(
     let inner_width = inner.width as usize;
 
     let icon_width = 2;
-    let sign_width = 2;
+    let sign_width = 3; // 1 git + 2 mark/reg sign
     let meta_width = 16;
     let name_width = inner_width.saturating_sub(meta_width + icon_width + sign_width);
 
@@ -322,8 +330,12 @@ fn render_panel(
                 format!("{:>7}", format_size(entry.size))
             };
 
-            let date_str = entry
-                .modified
+            let date_source = if panel.sort_mode == SortMode::Created {
+                entry.created
+            } else {
+                entry.modified
+            };
+            let date_str = date_source
                 .map(format_time)
                 .unwrap_or_else(|| "      ".into());
 
@@ -410,8 +422,22 @@ fn render_panel(
                 sign_style = sign_style.bg(bg);
             }
 
+            let git_char = git_statuses.get(&entry.path).copied().unwrap_or(' ');
+            let mut git_style = match git_char {
+                'M' => Style::default().fg(t.yellow),
+                'A' => Style::default().fg(t.green),
+                '?' => Style::default().fg(t.cyan),
+                'D' => Style::default().fg(t.red),
+                'R' => Style::default().fg(t.magenta),
+                _ => Style::default().fg(t.fg_dim),
+            };
+            if let Some(bg) = row_bg {
+                git_style = git_style.bg(bg);
+            }
+
             let meta_text = format!(" {size_str} {date_str}");
             let line = Line::from(vec![
+                Span::styled(format!("{git_char}"), git_style),
                 Span::styled(sign_text, sign_style),
                 Span::styled(icon, icon_style),
                 Span::styled(name_col, name_style),
@@ -715,12 +741,17 @@ fn render_status(f: &mut Frame, app: &App, area: Rect) {
     );
     right_parts.push((pos_text, t.bg, t.blue));
 
-    // Sort segment
-    if panel.sort_mode != SortMode::Name || panel.sort_reverse {
+    // Sort segment (always visible)
+    {
         let arrow = if panel.sort_reverse { "\u{2191}" } else { "\u{2193}" };
+        let sort_fg = if panel.sort_mode != SortMode::Name || panel.sort_reverse {
+            t.cyan
+        } else {
+            t.fg_dim
+        };
         right_parts.push((
-            format!(" {}{arrow} ", panel.sort_mode.label()),
-            t.fg,
+            format!(" 󰒓 {}{arrow} ", panel.sort_mode.label()),
+            sort_fg,
             t.bg_light,
         ));
     }
@@ -883,47 +914,200 @@ fn render_which_key(
         _ => return,
     };
 
-    // Full-width bar, 1 row above status bar
-    let bar = Rect::new(area.x, area.y + area.height.saturating_sub(2), area.width, 1);
-    f.render_widget(Clear, bar);
+    // Column layout: each entry is "key  description" padded to col_width
+    let col_width = 18usize;
+    let usable_width = area.width.saturating_sub(2) as usize; // -2 for borders
+    let num_cols = (usable_width / col_width).max(1);
+    let num_rows = (hints.len() + num_cols - 1) / num_cols;
 
-    let mut spans: Vec<Span> = Vec::new();
+    // Popup dimensions: rows + 2 border + 1 title
+    let popup_h = (num_rows as u16 + 2).min(area.height);
+    let popup_w = area.width.min((num_cols * col_width + 2) as u16).max(20);
+    let popup_x = (area.width.saturating_sub(popup_w)) / 2;
+    let popup_y = area.y + area.height.saturating_sub(popup_h + 1); // above status bar
 
-    // Leader label
-    spans.push(Span::styled(
-        format!(" {leader_label} "),
-        Style::default().fg(t.bg).bg(t.orange),
-    ));
-    spans.push(Span::styled(" ", Style::default().bg(t.bg_light)));
+    let popup = Rect::new(area.x + popup_x, popup_y, popup_w, popup_h);
+    f.render_widget(Clear, popup);
 
-    // Hint pairs: key highlighted, then description
-    for (i, (key, desc)) in hints.iter().enumerate() {
-        spans.push(Span::styled(
-            format!(" {key} "),
-            Style::default().fg(t.bg).bg(t.cyan),
-        ));
-        spans.push(Span::styled(
-            format!(" {desc}", ),
-            Style::default().fg(t.fg).bg(t.bg_light),
-        ));
-        if i < hints.len() - 1 {
+    let block = Block::default()
+        .borders(Borders::ALL)
+        .border_style(Style::default().fg(t.border_inactive))
+        .title(format!(" {leader_label} "))
+        .title_style(Style::default().fg(t.orange));
+
+    let inner = block.inner(popup);
+    f.render_widget(block, popup);
+
+    let iw = inner.width as usize;
+
+    // Render hints in column-major order (fill columns top-to-bottom, then left-to-right)
+    let mut lines: Vec<ListItem> = Vec::new();
+    for row in 0..num_rows {
+        let mut spans: Vec<Span> = Vec::new();
+        for col in 0..num_cols {
+            let idx = col * num_rows + row;
+            if idx < hints.len() {
+                let (key, desc) = hints[idx];
+                // Key badge
+                spans.push(Span::styled(
+                    format!(" {key} "),
+                    Style::default().fg(t.bg).bg(t.blue),
+                ));
+                // Description + padding to fill column
+                let desc_text = format!(" {desc}");
+                let entry_chars = key.chars().count() + 2 + desc_text.chars().count();
+                let pad = col_width.saturating_sub(entry_chars);
+                spans.push(Span::styled(
+                    desc_text,
+                    Style::default().fg(t.fg).bg(t.bg_light),
+                ));
+                spans.push(Span::styled(
+                    " ".repeat(pad),
+                    Style::default().bg(t.bg_light),
+                ));
+            } else {
+                // Empty cell
+                spans.push(Span::styled(
+                    " ".repeat(col_width),
+                    Style::default().bg(t.bg_light),
+                ));
+            }
+        }
+        // Fill remaining width
+        let used: usize = spans.iter().map(|s| s.content.chars().count()).sum();
+        if used < iw {
             spans.push(Span::styled(
-                "  \u{2502}",
-                Style::default().fg(t.fg_dim).bg(t.bg_light),
+                " ".repeat(iw - used),
+                Style::default().bg(t.bg_light),
             ));
+        }
+        lines.push(ListItem::new(Line::from(spans)));
+    }
+
+    f.render_widget(List::new(lines), inner);
+}
+
+fn render_sort(f: &mut Frame, app: &App, area: Rect) {
+    let t = &app.theme;
+    let panel = app.tab().active_panel();
+    let w = 32u16.min(area.width);
+    let h = 12u16.min(area.height);
+    let x = (area.width.saturating_sub(w)) / 2;
+    let y = (area.height.saturating_sub(h)) / 2;
+    let popup = Rect::new(area.x + x, area.y + y, w, h);
+    f.render_widget(Clear, popup);
+
+    let dir_arrow = if panel.sort_reverse { "\u{2191}" } else { "\u{2193}" };
+    let block = Block::default()
+        .borders(Borders::ALL)
+        .border_style(Style::default().fg(t.cyan))
+        .title(format!(" 󰒓 Sort {dir_arrow} "))
+        .title_style(Style::default().fg(t.cyan));
+
+    let inner = block.inner(popup);
+    f.render_widget(block, popup);
+
+    if inner.height < 4 || inner.width < 10 {
+        return;
+    }
+
+    let icons = [" 󰈔 ", " 󰪶 ", " 󰃰 ", " 󰃰 ", " 󰈔 "];
+    let labels = ["Name", "Size", "Modified", "Created", "Extension"];
+    let keys = ["n", "s", "m", "c", "e"];
+    let iw = inner.width as usize;
+    let mut items: Vec<ListItem> = Vec::new();
+
+    for (i, ((&mode, label), (icon, key))) in SortMode::ALL
+        .iter()
+        .zip(labels.iter())
+        .zip(icons.iter().zip(keys.iter()))
+        .enumerate()
+    {
+        let is_current = mode == panel.sort_mode;
+        let is_cursor = i == app.sort_cursor;
+
+        // Build the right-side indicator: arrow for active, key hint otherwise
+        let right_text = if is_current {
+            format!(" {dir_arrow} ")
+        } else {
+            format!(" {key} ")
+        };
+
+        // Marker column
+        let marker = if is_current && is_cursor {
+            "\u{25b8} "
+        } else if is_current {
+            "  "
+        } else if is_cursor {
+            "\u{25b8} "
+        } else {
+            "  "
+        };
+
+        let label_width = iw.saturating_sub(
+            marker.chars().count() + icon.chars().count() + right_text.chars().count(),
+        );
+        let label_pad = label_width.saturating_sub(label.len());
+        let label_col = format!("{label}{}", " ".repeat(label_pad));
+
+        if is_cursor {
+            let cursor_style = Style::default().fg(t.bg).bg(t.blue);
+            let line = Line::from(vec![
+                Span::styled(marker, cursor_style),
+                Span::styled(*icon, cursor_style),
+                Span::styled(label_col, cursor_style),
+                Span::styled(right_text, cursor_style),
+            ]);
+            items.push(ListItem::new(line));
+        } else if is_current {
+            let line = Line::from(vec![
+                Span::styled(marker, Style::default().fg(t.green)),
+                Span::styled(*icon, Style::default().fg(t.green)),
+                Span::styled(label_col, Style::default().fg(t.green)),
+                Span::styled(right_text, Style::default().fg(t.cyan)),
+            ]);
+            items.push(ListItem::new(line));
+        } else {
+            let line = Line::from(vec![
+                Span::styled(marker, Style::default().fg(t.fg_dim)),
+                Span::styled(*icon, Style::default().fg(t.fg_dim)),
+                Span::styled(label_col, Style::default().fg(t.fg)),
+                Span::styled(right_text, Style::default().fg(t.fg_dim)),
+            ]);
+            items.push(ListItem::new(line));
         }
     }
 
-    // Fill remaining width
-    let used: usize = spans.iter().map(|s| s.content.chars().count()).sum();
-    if (used) < bar.width as usize {
-        spans.push(Span::styled(
-            " ".repeat(bar.width as usize - used),
-            Style::default().bg(t.bg_light),
-        ));
-    }
+    // Separator
+    let sep_y = inner.y + items.len().min(inner.height.saturating_sub(2) as usize) as u16;
+    let sep_area = Rect::new(inner.x, sep_y, inner.width, 1);
+    f.render_widget(
+        Paragraph::new(Line::from(Span::styled(
+            "\u{2500}".repeat(iw),
+            Style::default().fg(t.border_inactive),
+        ))),
+        sep_area,
+    );
 
-    f.render_widget(Paragraph::new(Line::from(spans)), bar);
+    // Hint line
+    let rev_label = if panel.sort_reverse { "asc" } else { "desc" };
+    let hint_line = Line::from(vec![
+        Span::styled(" r", Style::default().fg(t.cyan)),
+        Span::styled(format!(" {rev_label}  "), Style::default().fg(t.fg_dim)),
+        Span::styled("\u{23ce}", Style::default().fg(t.cyan)),
+        Span::styled(" apply  ", Style::default().fg(t.fg_dim)),
+        Span::styled("esc", Style::default().fg(t.cyan)),
+        Span::styled(" close", Style::default().fg(t.fg_dim)),
+    ]);
+
+    let list_height = inner.height.saturating_sub(2) as usize;
+    let list_area = Rect::new(inner.x, inner.y, inner.width, list_height as u16);
+    items.truncate(list_height);
+    f.render_widget(List::new(items), list_area);
+
+    let hint_y = inner.y + inner.height.saturating_sub(1);
+    let hint_area = Rect::new(inner.x, hint_y, inner.width, 1);
+    f.render_widget(Paragraph::new(hint_line), hint_area);
 }
 
 fn render_help(f: &mut Frame, t: &Theme, area: Rect) {
@@ -968,19 +1152,28 @@ fn render_help(f: &mut Frame, t: &Theme, area: Rect) {
                 ("v", "Visual select"),
                 ("/", "Search"),
                 (":", "Command mode"),
-                ("Space+,/.", "Find local/global"),
-                ("?", "This help"),
+                ("Space+?", "This help"),
             ],
         ),
         (
-            "󰒓 Preview & Sort",
+            "󱁐 Space leader",
             &[
-                ("w", "Toggle preview"),
-                ("t", "Toggle tree sidebar"),
-                ("J/K", "Scroll preview"),
-                (".", "Toggle hidden files"),
-                ("sn/ss/sd/se", "Sort name/size/date/ext"),
+                ("Space+p", "Toggle preview"),
+                ("Space+t", "Toggle tree sidebar"),
+                ("Space+h", "Toggle hidden files"),
+                ("Space+d", "Directory sizes"),
+                ("Space+s", "Sort popup"),
+                ("Space+,/.", "Find local/global"),
+            ],
+        ),
+        (
+            "󰒓 Sort",
+            &[
+                ("sn/ss", "Sort by name/size"),
+                ("sm/sc", "Sort by modified/created"),
+                ("se", "Sort by extension"),
                 ("sr", "Reverse sort"),
+                ("J/K", "Scroll preview"),
             ],
         ),
         (
@@ -996,6 +1189,7 @@ fn render_help(f: &mut Frame, t: &Theme, area: Rect) {
             &[
                 ("m{a-z}", "Set mark"),
                 ("'{a-z}", "Go to mark"),
+                ("T", "Cycle theme"),
                 ("Ctrl-r", "Refresh"),
             ],
         ),

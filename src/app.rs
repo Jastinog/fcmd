@@ -38,6 +38,7 @@ pub enum Mode {
     Search,
     Find,
     Help,
+    Sort,
 }
 
 #[derive(PartialEq, Eq, Clone, Copy)]
@@ -139,6 +140,11 @@ pub struct App {
     pub theme: Theme,
     pub theme_list: Vec<String>,
     pub theme_index: Option<usize>,
+    // Sort popup
+    pub sort_cursor: usize,
+    // Git status
+    pub git_statuses: HashMap<PathBuf, char>,
+    pub git_root: Option<PathBuf>,
 }
 
 impl App {
@@ -242,6 +248,9 @@ impl App {
             theme,
             theme_list: Vec::new(),
             theme_index,
+            sort_cursor: 0,
+            git_statuses: HashMap::new(),
+            git_root: None,
         })
     }
 
@@ -302,6 +311,7 @@ impl App {
             Mode::Search => self.handle_search(key),
             Mode::Find => self.handle_find(key),
             Mode::Help => self.handle_help(key),
+            Mode::Sort => self.handle_sort(key),
         }
 
         self.update_preview();
@@ -420,7 +430,8 @@ impl App {
             ('\'', KeyCode::Char(c)) if c.is_ascii_lowercase() => self.goto_mark(c),
             ('s', KeyCode::Char('n')) => self.set_sort(SortMode::Name),
             ('s', KeyCode::Char('s')) => self.set_sort(SortMode::Size),
-            ('s', KeyCode::Char('d')) => self.set_sort(SortMode::Date),
+            ('s', KeyCode::Char('d')) | ('s', KeyCode::Char('m')) => self.set_sort(SortMode::Modified),
+            ('s', KeyCode::Char('c')) => self.set_sort(SortMode::Created),
             ('s', KeyCode::Char('e')) => self.set_sort(SortMode::Extension),
             ('s', KeyCode::Char('r')) => self.toggle_sort_reverse(),
             // Space as leader key
@@ -430,6 +441,14 @@ impl App {
             (' ', KeyCode::Char('d')) => self.start_du(),
             (' ', KeyCode::Char(',')) => self.open_find_local(),
             (' ', KeyCode::Char('.')) => self.open_find_global(),
+            (' ', KeyCode::Char('s')) => {
+                self.sort_cursor = SortMode::ALL.iter()
+                    .position(|&m| m == self.active_panel().sort_mode)
+                    .unwrap_or(0);
+                self.mode = Mode::Sort;
+            }
+            (' ', KeyCode::Char('a')) => self.select_all(),
+            (' ', KeyCode::Char('n')) => self.unselect_all(),
             (' ', KeyCode::Char('?')) => self.mode = Mode::Help,
             _ => return false,
         }
@@ -454,10 +473,16 @@ impl App {
     }
 
     fn refresh_current_panel(&mut self) {
-        if let Err(e) = self.active_panel_mut().load_dir() {
+        let tab = &mut self.tabs[self.active_tab];
+        let panel = match tab.active {
+            PanelSide::Left => &mut tab.left,
+            PanelSide::Right => &mut tab.right,
+        };
+        if let Err(e) = panel.load_dir_with_sizes(&self.dir_sizes) {
             self.status_message = format!("Refresh error: {e}");
         }
         self.tree_dirty = true;
+        self.refresh_git_status();
     }
 
     pub fn which_key_hints(&self) -> Option<&[(&str, &str)]> {
@@ -465,7 +490,10 @@ impl App {
             ("t", "tree"),
             ("h", "hidden"),
             ("p", "preview"),
+            ("s", "sort"),
             ("d", "dir sizes"),
+            ("a", "select all"),
+            ("n", "unselect"),
             (",", "find"),
             (".", "find global"),
             ("?", "help"),
@@ -473,7 +501,8 @@ impl App {
         const SORT_HINTS: &[(&str, &str)] = &[
             ("n", "name"),
             ("s", "size"),
-            ("d", "date"),
+            ("m/d", "modified"),
+            ("c", "created"),
             ("e", "extension"),
             ("r", "reverse"),
         ];
@@ -502,11 +531,11 @@ impl App {
 
     fn toggle_hidden(&mut self) {
         let hidden = !self.active_panel().show_hidden;
-        let tab = self.tab_mut();
+        let tab = &mut self.tabs[self.active_tab];
         tab.left.show_hidden = hidden;
         tab.right.show_hidden = hidden;
-        let _ = tab.left.load_dir();
-        let _ = tab.right.load_dir();
+        let _ = tab.left.load_dir_with_sizes(&self.dir_sizes);
+        let _ = tab.right.load_dir_with_sizes(&self.dir_sizes);
         self.tree_dirty = true;
         self.status_message = if hidden {
             "Hidden files: shown".into()
@@ -558,7 +587,7 @@ impl App {
     fn toggle_sort_reverse(&mut self) {
         let rev = !self.active_panel().sort_reverse;
         self.active_panel_mut().sort_reverse = rev;
-        let _ = self.active_panel_mut().load_dir();
+        self.reload_active_panel();
         let arrow = if rev { "\u{2191}" } else { "\u{2193}" };
         let label = self.active_panel().sort_mode.label();
         self.status_message = format!("Sort: {label}{arrow}");
@@ -776,19 +805,31 @@ impl App {
             }
 
             KeyCode::Char('y') => {
-                self.yank_targeted();
                 self.exit_visual();
+                self.yank_targeted();
             }
             KeyCode::Char('d') | KeyCode::Char('D') => {
+                self.exit_visual();
                 self.request_delete();
-                if self.mode == Mode::Visual {
-                    self.exit_visual();
-                }
             }
 
             KeyCode::Char('p') => {
-                self.paste(false);
                 self.exit_visual();
+                self.paste(false);
+            }
+
+            KeyCode::Char('l') | KeyCode::Right | KeyCode::Enter => {
+                self.exit_visual();
+                if let Err(e) = self.active_panel_mut().enter_selected() {
+                    self.status_message = format!("Error: {e}");
+                }
+            }
+
+            KeyCode::Char('h') | KeyCode::Left | KeyCode::Backspace => {
+                self.exit_visual();
+                if let Err(e) = self.active_panel_mut().go_parent() {
+                    self.status_message = format!("Error: {e}");
+                }
             }
 
             KeyCode::Char('v') | KeyCode::Char('V') | KeyCode::Esc => self.exit_visual(),
@@ -1010,6 +1051,23 @@ impl App {
         }
     }
 
+    fn select_all(&mut self) {
+        let panel = self.active_panel_mut();
+        let mut count = 0;
+        for entry in &panel.entries {
+            if entry.name != ".." {
+                panel.marked.insert(entry.path.clone());
+                count += 1;
+            }
+        }
+        self.status_message = format!("Selected {count} items");
+    }
+
+    fn unselect_all(&mut self) {
+        self.active_panel_mut().marked.clear();
+        self.status_message = "Selection cleared".into();
+    }
+
     // --- Bookmarks ---
 
     fn set_mark(&mut self, c: char) {
@@ -1040,8 +1098,37 @@ impl App {
 
     fn set_sort(&mut self, mode: SortMode) {
         self.active_panel_mut().sort_mode = mode;
-        let _ = self.active_panel_mut().load_dir();
+        self.reload_active_panel();
         self.status_message = format!("Sort: {}", mode.label());
+    }
+
+    fn handle_sort(&mut self, key: KeyEvent) {
+        let len = SortMode::ALL.len();
+        match key.code {
+            KeyCode::Char('j') | KeyCode::Down => {
+                self.sort_cursor = (self.sort_cursor + 1).min(len - 1);
+            }
+            KeyCode::Char('k') | KeyCode::Up => {
+                self.sort_cursor = self.sort_cursor.saturating_sub(1);
+            }
+            KeyCode::Enter => {
+                let mode = SortMode::ALL[self.sort_cursor];
+                self.active_panel_mut().sort_mode = mode;
+                self.reload_active_panel();
+                let arrow = if self.active_panel().sort_reverse { "\u{2191}" } else { "\u{2193}" };
+                self.status_message = format!("Sort: {}{arrow}", mode.label());
+                self.mode = Mode::Normal;
+            }
+            KeyCode::Char('r') => {
+                let rev = !self.active_panel().sort_reverse;
+                self.active_panel_mut().sort_reverse = rev;
+                self.reload_active_panel();
+            }
+            KeyCode::Esc | KeyCode::Char('q') => {
+                self.mode = Mode::Normal;
+            }
+            _ => {}
+        }
     }
 
     // --- Preview ---
@@ -1509,11 +1596,111 @@ impl App {
         }
     }
 
+    fn reload_active_panel(&mut self) {
+        let tab = &mut self.tabs[self.active_tab];
+        let panel = match tab.active {
+            PanelSide::Left => &mut tab.left,
+            PanelSide::Right => &mut tab.right,
+        };
+        let _ = panel.load_dir_with_sizes(&self.dir_sizes);
+        self.refresh_git_status();
+    }
+
     fn refresh_panels(&mut self) {
-        let tab = self.tab_mut();
-        let _ = tab.left.load_dir();
-        let _ = tab.right.load_dir();
+        let tab = &mut self.tabs[self.active_tab];
+        let _ = tab.left.load_dir_with_sizes(&self.dir_sizes);
+        let _ = tab.right.load_dir_with_sizes(&self.dir_sizes);
         self.tree_dirty = true;
+        self.refresh_git_status();
+    }
+
+    pub fn refresh_git_status(&mut self) {
+        self.git_statuses.clear();
+        self.git_root = None;
+
+        let dir = self.active_panel().path.clone();
+
+        // Detect git root
+        let root_output = std::process::Command::new("git")
+            .args(["-C", &dir.to_string_lossy(), "rev-parse", "--show-toplevel"])
+            .output();
+        let root = match root_output {
+            Ok(o) if o.status.success() => {
+                PathBuf::from(String::from_utf8_lossy(&o.stdout).trim())
+            }
+            _ => return,
+        };
+        self.git_root = Some(root.clone());
+
+        // Get porcelain status
+        let status_output = std::process::Command::new("git")
+            .args(["-C", &root.to_string_lossy(), "status", "--porcelain=v1", "-uall"])
+            .output();
+        let output = match status_output {
+            Ok(o) if o.status.success() => o,
+            _ => return,
+        };
+
+        let stdout = String::from_utf8_lossy(&output.stdout);
+
+        // Priority ordering for aggregation: D > M > A > R > ?
+        fn git_priority(c: char) -> u8 {
+            match c {
+                'D' => 5,
+                'M' => 4,
+                'A' => 3,
+                'R' => 2,
+                '?' => 1,
+                _ => 0,
+            }
+        }
+
+        for line in stdout.lines() {
+            if line.len() < 4 {
+                continue;
+            }
+            let x = line.as_bytes()[0] as char;
+            let y = line.as_bytes()[1] as char;
+            let rel_path = &line[3..];
+            // For renames: "R  old -> new", use the new path
+            let rel_path = if let Some(pos) = rel_path.find(" -> ") {
+                &rel_path[pos + 4..]
+            } else {
+                rel_path
+            };
+
+            // Determine the status char: prefer worktree (Y), fallback to index (X)
+            let status = match (x, y) {
+                ('?', '?') => '?',
+                (_, 'M') => 'M',
+                (_, 'D') => 'D',
+                ('M', _) => 'M',
+                ('A', _) => 'A',
+                ('R', _) => 'R',
+                ('D', _) => 'D',
+                _ => 'M',
+            };
+
+            let abs_path = root.join(rel_path);
+            self.git_statuses.insert(abs_path.clone(), status);
+
+            // Propagate to parent directories up to root
+            let mut parent = abs_path.parent();
+            while let Some(p) = parent {
+                if !p.starts_with(&root) || p == root {
+                    // Also mark root-level dir entries
+                    if p == root {
+                        break;
+                    }
+                    break;
+                }
+                let existing = self.git_statuses.get(p).copied().unwrap_or('\0');
+                if git_priority(status) > git_priority(existing) {
+                    self.git_statuses.insert(p.to_path_buf(), status);
+                }
+                parent = p.parent();
+            }
+        }
     }
 
     // --- Command mode ---
@@ -1668,19 +1855,20 @@ impl App {
                 match arg.map(|a| a.to_lowercase()).as_deref() {
                     Some("name" | "n") => self.set_sort(SortMode::Name),
                     Some("size" | "s") => self.set_sort(SortMode::Size),
-                    Some("date" | "d" | "time" | "t") => self.set_sort(SortMode::Date),
+                    Some("mod" | "modified" | "m" | "date" | "d") => self.set_sort(SortMode::Modified),
+                    Some("cre" | "created" | "c") => self.set_sort(SortMode::Created),
                     Some("ext" | "e" | "extension") => self.set_sort(SortMode::Extension),
-                    _ => self.status_message = "Usage: :sort name|size|date|ext".into(),
+                    _ => self.status_message = "Usage: :sort name|size|mod|cre|ext".into(),
                 }
             }
 
             "hidden" => {
                 let hidden = !self.active_panel().show_hidden;
-                let tab = self.tab_mut();
+                let tab = &mut self.tabs[self.active_tab];
                 tab.left.show_hidden = hidden;
                 tab.right.show_hidden = hidden;
-                let _ = tab.left.load_dir();
-                let _ = tab.right.load_dir();
+                let _ = tab.left.load_dir_with_sizes(&self.dir_sizes);
+                let _ = tab.right.load_dir_with_sizes(&self.dir_sizes);
                 self.status_message = if hidden {
                     "Hidden files: shown".into()
                 } else {
@@ -1725,6 +1913,55 @@ impl App {
                     }
                 }
             },
+
+            "select" | "sel" => {
+                let panel = self.active_panel_mut();
+                match arg.filter(|a| !a.is_empty()) {
+                    Some(pattern) => {
+                        let mut count = 0;
+                        for entry in &panel.entries {
+                            if entry.name != ".." && glob_match(pattern, &entry.name) {
+                                panel.marked.insert(entry.path.clone());
+                                count += 1;
+                            }
+                        }
+                        self.status_message = format!("Selected {count} items");
+                    }
+                    None => {
+                        let mut count = 0;
+                        for entry in &panel.entries {
+                            if entry.name != ".." {
+                                panel.marked.insert(entry.path.clone());
+                                count += 1;
+                            }
+                        }
+                        self.status_message = format!("Selected {count} items");
+                    }
+                }
+            }
+
+            "unselect" | "unsel" => {
+                let panel = self.active_panel_mut();
+                match arg.filter(|a| !a.is_empty()) {
+                    Some(pattern) => {
+                        let to_remove: Vec<PathBuf> = panel
+                            .entries
+                            .iter()
+                            .filter(|e| e.name != ".." && glob_match(pattern, &e.name))
+                            .map(|e| e.path.clone())
+                            .collect();
+                        let count = to_remove.len();
+                        for p in &to_remove {
+                            panel.marked.remove(p);
+                        }
+                        self.status_message = format!("Unselected {count} items");
+                    }
+                    None => {
+                        panel.marked.clear();
+                        self.status_message = "Selection cleared".into();
+                    }
+                }
+            }
 
             "du" => self.start_du(),
 
@@ -1776,6 +2013,26 @@ fn format_bytes(b: u64) -> String {
         format!("{:.1}M", b as f64 / (1024.0 * 1024.0))
     } else {
         format!("{:.1}G", b as f64 / (1024.0 * 1024.0 * 1024.0))
+    }
+}
+
+fn glob_match(pattern: &str, text: &str) -> bool {
+    let p: Vec<char> = pattern.chars().flat_map(|c| c.to_lowercase()).collect();
+    let t: Vec<char> = text.chars().flat_map(|c| c.to_lowercase()).collect();
+    glob_match_inner(&p, &t)
+}
+
+fn glob_match_inner(pattern: &[char], text: &[char]) -> bool {
+    match (pattern.first(), text.first()) {
+        (None, None) => true,
+        (Some('*'), _) => {
+            // '*' matches zero chars, or consume one char of text
+            glob_match_inner(&pattern[1..], text)
+                || (!text.is_empty() && glob_match_inner(pattern, &text[1..]))
+        }
+        (Some('?'), Some(_)) => glob_match_inner(&pattern[1..], &text[1..]),
+        (Some(a), Some(b)) if *a == *b => glob_match_inner(&pattern[1..], &text[1..]),
+        _ => false,
     }
 }
 

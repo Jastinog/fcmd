@@ -1,4 +1,4 @@
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::time::SystemTime;
@@ -9,6 +9,7 @@ pub struct FileEntry {
     pub is_dir: bool,
     pub size: u64,
     pub modified: Option<SystemTime>,
+    pub created: Option<SystemTime>,
     pub is_symlink: bool,
 }
 
@@ -16,16 +17,26 @@ pub struct FileEntry {
 pub enum SortMode {
     Name,
     Size,
-    Date,
+    Modified,
+    Created,
     Extension,
 }
 
 impl SortMode {
+    pub const ALL: &[SortMode] = &[
+        SortMode::Name,
+        SortMode::Size,
+        SortMode::Modified,
+        SortMode::Created,
+        SortMode::Extension,
+    ];
+
     pub fn label(self) -> &'static str {
         match self {
             SortMode::Name => "name",
             SortMode::Size => "size",
-            SortMode::Date => "date",
+            SortMode::Modified => "mod",
+            SortMode::Created => "cre",
             SortMode::Extension => "ext",
         }
     }
@@ -61,6 +72,10 @@ impl Panel {
     }
 
     pub fn load_dir(&mut self) -> std::io::Result<()> {
+        self.load_dir_with_sizes(&HashMap::new())
+    }
+
+    pub fn load_dir_with_sizes(&mut self, dir_sizes: &HashMap<PathBuf, u64>) -> std::io::Result<()> {
         self.entries.clear();
 
         if let Some(parent) = self.path.parent() {
@@ -70,6 +85,7 @@ impl Panel {
                 is_dir: true,
                 size: 0,
                 modified: None,
+                created: None,
                 is_symlink: false,
             });
         }
@@ -96,6 +112,7 @@ impl Panel {
                 is_dir: metadata.is_dir(),
                 size: metadata.len(),
                 modified: metadata.modified().ok(),
+                created: metadata.created().ok(),
                 is_symlink,
             };
 
@@ -116,12 +133,25 @@ impl Panel {
                 files.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));
             }
             SortMode::Size => {
-                dirs.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));
+                dirs.sort_by(|a, b| {
+                    let sa = dir_sizes.get(&a.path).copied();
+                    let sb = dir_sizes.get(&b.path).copied();
+                    match (sa, sb) {
+                        (Some(sa), Some(sb)) => sa.cmp(&sb),
+                        (Some(_), None) => std::cmp::Ordering::Greater,
+                        (None, Some(_)) => std::cmp::Ordering::Less,
+                        (None, None) => a.name.to_lowercase().cmp(&b.name.to_lowercase()),
+                    }
+                });
                 files.sort_by(|a, b| a.size.cmp(&b.size));
             }
-            SortMode::Date => {
+            SortMode::Modified => {
                 dirs.sort_by(|a, b| a.modified.cmp(&b.modified));
                 files.sort_by(|a, b| a.modified.cmp(&b.modified));
+            }
+            SortMode::Created => {
+                dirs.sort_by(|a, b| a.created.cmp(&b.created));
+                files.sort_by(|a, b| a.created.cmp(&b.created));
             }
             SortMode::Extension => {
                 dirs.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));
