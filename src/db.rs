@@ -1,4 +1,4 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
 use rusqlite::{Connection, params};
@@ -37,28 +37,41 @@ impl Db {
                  size_bytes INTEGER NOT NULL
              );",
         )?;
+        // Migrate: add level column if missing
+        let has_level: bool = conn
+            .prepare("SELECT level FROM visual_marks LIMIT 0")
+            .is_ok();
+        if !has_level {
+            conn.execute_batch(
+                "ALTER TABLE visual_marks ADD COLUMN level INTEGER NOT NULL DEFAULT 1;",
+            )
+            .ok();
+        }
         Ok(Db { conn })
     }
 
-    pub fn load_visual_marks(&self) -> rusqlite::Result<HashSet<PathBuf>> {
-        let mut stmt = self.conn.prepare("SELECT path FROM visual_marks")?;
+    pub fn load_visual_marks(&self) -> rusqlite::Result<HashMap<PathBuf, u8>> {
+        let mut stmt = self
+            .conn
+            .prepare("SELECT path, level FROM visual_marks")?;
         let rows = stmt.query_map([], |row| {
             let s: String = row.get(0)?;
-            Ok(PathBuf::from(s))
+            let level: i64 = row.get(1)?;
+            Ok((PathBuf::from(s), level as u8))
         })?;
-        let mut set = HashSet::new();
+        let mut map = HashMap::new();
         for row in rows {
-            if let Ok(p) = row {
-                set.insert(p);
+            if let Ok((p, l)) = row {
+                map.insert(p, l);
             }
         }
-        Ok(set)
+        Ok(map)
     }
 
-    pub fn add_visual_mark(&self, path: &PathBuf) -> rusqlite::Result<()> {
+    pub fn set_visual_mark(&self, path: &PathBuf, level: u8) -> rusqlite::Result<()> {
         self.conn.execute(
-            "INSERT OR IGNORE INTO visual_marks (path) VALUES (?1)",
-            params![path.to_string_lossy().as_ref()],
+            "INSERT OR REPLACE INTO visual_marks (path, level) VALUES (?1, ?2)",
+            params![path.to_string_lossy().as_ref(), level as i64],
         )?;
         Ok(())
     }

@@ -122,8 +122,8 @@ pub struct App {
     pub tree_scroll: usize,
     pub start_dir: PathBuf,
     pub tree_data: Vec<crate::tree::TreeLine>,
-    // Visual marks (persistent colored dots)
-    pub visual_marks: HashSet<PathBuf>,
+    // Visual marks (persistent colored dots, level 1-3)
+    pub visual_marks: HashMap<PathBuf, u8>,
     // Database
     pub db: Option<crate::db::Db>,
     // Paste progress
@@ -145,6 +145,7 @@ pub struct App {
     // Git status
     pub git_statuses: HashMap<PathBuf, char>,
     pub git_root: Option<PathBuf>,
+    git_status_dir: Option<PathBuf>,
 }
 
 impl App {
@@ -158,7 +159,7 @@ impl App {
             }
             Err(e) => {
                 eprintln!("Warning: DB init failed: {e}");
-                (None, HashSet::new())
+                (None, HashMap::new())
             }
         };
 
@@ -210,7 +211,7 @@ impl App {
             list.iter().position(|n| n == &name)
         });
 
-        Ok(App {
+        let mut app = App {
             tabs,
             active_tab,
             mode: Mode::Normal,
@@ -251,7 +252,10 @@ impl App {
             sort_cursor: 0,
             git_statuses: HashMap::new(),
             git_root: None,
-        })
+            git_status_dir: None,
+        };
+        app.refresh_git_status();
+        Ok(app)
     }
 
     pub fn save_session(&self) {
@@ -315,6 +319,7 @@ impl App {
         }
 
         self.update_preview();
+        self.ensure_git_status();
     }
 
     // --- Normal mode ---
@@ -397,6 +402,7 @@ impl App {
 
             // Marks
             KeyCode::Char('m') => self.toggle_visual_mark(),
+            KeyCode::Char('M') => self.jump_next_visual_mark(),
 
             // Toggles & settings
             KeyCode::Char('r') if ctrl => self.refresh_current_panel(),
@@ -482,6 +488,7 @@ impl App {
             self.status_message = format!("Refresh error: {e}");
         }
         self.tree_dirty = true;
+        self.git_status_dir = None; // force re-fetch
         self.refresh_git_status();
     }
 
@@ -1031,23 +1038,49 @@ impl App {
         }
         let path = entry.path.clone();
         let name = entry.name.clone();
-        if self.visual_marks.remove(&path) {
+        let current_level = self.visual_marks.get(&path).copied().unwrap_or(0);
+        let next_level = if current_level >= 3 { 0 } else { current_level + 1 };
+
+        if next_level == 0 {
+            self.visual_marks.remove(&path);
             if let Some(ref db) = self.db {
                 if let Err(e) = db.remove_visual_mark(&path) {
-                    self.status_message = format!("Unmarked: {name} (db error: {e})");
+                    self.status_message = format!("Unmark error: {e}");
                     return;
                 }
             }
             self.status_message = format!("Unmarked: {name}");
         } else {
+            self.visual_marks.insert(path.clone(), next_level);
             if let Some(ref db) = self.db {
-                if let Err(e) = db.add_visual_mark(&path) {
-                    self.status_message = format!("Mark failed: {e}");
+                if let Err(e) = db.set_visual_mark(&path, next_level) {
+                    self.status_message = format!("Mark error: {e}");
                     return;
                 }
             }
-            self.visual_marks.insert(path);
-            self.status_message = format!("Marked: {name}");
+            let label = match next_level {
+                1 => "●1",
+                2 => "●2",
+                3 => "●3",
+                _ => "●",
+            };
+            self.status_message = format!("{label} {name}");
+        }
+    }
+
+    fn jump_next_visual_mark(&mut self) {
+        let panel = self.active_panel();
+        let len = panel.entries.len();
+        if len == 0 {
+            return;
+        }
+        let start = (panel.selected + 1) % len;
+        let pos = (0..len)
+            .map(|i| (start + i) % len)
+            .find(|&i| self.visual_marks.contains_key(&panel.entries[i].path));
+        match pos {
+            Some(pos) => self.active_panel_mut().selected = pos,
+            None => self.status_message = "No marks".into(),
         }
     }
 
@@ -1603,7 +1636,6 @@ impl App {
             PanelSide::Right => &mut tab.right,
         };
         let _ = panel.load_dir_with_sizes(&self.dir_sizes);
-        self.refresh_git_status();
     }
 
     fn refresh_panels(&mut self) {
@@ -1611,6 +1643,23 @@ impl App {
         let _ = tab.left.load_dir_with_sizes(&self.dir_sizes);
         let _ = tab.right.load_dir_with_sizes(&self.dir_sizes);
         self.tree_dirty = true;
+        self.git_status_dir = None; // force re-fetch
+        self.refresh_git_status();
+    }
+
+    fn ensure_git_status(&mut self) {
+        let dir = self.active_panel().path.clone();
+
+        // Check if current dir is inside the cached git root — statuses still valid
+        if let Some(ref root) = self.git_root {
+            if dir.starts_with(root) {
+                return;
+            }
+        }
+        // Different repo or not cached yet — need to check
+        if self.git_status_dir.as_ref() == Some(&dir) {
+            return; // already checked this dir, it's not a git repo
+        }
         self.refresh_git_status();
     }
 
@@ -1619,6 +1668,7 @@ impl App {
         self.git_root = None;
 
         let dir = self.active_panel().path.clone();
+        self.git_status_dir = Some(dir.clone());
 
         // Detect git root
         let root_output = std::process::Command::new("git")

@@ -255,7 +255,7 @@ fn render_panel(
     panel: &Panel,
     area: Rect,
     is_active: bool,
-    visual_marks: &std::collections::HashSet<std::path::PathBuf>,
+    visual_marks: &std::collections::HashMap<std::path::PathBuf, u8>,
     dir_sizes: &std::collections::HashMap<std::path::PathBuf, u64>,
     register: Option<&Register>,
     phantoms: &[crate::app::PhantomEntry],
@@ -292,9 +292,10 @@ fn render_panel(
     let inner_width = inner.width as usize;
 
     let icon_width = 2;
-    let sign_width = 3; // 1 git + 2 mark/reg sign
+    let sign_width = 2; // 1 git + 1 reg
     let meta_width = 16;
-    let name_width = inner_width.saturating_sub(meta_width + icon_width + sign_width);
+    let vm_width = 1; // visual mark on the right
+    let name_width = inner_width.saturating_sub(meta_width + icon_width + sign_width + vm_width);
 
     let visual_range = panel.visual_range();
 
@@ -394,7 +395,7 @@ fn render_panel(
                 (ic, nc, mc)
             };
 
-            let is_vm = visual_marks.contains(&entry.path);
+            let vm_level = visual_marks.get(&entry.path).copied().unwrap_or(0);
             let row_bg = if is_active_cursor {
                 Some(t.blue)
             } else if in_visual && is_active {
@@ -404,16 +405,12 @@ fn render_panel(
             } else {
                 None
             };
-            let sign_text = if is_vm {
-                "\u{2588} "
-            } else if in_reg {
-                "\u{258e} "
+            let sign_text = if in_reg {
+                "\u{258e}"
             } else {
-                "  "
+                " "
             };
-            let mut sign_style = if is_vm {
-                Style::default().fg(t.yellow)
-            } else if let Some(c) = reg_color {
+            let mut sign_style = if let Some(c) = reg_color {
                 Style::default().fg(c)
             } else {
                 Style::default()
@@ -423,25 +420,48 @@ fn render_panel(
             }
 
             let git_char = git_statuses.get(&entry.path).copied().unwrap_or(' ');
-            let mut git_style = match git_char {
-                'M' => Style::default().fg(t.yellow),
-                'A' => Style::default().fg(t.green),
-                '?' => Style::default().fg(t.cyan),
-                'D' => Style::default().fg(t.red),
-                'R' => Style::default().fg(t.magenta),
-                _ => Style::default().fg(t.fg_dim),
+            let git_color = match git_char {
+                'M' => Some(t.yellow),
+                'A' => Some(t.green),
+                '?' => Some(t.cyan),
+                'D' => Some(t.red),
+                'R' => Some(t.magenta),
+                _ => None,
             };
-            if let Some(bg) = row_bg {
-                git_style = git_style.bg(bg);
-            }
+            let git_style = match (git_color, row_bg) {
+                (Some(c), Some(_)) => Style::default().fg(t.bg).bg(c),
+                (Some(c), None) => Style::default().fg(c),
+                (None, Some(bg)) => Style::default().fg(t.fg_dim).bg(bg),
+                (None, None) => Style::default().fg(t.fg_dim),
+            };
 
-            let meta_text = format!(" {size_str} {date_str}");
+            let meta_text = format!(" {size_str} {date_str} ");
+
+            let (vm_text, vm_style) = if vm_level > 0 {
+                let vm_color = match vm_level {
+                    1 => t.green,
+                    2 => t.yellow,
+                    _ => t.red,
+                };
+                let s = if row_bg.is_some() {
+                    Style::default().fg(t.bg).bg(vm_color)
+                } else {
+                    Style::default().fg(vm_color)
+                };
+                ("\u{258a}", s)
+            } else {
+                let mut s = meta_style;
+                if let Some(bg) = row_bg { s = s.bg(bg); }
+                (" ", s)
+            };
+
             let line = Line::from(vec![
                 Span::styled(format!("{git_char}"), git_style),
                 Span::styled(sign_text, sign_style),
                 Span::styled(icon, icon_style),
                 Span::styled(name_col, name_style),
                 Span::styled(meta_text, meta_style),
+                Span::styled(vm_text, vm_style),
             ]);
             ListItem::new(line)
         })
@@ -472,10 +492,11 @@ fn render_panel(
                 format!("{display}{}", " ".repeat(pad))
             };
             let line = Line::from(vec![
-                Span::styled("\u{25cc} ", ghost_style),
+                Span::styled("\u{25cc}", ghost_style),
+                Span::styled(" ", ghost_style),
                 Span::styled(icon, ghost_style),
                 Span::styled(name_col, ghost_style),
-                Span::styled(" ".repeat(meta_width), ghost_style),
+                Span::styled(" ".repeat(meta_width + vm_width), ghost_style),
             ]);
             items.push(ListItem::new(line));
         }
