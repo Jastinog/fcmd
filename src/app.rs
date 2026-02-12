@@ -5,7 +5,7 @@ use std::time::Instant;
 
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
-use crate::find::FindState;
+use crate::find::{FindScope, FindState};
 use crate::ops::{self, DuMsg, ProgressMsg, Register, RegisterOp, UndoStack};
 use crate::panel::{Panel, SortMode};
 use crate::preview::Preview;
@@ -371,7 +371,6 @@ impl App {
             KeyCode::Char('\'') => { self.pending_key = Some('\''); self.pending_key_time = Some(Instant::now()); },
 
             // File operations
-            KeyCode::Char('p') if ctrl => self.open_find(),
             KeyCode::Char('p') => self.paste(false),
             KeyCode::Char('P') => self.paste(true),
             KeyCode::Char('u') => self.undo(),
@@ -429,6 +428,8 @@ impl App {
             (' ', KeyCode::Char('h')) => self.toggle_hidden(),
             (' ', KeyCode::Char('p')) => self.preview_mode = !self.preview_mode,
             (' ', KeyCode::Char('d')) => self.start_du(),
+            (' ', KeyCode::Char(',')) => self.open_find_local(),
+            (' ', KeyCode::Char('.')) => self.open_find_global(),
             (' ', KeyCode::Char('?')) => self.mode = Mode::Help,
             _ => return false,
         }
@@ -465,6 +466,8 @@ impl App {
             ("h", "hidden"),
             ("p", "preview"),
             ("d", "dir sizes"),
+            (",", "find"),
+            (".", "find global"),
             ("?", "help"),
         ];
         const SORT_HINTS: &[(&str, &str)] = &[
@@ -1062,9 +1065,15 @@ impl App {
 
     // --- Find mode ---
 
-    fn open_find(&mut self) {
+    fn open_find_local(&mut self) {
         let base = self.active_panel().path.clone();
-        self.find_state = Some(FindState::new(&base));
+        self.find_state = Some(FindState::new_local(&base));
+        self.mode = Mode::Find;
+    }
+
+    fn open_find_global(&mut self) {
+        let base = self.active_panel().path.clone();
+        self.find_state = Some(FindState::new_global(&base));
         self.mode = Mode::Find;
     }
 
@@ -1098,16 +1107,31 @@ impl App {
             KeyCode::Enter => {
                 self.accept_find();
             }
+            KeyCode::Tab => {
+                if let Some(ref fs) = self.find_state {
+                    let mut new_state = fs.switch_scope();
+                    new_state.update_filter();
+                    self.find_state = Some(new_state);
+                }
+            }
             KeyCode::Backspace => {
                 if let Some(ref mut fs) = self.find_state {
                     fs.query.pop();
-                    fs.update_filter();
+                    if fs.scope == FindScope::Global {
+                        fs.trigger_search();
+                    } else {
+                        fs.update_filter();
+                    }
                 }
             }
             KeyCode::Char(c) if !ctrl => {
                 if let Some(ref mut fs) = self.find_state {
                     fs.query.push(c);
-                    fs.update_filter();
+                    if fs.scope == FindScope::Global {
+                        fs.trigger_search();
+                    } else {
+                        fs.update_filter();
+                    }
                 }
             }
             _ => {}
@@ -1262,6 +1286,7 @@ impl App {
     pub fn poll_find(&mut self) {
         if let Some(ref mut fs) = self.find_state {
             fs.poll_entries();
+            fs.update_find_preview();
         }
     }
 
@@ -1630,7 +1655,7 @@ impl App {
 
             "find" => {
                 let base = self.active_panel().path.clone();
-                let mut fs = FindState::new(&base);
+                let mut fs = FindState::new_local(&base);
                 if let Some(pattern) = arg.filter(|a| !a.is_empty()) {
                     fs.query = pattern.to_string();
                     fs.update_filter();

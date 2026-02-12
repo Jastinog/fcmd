@@ -1,6 +1,9 @@
 use std::fs;
+use std::io::BufRead;
 use std::path::{Path, PathBuf};
+use std::process::{Command, Stdio};
 use std::sync::mpsc;
+use std::time::Instant;
 
 const MAX_ENTRIES: usize = 5000;
 const MAX_DEPTH: usize = 12;
@@ -9,9 +12,17 @@ const SKIP_DIRS: &[&str] = &[
     "__pycache__", ".cache", "build", "dist", ".next",
 ];
 
+const MDFIND_LIMIT: usize = 5000;
+
+#[derive(Clone, Copy, PartialEq)]
+pub enum FindScope {
+    Local,
+    Global,
+}
+
 struct Entry {
     rel_path: String,
-    rel_path_lower: String, // cached lowercase for fuzzy matching
+    rel_path_lower: String,
     full_path: PathBuf,
     is_dir: bool,
 }
@@ -23,11 +34,27 @@ pub struct FindState {
     pub filtered: Vec<usize>,
     pub selected: usize,
     pub scroll: usize,
-    pub walking: bool,
+    pub loading: bool,
+    pub scope: FindScope,
+    base_dir: PathBuf,
+    search_child: Option<std::process::Child>,
+    pub find_preview: Option<crate::preview::Preview>,
+    find_preview_path: Option<PathBuf>,
+    pub search_started: Option<Instant>,
+    pub tick: usize,
+}
+
+impl Drop for FindState {
+    fn drop(&mut self) {
+        if let Some(ref mut child) = self.search_child {
+            let _ = child.kill();
+            let _ = child.wait();
+        }
+    }
 }
 
 impl FindState {
-    pub fn new(base_dir: &Path) -> Self {
+    pub fn new_local(base_dir: &Path) -> Self {
         let (tx, rx) = mpsc::channel();
         let base = base_dir.to_path_buf();
         std::thread::spawn(move || {
@@ -40,13 +67,161 @@ impl FindState {
             filtered: Vec::new(),
             selected: 0,
             scroll: 0,
-            walking: true,
+            loading: true,
+            scope: FindScope::Local,
+            base_dir: base_dir.to_path_buf(),
+            search_child: None,
+            find_preview: None,
+            find_preview_path: None,
+            search_started: Some(Instant::now()),
+            tick: 0,
         }
     }
 
-    /// Drain pending entries from background walk thread.
+    pub fn new_global(base_dir: &Path) -> Self {
+        FindState {
+            query: String::new(),
+            entries: Vec::new(),
+            rx: None,
+            filtered: Vec::new(),
+            selected: 0,
+            scroll: 0,
+            loading: false,
+            scope: FindScope::Global,
+            base_dir: base_dir.to_path_buf(),
+            search_child: None,
+            find_preview: None,
+            find_preview_path: None,
+            search_started: None,
+            tick: 0,
+        }
+    }
+
+    pub fn switch_scope(&self) -> Self {
+        let mut new_state = match self.scope {
+            FindScope::Local => Self::new_global(&self.base_dir),
+            FindScope::Global => Self::new_local(&self.base_dir),
+        };
+        new_state.query = self.query.clone();
+        // For global, trigger search if query is non-empty
+        if new_state.scope == FindScope::Global && !new_state.query.is_empty() {
+            new_state.trigger_search();
+        }
+        new_state
+    }
+
+    /// Trigger global search (tries mdfind, falls back to find from $HOME).
+    pub fn trigger_search(&mut self) {
+        if self.scope != FindScope::Global {
+            return;
+        }
+
+        // Kill old search process
+        if let Some(ref mut child) = self.search_child {
+            let _ = child.kill();
+            let _ = child.wait();
+        }
+        self.search_child = None;
+
+        // Clear state
+        self.entries.clear();
+        self.filtered.clear();
+        self.selected = 0;
+        self.scroll = 0;
+
+        if self.query.is_empty() {
+            self.loading = false;
+            self.rx = None;
+            self.search_started = None;
+            return;
+        }
+
+        let (tx, rx) = mpsc::channel();
+        let query = self.query.clone();
+        let pattern = format!("*{query}*");
+
+        // Try mdfind first (Spotlight), fall back to find from $HOME
+        let child_result = Command::new("mdfind")
+            .args(["-name", &query])
+            .stdout(Stdio::piped())
+            .stderr(Stdio::null())
+            .spawn();
+
+        let child_result = match child_result {
+            Ok(child) => {
+                // If Spotlight is disabled, mdfind exits with empty output.
+                // The reader thread will detect 0 results and retry with find.
+                Ok(child)
+            }
+            Err(_) => {
+                // mdfind not available, use find
+                let home = std::env::var("HOME").unwrap_or_else(|_| "/".to_string());
+                Command::new("find")
+                    .args([&home, "-maxdepth", "6", "-iname", &pattern])
+                    .stdout(Stdio::piped())
+                    .stderr(Stdio::null())
+                    .spawn()
+            }
+        };
+
+        match child_result {
+            Ok(mut child) => {
+                let stdout = child.stdout.take().unwrap();
+                self.search_child = Some(child);
+                self.rx = Some(rx);
+                self.loading = true;
+                self.search_started = Some(Instant::now());
+
+                std::thread::spawn(move || {
+                    let count = global_search_read(stdout, &tx);
+                    // If mdfind returned 0 results (Spotlight disabled), retry with find
+                    if count == 0 {
+                        let home = std::env::var("HOME").unwrap_or_else(|_| "/".to_string());
+                        if let Ok(mut child) = Command::new("find")
+                            .args([&home, "-maxdepth", "6", "-iname", &pattern])
+                            .stdout(Stdio::piped())
+                            .stderr(Stdio::null())
+                            .spawn()
+                        {
+                            if let Some(stdout) = child.stdout.take() {
+                                global_search_read(stdout, &tx);
+                            }
+                            let _ = child.wait();
+                        }
+                    }
+                });
+            }
+            Err(_) => {
+                self.loading = false;
+            }
+        }
+    }
+
+    /// Spinner character for the current tick.
+    pub fn spinner(&self) -> &'static str {
+        const FRAMES: &[&str] = &["\u{280b}", "\u{2819}", "\u{2839}", "\u{2838}", "\u{283c}", "\u{2834}", "\u{2826}", "\u{2827}", "\u{2807}", "\u{280f}"];
+        FRAMES[self.tick % FRAMES.len()]
+    }
+
+    /// Elapsed time since search started, formatted.
+    pub fn elapsed_str(&self) -> String {
+        match self.search_started {
+            Some(t) => {
+                let secs = t.elapsed().as_secs_f64();
+                if secs < 1.0 {
+                    format!("{:.0}ms", secs * 1000.0)
+                } else {
+                    format!("{secs:.1}s")
+                }
+            }
+            None => String::new(),
+        }
+    }
+
+    /// Drain pending entries from background thread.
     /// Returns true if new entries arrived.
     pub fn poll_entries(&mut self) -> bool {
+        self.tick = self.tick.wrapping_add(1);
         let Some(rx) = &self.rx else {
             return false;
         };
@@ -60,7 +235,7 @@ impl FindState {
                 Err(mpsc::TryRecvError::Empty) => break,
                 Err(mpsc::TryRecvError::Disconnected) => {
                     self.rx = None;
-                    self.walking = false;
+                    self.loading = false;
                     break;
                 }
             }
@@ -100,6 +275,15 @@ impl FindState {
         self.refilter();
         self.selected = 0;
         self.scroll = 0;
+    }
+
+    pub fn update_find_preview(&mut self) {
+        let current = self.selected_path().map(|p| p.to_path_buf());
+        if current == self.find_preview_path {
+            return;
+        }
+        self.find_preview_path = current.clone();
+        self.find_preview = current.map(|p| crate::preview::Preview::load(&p));
     }
 
     pub fn move_up(&mut self) {
@@ -144,6 +328,42 @@ impl FindState {
             .and_then(|&i| self.entries.get(i))
             .map(|e| (e.rel_path.as_str(), e.is_dir))
     }
+}
+
+fn abbreviate_home(path: &str) -> String {
+    if let Ok(home) = std::env::var("HOME") {
+        if let Some(rest) = path.strip_prefix(&home) {
+            return format!("~{rest}");
+        }
+    }
+    path.to_string()
+}
+
+fn global_search_read(stdout: std::process::ChildStdout, tx: &mpsc::Sender<Entry>) -> usize {
+    let reader = std::io::BufReader::new(stdout);
+    let mut count = 0;
+    for line in reader.lines().map_while(Result::ok) {
+        if count >= MDFIND_LIMIT {
+            break;
+        }
+        let path = PathBuf::from(&line);
+        let is_dir = path.is_dir();
+        let display = abbreviate_home(&line);
+        let display_lower = display.to_lowercase();
+        if tx
+            .send(Entry {
+                rel_path: display,
+                rel_path_lower: display_lower,
+                full_path: path,
+                is_dir,
+            })
+            .is_err()
+        {
+            break;
+        }
+        count += 1;
+    }
+    count
 }
 
 fn walk_send(
@@ -197,7 +417,7 @@ fn walk_send(
             })
             .is_err()
         {
-            return; // receiver dropped (FindState closed)
+            return;
         }
 
         *count += 1;
@@ -291,7 +511,6 @@ mod tests {
     fn fuzzy_case_insensitive() {
         let q: Vec<char> = "main".chars().collect();
         let score = fuzzy_score_pre(&q, "main.rs", 7);
-        // Already lowered, so same as matching "MAIN" against "main.rs" pre-lowered
         assert!(score.is_some());
     }
 

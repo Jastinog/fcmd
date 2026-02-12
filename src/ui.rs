@@ -9,8 +9,9 @@ use ratatui::{
 use std::time::SystemTime;
 
 use crate::app::{App, Mode, PanelSide};
-use crate::find::FindState;
+use crate::find::{FindScope, FindState};
 use crate::icons::file_icon;
+use crate::ops::{Register, RegisterOp};
 use crate::panel::{Panel, SortMode};
 use crate::preview::Preview;
 use crate::theme::Theme;
@@ -83,9 +84,12 @@ pub fn render(f: &mut Frame, app: &mut App) {
 
     // Adjust find scroll before rendering
     if let Some(ref mut fs) = app.find_state {
-        let popup = centered_rect(60, 70, full_area);
+        let popup = centered_rect(80, 75, full_area);
+        // Left half height minus input(1) + sep(1) + hint(1) + borders(2)
         let inner_h = popup.height.saturating_sub(4) as usize;
-        fs.adjust_scroll(inner_h);
+        // The results area is half the width, but same height
+        let results_h = inner_h.saturating_sub(1); // -1 for hint line
+        fs.adjust_scroll(results_h);
     }
 
     // Rebuild tree data only when needed
@@ -128,17 +132,18 @@ pub fn render(f: &mut Frame, app: &mut App) {
     let t = &app.theme;
     let vm = &app.visual_marks;
     let ds = &app.dir_sizes;
+    let reg = app.register.as_ref();
     let left_phantoms = app.phantoms_for(&tab.left.path);
     let right_phantoms = app.phantoms_for(&tab.right.path);
     if app.preview_mode {
         match tab.active {
             PanelSide::Left => {
-                render_panel(f, &tab.left, panel_areas[0], panels_active, vm, ds, left_phantoms, t);
+                render_panel(f, &tab.left, panel_areas[0], panels_active, vm, ds, reg, left_phantoms, t);
                 render_preview(f, &app.preview, panel_areas[1], t);
             }
             PanelSide::Right => {
                 render_preview(f, &app.preview, panel_areas[0], t);
-                render_panel(f, &tab.right, panel_areas[1], panels_active, vm, ds, right_phantoms, t);
+                render_panel(f, &tab.right, panel_areas[1], panels_active, vm, ds, reg, right_phantoms, t);
             }
         }
     } else {
@@ -149,6 +154,7 @@ pub fn render(f: &mut Frame, app: &mut App) {
             panels_active && tab.active == PanelSide::Left,
             vm,
             ds,
+            reg,
             left_phantoms,
             t,
         );
@@ -159,6 +165,7 @@ pub fn render(f: &mut Frame, app: &mut App) {
             panels_active && tab.active == PanelSide::Right,
             vm,
             ds,
+            reg,
             right_phantoms,
             t,
         );
@@ -243,6 +250,7 @@ fn render_panel(
     is_active: bool,
     visual_marks: &std::collections::HashSet<std::path::PathBuf>,
     dir_sizes: &std::collections::HashMap<std::path::PathBuf, u64>,
+    register: Option<&Register>,
     phantoms: &[crate::app::PhantomEntry],
     t: &Theme,
 ) {
@@ -326,6 +334,15 @@ fn render_panel(
 
             let is_cursor = i == panel.selected;
             let is_active_cursor = is_cursor && is_active;
+            let in_reg = register.map_or(false, |r| r.paths.contains(&entry.path));
+            let reg_color = register.and_then(|r| if in_reg {
+                Some(match r.op {
+                    RegisterOp::Yank => t.cyan,
+                    RegisterOp::Cut => t.red,
+                })
+            } else {
+                None
+            });
 
             // Determine styles per segment
             let (icon_style, name_style, meta_style) = if is_active_cursor {
@@ -338,6 +355,9 @@ fn render_panel(
                 (base, base, base)
             } else if is_marked {
                 let base = Style::default().fg(t.green);
+                (base, base, base)
+            } else if let Some(c) = reg_color {
+                let base = Style::default().fg(c);
                 (base, base, base)
             } else if is_cursor {
                 // Inactive panel cursor
@@ -372,9 +392,17 @@ fn render_panel(
             } else {
                 None
             };
-            let sign_text = if is_vm { "\u{2588} " } else { "  " };
+            let sign_text = if is_vm {
+                "\u{2588} "
+            } else if in_reg {
+                "\u{258e} "
+            } else {
+                "  "
+            };
             let mut sign_style = if is_vm {
                 Style::default().fg(t.yellow)
+            } else if let Some(c) = reg_color {
+                Style::default().fg(c)
             } else {
                 Style::default()
             };
@@ -940,7 +968,7 @@ fn render_help(f: &mut Frame, t: &Theme, area: Rect) {
                 ("v", "Visual select"),
                 ("/", "Search"),
                 (":", "Command mode"),
-                ("Ctrl-p", "Fuzzy finder"),
+                ("Space+,/.", "Find local/global"),
                 ("?", "This help"),
             ],
         ),
@@ -1003,106 +1031,259 @@ fn render_help(f: &mut Frame, t: &Theme, area: Rect) {
 // ── Find overlay ────────────────────────────────────────────────────
 
 fn render_find(f: &mut Frame, fs: &FindState, t: &Theme, area: Rect) {
-    let popup = centered_rect(60, 70, area);
+    let popup = centered_rect(80, 75, area);
     f.render_widget(Clear, popup);
 
-    let walk_indicator = if fs.walking { "\u{2026}" } else { "" };
+    let scope_label = match fs.scope {
+        FindScope::Local => "Local",
+        FindScope::Global => "Global",
+    };
+    let scope_color = match fs.scope {
+        FindScope::Local => t.cyan,
+        FindScope::Global => t.yellow,
+    };
+    let status_part = if fs.loading {
+        let spinner = fs.spinner();
+        let elapsed = fs.elapsed_str();
+        format!("{spinner} {elapsed}")
+    } else if fs.total_count() > 0 {
+        "\u{2714}".to_string()
+    } else {
+        String::new()
+    };
     let title = format!(
-        "  Find ({}/{}{walk_indicator}) ",
+        "  Find [{scope_label}] ({}/{}) {status_part} ",
         fs.filtered_count(),
         fs.total_count()
     );
     let block = Block::default()
         .borders(Borders::ALL)
-        .border_style(Style::default().fg(t.cyan))
+        .border_style(Style::default().fg(scope_color))
         .title(title)
-        .title_style(Style::default().fg(t.cyan));
+        .title_style(Style::default().fg(scope_color));
 
     let inner = block.inner(popup);
     f.render_widget(block, popup);
 
-    if inner.height < 2 {
+    if inner.height < 3 || inner.width < 10 {
         return;
     }
 
+    // Split inner into left (results) and right (preview) columns
+    let left_w = inner.width / 2;
+    let right_w = inner.width - left_w - 1; // -1 for vertical separator
+    let left_x = inner.x;
+    let sep_x = inner.x + left_w;
+    let right_x = sep_x + 1;
+
+    // === LEFT SIDE: input + separator + results + hint ===
+
     // Input line
-    let input_area = Rect::new(inner.x, inner.y, inner.width, 1);
+    let input_area = Rect::new(left_x, inner.y, left_w, 1);
     let input_text = format!("> {}", fs.query);
     let input = Paragraph::new(Line::from(Span::styled(
         input_text,
-        Style::default()
-            .fg(t.green),
+        Style::default().fg(t.green),
     )));
     f.render_widget(input, input_area);
 
     // Separator
-    let sep_area = Rect::new(inner.x, inner.y + 1, inner.width, 1);
+    let sep_area = Rect::new(left_x, inner.y + 1, left_w, 1);
     let sep = Paragraph::new(Line::from(Span::styled(
-        "\u{2500}".repeat(inner.width as usize),
+        "\u{2500}".repeat(left_w as usize),
         Style::default().fg(t.border_inactive),
     )));
     f.render_widget(sep, sep_area);
 
-    // Results
-    let results_height = inner.height.saturating_sub(2) as usize;
-    let results_area = Rect::new(inner.x, inner.y + 2, inner.width, results_height as u16);
+    // Results (leave 1 row at bottom for hint)
+    let results_height = inner.height.saturating_sub(4) as usize;
+    let results_area = Rect::new(left_x, inner.y + 2, left_w, results_height as u16);
 
-    let width = results_area.width as usize;
-    let items: Vec<ListItem> = (fs.scroll..fs.scroll + results_height)
-        .filter_map(|idx| {
-            let (rel_path, is_dir) = fs.get_item(idx)?;
-            let is_selected = idx == fs.selected;
+    let lwidth = results_area.width as usize;
 
-            let icon = file_icon(
-                rel_path.rsplit('/').next().unwrap_or(rel_path),
-                is_dir,
+    // Placeholders for global search
+    if fs.scope == FindScope::Global && fs.query.is_empty() {
+        let placeholder = Paragraph::new(Line::from(Span::styled(
+            "  Type to search...",
+            Style::default().fg(t.fg_dim),
+        )));
+        f.render_widget(placeholder, results_area);
+    } else if fs.loading && fs.filtered_count() == 0 {
+        let spinner = fs.spinner();
+        let placeholder = Paragraph::new(Line::from(Span::styled(
+            format!("  {spinner} Searching..."),
+            Style::default().fg(t.fg_dim),
+        )));
+        f.render_widget(placeholder, results_area);
+    } else {
+        let items: Vec<ListItem> = (fs.scroll..fs.scroll + results_height)
+            .filter_map(|idx| {
+                let (rel_path, is_dir) = fs.get_item(idx)?;
+                let is_selected = idx == fs.selected;
+
+                let icon = file_icon(
+                    rel_path.rsplit('/').next().unwrap_or(rel_path),
+                    is_dir,
+                );
+
+                let display = if is_dir {
+                    format!("{rel_path}/")
+                } else {
+                    rel_path.to_string()
+                };
+
+                let max_display = lwidth.saturating_sub(4 + icon.chars().count());
+                let display_chars: Vec<char> = display.chars().collect();
+                let truncated = if display_chars.len() > max_display {
+                    let start = display_chars.len() - max_display.saturating_sub(1);
+                    let tail: String = display_chars[start..].iter().collect();
+                    format!("\u{2026}{tail}")
+                } else {
+                    display
+                };
+
+                let prefix = if is_selected { "> " } else { "  " };
+
+                let sel_bg = match fs.scope {
+                    FindScope::Local => t.cyan,
+                    FindScope::Global => t.yellow,
+                };
+
+                let style = if is_selected {
+                    Style::default().fg(t.bg).bg(sel_bg)
+                } else if is_dir {
+                    Style::default().fg(t.dir_color)
+                } else {
+                    Style::default().fg(t.fg)
+                };
+
+                let icon_style = if is_selected {
+                    style
+                } else {
+                    Style::default().fg(t.fg_dim)
+                };
+
+                let line = Line::from(vec![
+                    Span::styled(prefix, style),
+                    Span::styled(icon, icon_style),
+                    Span::styled(truncated, style),
+                ]);
+
+                Some(ListItem::new(line))
+            })
+            .collect();
+
+        f.render_widget(List::new(items), results_area);
+    }
+
+    // Hint line at the bottom of left side
+    let hint_y = inner.y + inner.height.saturating_sub(1);
+    let hint_area = Rect::new(left_x, hint_y, left_w, 1);
+    let mut hint_spans = vec![
+        Span::styled(" Tab", Style::default().fg(scope_color)),
+        Span::styled(": scope \u{2502} ", Style::default().fg(t.fg_dim)),
+        Span::styled("Esc", Style::default().fg(scope_color)),
+        Span::styled(": close", Style::default().fg(t.fg_dim)),
+    ];
+    // Show search progress on the right side of the hint bar
+    if fs.scope == FindScope::Global && !fs.query.is_empty() {
+        let used: usize = hint_spans.iter().map(|s| s.content.chars().count()).sum();
+        let elapsed = fs.elapsed_str();
+        let status_text = if fs.loading {
+            format!(" {} {} found", fs.spinner(), fs.total_count())
+        } else {
+            format!(" \u{2714} {} found ({})", fs.total_count(), elapsed)
+        };
+        let pad = (left_w as usize).saturating_sub(used + status_text.chars().count());
+        if pad > 0 {
+            hint_spans.push(Span::styled(" ".repeat(pad), Style::default()));
+        }
+        let status_color = if fs.loading { t.yellow } else { t.green };
+        hint_spans.push(Span::styled(status_text, Style::default().fg(status_color)));
+    }
+    f.render_widget(Paragraph::new(Line::from(hint_spans)), hint_area);
+
+    // === VERTICAL SEPARATOR ===
+    for row in 0..inner.height {
+        let sep_rect = Rect::new(sep_x, inner.y + row, 1, 1);
+        f.render_widget(
+            Paragraph::new(Line::from(Span::styled(
+                "\u{2502}",
+                Style::default().fg(t.border_inactive),
+            ))),
+            sep_rect,
+        );
+    }
+
+    // === RIGHT SIDE: preview ===
+    match &fs.find_preview {
+        Some(p) => {
+            // Preview title
+            let preview_title = format!(" {} [{}] ", p.title, p.info);
+            let title_chars: Vec<char> = preview_title.chars().collect();
+            let title_display = if title_chars.len() > right_w as usize {
+                let truncated: String = title_chars[..right_w.saturating_sub(2) as usize].iter().collect();
+                format!("{truncated}\u{2026} ")
+            } else {
+                preview_title
+            };
+            let title_area = Rect::new(right_x, inner.y, right_w, 1);
+            f.render_widget(
+                Paragraph::new(Line::from(Span::styled(
+                    title_display,
+                    Style::default().fg(scope_color),
+                ))),
+                title_area,
             );
 
-            let display = if is_dir {
-                format!("{rel_path}/")
-            } else {
-                rel_path.to_string()
-            };
+            // Preview content
+            let content_height = inner.height.saturating_sub(1) as usize;
+            let content_area = Rect::new(right_x, inner.y + 1, right_w, content_height as u16);
+            let rwidth = right_w as usize;
 
-            let max_display = width.saturating_sub(4 + icon.chars().count());
-            let display_chars: Vec<char> = display.chars().collect();
-            let truncated = if display_chars.len() > max_display {
-                let start = display_chars.len() - max_display.saturating_sub(1);
-                let tail: String = display_chars[start..].iter().collect();
-                format!("\u{2026}{tail}")
-            } else {
-                display
-            };
+            let items: Vec<ListItem> = p
+                .lines
+                .iter()
+                .skip(p.scroll)
+                .take(content_height)
+                .enumerate()
+                .map(|(i, line)| {
+                    let line_num = i + p.scroll + 1;
+                    let num_width = 4;
+                    let max_content = rwidth.saturating_sub(num_width + 2);
+                    let content: String = if line.chars().count() > max_content {
+                        line.chars().take(max_content).collect()
+                    } else {
+                        line.clone()
+                    };
+                    Line::from(vec![
+                        Span::styled(
+                            format!("{line_num:>num_width$}\u{2502}", num_width = num_width),
+                            Style::default().fg(t.fg_dim),
+                        ),
+                        Span::styled(content, Style::default().fg(t.fg)),
+                    ])
+                })
+                .map(ListItem::new)
+                .collect();
 
-            let prefix = if is_selected { "> " } else { "  " };
-
-            let style = if is_selected {
-                Style::default()
-                    .fg(t.fg)
-                    .bg(t.cyan)
-                                } else if is_dir {
-                Style::default().fg(t.dir_color)
-            } else {
-                Style::default().fg(t.fg)
-            };
-
-            let icon_style = if is_selected {
-                style
-            } else {
-                Style::default().fg(t.fg_dim)
-            };
-
-            let line = Line::from(vec![
-                Span::styled(prefix, style),
-                Span::styled(icon, icon_style),
-                Span::styled(truncated, style),
-            ]);
-
-            Some(ListItem::new(line))
-        })
-        .collect();
-
-    f.render_widget(List::new(items), results_area);
+            f.render_widget(List::new(items), content_area);
+        }
+        None => {
+            // No preview placeholder
+            let center_y = inner.y + inner.height / 2;
+            let placeholder_area = Rect::new(right_x, center_y, right_w, 1);
+            let text = "No preview";
+            let pad = (right_w as usize).saturating_sub(text.len()) / 2;
+            f.render_widget(
+                Paragraph::new(Line::from(Span::styled(
+                    format!("{}{text}", " ".repeat(pad)),
+                    Style::default().fg(t.fg_dim),
+                ))),
+                placeholder_area,
+            );
+        }
+    }
 }
 
 // ── Utilities ───────────────────────────────────────────────────────
