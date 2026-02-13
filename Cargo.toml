@@ -1,7 +1,13 @@
 [package]
-name = "fc"
+name = "fcmd"
 version = "0.1.0"
 edition = "2024"
+description = "A fast dual-panel terminal file manager with Vim keybindings"
+authors = ["Jastinog <jastinog.pro@gmail.com>"]
+license = "MIT"
+repository = "https://github.com/Jastinog/fcmd"
+keywords = ["tui", "file-manager", "terminal", "vim"]
+categories = ["command-line-utilities"]
 
 [dependencies]
 ratatui = "0.29"
