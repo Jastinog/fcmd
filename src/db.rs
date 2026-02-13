@@ -17,9 +17,9 @@ impl Db {
     pub fn init() -> rusqlite::Result<Self> {
         let db_path = dirs::config_dir()
             .unwrap_or_else(|| PathBuf::from("."))
-            .join("fc");
+            .join("fcmd");
         std::fs::create_dir_all(&db_path).ok();
-        let conn = Connection::open(db_path.join("fc.db"))?;
+        let conn = Connection::open(db_path.join("fcmd.db"))?;
         conn.execute_batch(
             "CREATE TABLE IF NOT EXISTS visual_marks (path TEXT PRIMARY KEY);
              CREATE TABLE IF NOT EXISTS session_tabs (

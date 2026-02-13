@@ -31,7 +31,7 @@ Or build from source:
 
 ```
 git clone https://github.com/Jastinog/fcmd.git
-cd fc
+cd fcmd
 cargo build --release
 ./target/release/fcmd
 ```
@@ -101,7 +101,7 @@ cargo build --release
 
 28 built-in themes including: ayu-dark, gruvbox-dark, catppuccin-mocha, tokyo-night, rose-pine, dracula, nord, kanagawa, everforest-dark, solarized-dark, one-dark, monokai-pro, palenight, and more.
 
-Themes are TOML files stored in `~/.config/fc/themes/`. Custom themes are automatically discovered.
+Themes are TOML files stored in `~/.config/fcmd/themes/`. Custom themes are automatically discovered.
 
 ## License
 

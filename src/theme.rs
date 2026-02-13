@@ -158,14 +158,14 @@ impl Theme {
     }
 
     pub fn load_by_name(name: &str) -> Option<Self> {
-        let themes_dir = dirs::config_dir()?.join("fc").join("themes");
+        let themes_dir = dirs::config_dir()?.join("fcmd").join("themes");
         let path = themes_dir.join(format!("{name}.toml"));
         Self::load(&path)
     }
 
     pub fn list_available() -> Vec<String> {
         let themes_dir = match dirs::config_dir() {
-            Some(d) => d.join("fc").join("themes"),
+            Some(d) => d.join("fcmd").join("themes"),
             None => return Vec::new(),
         };
         let mut names = Vec::new();
@@ -185,7 +185,7 @@ impl Theme {
 
     pub fn from_config() -> Self {
         let config_dir = match dirs::config_dir() {
-            Some(d) => d.join("fc"),
+            Some(d) => d.join("fcmd"),
             None => return Self::default_theme(),
         };
 
