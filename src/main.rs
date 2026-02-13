@@ -18,6 +18,7 @@ mod preview;
 mod theme;
 mod tree;
 mod ui;
+mod util;
 
 fn main() -> io::Result<()> {
     // Setup terminal
