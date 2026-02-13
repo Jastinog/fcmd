@@ -2,6 +2,9 @@
 
 A fast dual-panel terminal file manager with Vim keybindings, built in Rust.
 
+![Dual panel with tree view](assets/dual-panel.png)
+![Find with preview](assets/find-preview.png)
+
 ## Features
 
 - **Dual-panel layout** with Tab to switch panels
