@@ -81,6 +81,10 @@ impl App {
             KeyCode::Char('m') => self.toggle_visual_mark(),
             KeyCode::Char('M') => self.jump_next_visual_mark(),
 
+            // Find
+            KeyCode::Char('f') => self.open_find_local(),
+            KeyCode::Char('F') => self.open_find_global(),
+
             // Rename / Create
             KeyCode::Char('r') if !ctrl => self.enter_rename(),
             KeyCode::Char('a') => self.enter_create(),

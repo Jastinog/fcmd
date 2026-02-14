@@ -289,6 +289,7 @@ pub(super) fn render_help(f: &mut Frame, t: &Theme, area: Rect) {
             &[
                 ("v", "Visual select"),
                 ("/", "Search"),
+                ("f / F", "Find local / global"),
                 (":", "Command mode"),
                 ("Space+?", "This help"),
             ],
