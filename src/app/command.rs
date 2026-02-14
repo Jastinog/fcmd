@@ -266,6 +266,66 @@ impl App {
                 }
             }
 
+            "bookmark" | "bm" => {
+                let name = match arg.filter(|a| !a.is_empty()) {
+                    Some(n) => n,
+                    None => {
+                        self.status_message = "Usage: :bookmark <name>".into();
+                        return;
+                    }
+                };
+                let path = match self
+                    .active_panel()
+                    .selected_entry()
+                    .filter(|e| e.is_dir || e.name == "..")
+                {
+                    Some(e) => e.path.clone(),
+                    None => {
+                        self.status_message = "Select a directory to bookmark".into();
+                        return;
+                    }
+                };
+                self.add_bookmark(name, path);
+            }
+
+            "bookmarks" | "bms" => {
+                self.open_bookmarks();
+            }
+
+            "brename" | "bmrn" => {
+                let parts: Vec<&str> = match arg.filter(|a| !a.is_empty()) {
+                    Some(a) => a.splitn(2, ' ').collect(),
+                    None => {
+                        self.status_message = "Usage: :brename <oldname> <newname>".into();
+                        return;
+                    }
+                };
+                if parts.len() < 2 || parts[1].is_empty() {
+                    self.status_message = "Usage: :brename <oldname> <newname>".into();
+                    return;
+                }
+                let old_name = parts[0];
+                let new_name = parts[1];
+                self.rename_bookmark(old_name, new_name);
+            }
+
+            "bdel" => {
+                let name = match arg.filter(|a| !a.is_empty()) {
+                    Some(n) => n,
+                    None => {
+                        self.status_message = "Usage: :bdel <name>".into();
+                        return;
+                    }
+                };
+                if self.bookmarks.iter().any(|(n, _)| n == name) {
+                    let name_owned = name.to_string();
+                    self.remove_bookmark_by_name(&name_owned);
+                    self.status_message = format!("Bookmark removed: {name_owned}");
+                } else {
+                    self.status_message = format!("Bookmark not found: {name}");
+                }
+            }
+
             _ => {
                 self.status_message = format!("Unknown command: :{cmd}");
             }

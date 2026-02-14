@@ -22,6 +22,7 @@ mod polling;
 mod rename;
 mod search;
 mod tree;
+mod bookmarks;
 mod visual;
 
 pub struct PhantomEntry {
@@ -57,6 +58,9 @@ pub enum Mode {
     Create,
     Preview,
     ThemePicker,
+    Bookmarks,
+    BookmarkAdd,
+    BookmarkRename,
 }
 
 #[derive(PartialEq, Eq, Clone, Copy)]
@@ -171,6 +175,12 @@ pub struct App {
     pub dir_sorts: HashMap<PathBuf, (SortMode, bool)>,
     // Sort popup
     pub sort_cursor: usize,
+    // Bookmarks
+    pub bookmarks: Vec<(String, PathBuf)>,
+    pub bookmark_cursor: usize,
+    pub bookmark_scroll: usize,
+    pub bookmark_rename_old: Option<String>,
+    pub bookmark_add_path: Option<PathBuf>,
     // Git status
     pub git_statuses: HashMap<PathBuf, char>,
     pub git_root: Option<PathBuf>,
@@ -181,7 +191,7 @@ impl App {
     pub fn new() -> std::io::Result<Self> {
         let cwd = std::env::current_dir()?;
 
-        let (db, visual_marks, dir_sorts) = match crate::db::Db::init() {
+        let (db, visual_marks, dir_sorts, bookmarks) = match crate::db::Db::init() {
             Ok(db) => {
                 let marks = db.load_visual_marks().unwrap_or_default();
                 let raw_sorts = db.load_dir_sorts().unwrap_or_default();
@@ -191,11 +201,12 @@ impl App {
                         SortMode::from_label(&label).map(|m| (p, (m, rev)))
                     })
                     .collect();
-                (Some(db), marks, dir_sorts)
+                let bookmarks = db.load_bookmarks().unwrap_or_default();
+                (Some(db), marks, dir_sorts, bookmarks)
             }
             Err(e) => {
                 eprintln!("Warning: DB init failed: {e}");
-                (None, HashMap::new(), HashMap::new())
+                (None, HashMap::new(), HashMap::new(), Vec::new())
             }
         };
 
@@ -300,6 +311,11 @@ impl App {
             theme_scroll: 0,
             theme_preview: None,
             sort_cursor: 0,
+            bookmarks,
+            bookmark_cursor: 0,
+            bookmark_scroll: 0,
+            bookmark_rename_old: None,
+            bookmark_add_path: None,
             git_statuses: HashMap::new(),
             git_root: None,
             git_status_dir: None,
@@ -385,6 +401,9 @@ impl App {
             Mode::Create => self.handle_create(key),
             Mode::Preview => self.handle_preview(key),
             Mode::ThemePicker => self.handle_theme_picker(key),
+            Mode::Bookmarks => self.handle_bookmarks(key),
+            Mode::BookmarkAdd => self.handle_bookmark_add(key),
+            Mode::BookmarkRename => self.handle_bookmark_rename(key),
         }
 
         self.update_preview();

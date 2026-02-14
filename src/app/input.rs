@@ -133,6 +133,10 @@ impl App {
             KeyCode::Char('r') if !ctrl => self.enter_rename(),
             KeyCode::Char('a') => self.enter_create(),
 
+            // Bookmarks
+            KeyCode::Char('b') => self.add_bookmark_prompt(),
+            KeyCode::Char('B') => self.open_bookmarks(),
+
             // Toggles & settings
             KeyCode::Char('r') if ctrl => self.refresh_current_panel(),
             KeyCode::Char('T') => self.enter_theme_picker(),
@@ -198,6 +202,7 @@ impl App {
             }
             (' ', KeyCode::Char('a')) => self.select_all(),
             (' ', KeyCode::Char('n')) => self.unselect_all(),
+            (' ', KeyCode::Char('b')) => self.open_bookmarks(),
             (' ', KeyCode::Char('?')) => self.mode = Mode::Help,
             _ => return false,
         }

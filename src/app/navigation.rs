@@ -215,15 +215,21 @@ impl App {
 
     pub fn which_key_hints(&self) -> Option<&[(&str, &str)]> {
         const LEADER_HINTS: &[(&str, &str)] = &[
+            ("", "Toggle"),
             ("t", "tree"),
             ("h", "hidden"),
             ("p", "preview"),
+            ("", "Actions"),
             ("s", "sort"),
             ("d", "dir sizes"),
+            ("", "Select"),
             ("a", "select all"),
             ("n", "unselect"),
+            ("", "Search"),
             (",", "find"),
             (".", "find global"),
+            ("", "Other"),
+            ("b", "bookmarks"),
             ("?", "help"),
         ];
         const SORT_HINTS: &[(&str, &str)] = &[

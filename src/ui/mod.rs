@@ -214,7 +214,11 @@ pub fn render(f: &mut Frame, app: &mut App) {
         overlays::render_theme_picker(f, app, full_area);
     }
 
-    if app.mode == Mode::Rename || app.mode == Mode::Create {
+    if app.mode == Mode::Bookmarks {
+        overlays::render_bookmarks(f, app, full_area);
+    }
+
+    if matches!(app.mode, Mode::Rename | Mode::Create | Mode::BookmarkAdd | Mode::BookmarkRename) {
         overlays::render_input_popup(f, app, full_area);
     }
 

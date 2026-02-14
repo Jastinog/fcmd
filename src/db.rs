@@ -42,6 +42,10 @@ impl Db {
                  path TEXT PRIMARY KEY,
                  sort_mode TEXT NOT NULL,
                  sort_reverse INTEGER NOT NULL DEFAULT 0
+             );
+             CREATE TABLE IF NOT EXISTS bookmarks (
+                 name TEXT PRIMARY KEY,
+                 path TEXT NOT NULL
              );",
         )?;
         // Migrate: add level column if missing
@@ -243,9 +247,57 @@ impl Db {
                  path TEXT PRIMARY KEY,
                  sort_mode TEXT NOT NULL,
                  sort_reverse INTEGER NOT NULL DEFAULT 0
+             );
+             CREATE TABLE IF NOT EXISTS bookmarks (
+                 name TEXT PRIMARY KEY,
+                 path TEXT NOT NULL
              );",
         )?;
         Ok(Db { conn })
+    }
+
+    // --- Bookmarks ---
+
+    pub fn load_bookmarks(&self) -> rusqlite::Result<Vec<(String, PathBuf)>> {
+        let mut stmt = self.conn.prepare("SELECT name, path FROM bookmarks ORDER BY name")?;
+        let rows = stmt.query_map([], |row| {
+            let name: String = row.get(0)?;
+            let path: String = row.get(1)?;
+            Ok((name, PathBuf::from(path)))
+        })?;
+        Ok(rows.flatten().collect())
+    }
+
+    pub fn save_bookmark(&self, name: &str, path: &Path) -> rusqlite::Result<()> {
+        self.conn.execute(
+            "INSERT OR REPLACE INTO bookmarks (name, path) VALUES (?1, ?2)",
+            params![name, path.to_string_lossy().as_ref()],
+        )?;
+        Ok(())
+    }
+
+    pub fn remove_bookmark(&self, name: &str) -> rusqlite::Result<()> {
+        self.conn.execute(
+            "DELETE FROM bookmarks WHERE name = ?1",
+            params![name],
+        )?;
+        Ok(())
+    }
+
+    pub fn rename_bookmark(&self, old_name: &str, new_name: &str) -> rusqlite::Result<()> {
+        let tx = self.conn.unchecked_transaction()?;
+        let path: String = tx.query_row(
+            "SELECT path FROM bookmarks WHERE name = ?1",
+            params![old_name],
+            |row| row.get(0),
+        )?;
+        tx.execute("DELETE FROM bookmarks WHERE name = ?1", params![old_name])?;
+        tx.execute(
+            "INSERT OR REPLACE INTO bookmarks (name, path) VALUES (?1, ?2)",
+            params![new_name, path],
+        )?;
+        tx.commit()?;
+        Ok(())
     }
 
     pub fn load_session(&self) -> rusqlite::Result<(Vec<SavedTab>, usize)> {
@@ -403,6 +455,53 @@ mod tests {
         // Saving default sort (name, not reversed) removes the row
         db.save_dir_sort(Path::new("/home"), "name", false).unwrap();
         assert!(db.load_dir_sorts().unwrap().is_empty());
+    }
+
+    #[test]
+    fn bookmarks_crud() {
+        let db = Db::init_in_memory().unwrap();
+
+        // Initially empty
+        let bm = db.load_bookmarks().unwrap();
+        assert!(bm.is_empty());
+
+        // Add bookmarks
+        db.save_bookmark("projects", Path::new("/home/user/projects")).unwrap();
+        db.save_bookmark("downloads", Path::new("/home/user/downloads")).unwrap();
+        let bm = db.load_bookmarks().unwrap();
+        assert_eq!(bm.len(), 2);
+        assert_eq!(bm[0].0, "downloads");
+        assert_eq!(bm[1].0, "projects");
+
+        // Update bookmark path
+        db.save_bookmark("projects", Path::new("/opt/projects")).unwrap();
+        let bm = db.load_bookmarks().unwrap();
+        assert_eq!(bm.len(), 2);
+        assert_eq!(bm[1].1, PathBuf::from("/opt/projects"));
+
+        // Remove bookmark
+        db.remove_bookmark("downloads").unwrap();
+        let bm = db.load_bookmarks().unwrap();
+        assert_eq!(bm.len(), 1);
+        assert_eq!(bm[0].0, "projects");
+    }
+
+    #[test]
+    fn bookmarks_rename() {
+        let db = Db::init_in_memory().unwrap();
+
+        db.save_bookmark("old", Path::new("/home/user/old")).unwrap();
+        db.save_bookmark("other", Path::new("/tmp/other")).unwrap();
+
+        // Rename old -> new
+        db.rename_bookmark("old", "new").unwrap();
+        let bm = db.load_bookmarks().unwrap();
+        assert_eq!(bm.len(), 2);
+        assert!(bm.iter().any(|(n, p)| n == "new" && p == Path::new("/home/user/old")));
+        assert!(!bm.iter().any(|(n, _)| n == "old"));
+
+        // Rename non-existent fails
+        assert!(db.rename_bookmark("nonexistent", "x").is_err());
     }
 
     #[test]

@@ -29,17 +29,47 @@ pub(super) fn render_which_key(
         _ => return,
     };
 
-    // Column layout: each entry is "key  description" padded to col_width
-    let col_width = 18usize;
-    let usable_width = area.width.saturating_sub(2) as usize; // -2 for borders
-    let num_cols = (usable_width / col_width).max(1);
-    let num_rows = hints.len().div_ceil(num_cols);
+    // Parse hints into groups: entries with empty key are section headers
+    let mut groups: Vec<Vec<(&str, &str)>> = Vec::new();
+    for &(key, desc) in hints {
+        if key.is_empty() {
+            groups.push(Vec::new());
+        } else {
+            if groups.is_empty() {
+                groups.push(Vec::new());
+            }
+            groups.last_mut().unwrap().push((key, desc));
+        }
+    }
+    // Remove empty groups
+    groups.retain(|g| !g.is_empty());
+    let has_sections = groups.len() > 1;
 
-    // Popup dimensions: rows + 2 border + 2 (separator + hint)
-    let popup_h = (num_rows as u16 + 4).min(area.height);
-    let popup_w = area.width.min((num_cols * col_width + 2) as u16).max(20);
+    // Layout
+    let col_width = 18usize;
+    let usable_width = area.width.saturating_sub(2) as usize;
+    let num_cols = (usable_width / col_width).max(1);
+
+    // Calculate total content rows (items + dashed separators between groups)
+    let total_rows: usize = if has_sections {
+        let item_rows: usize = groups
+            .iter()
+            .map(|items| items.len().div_ceil(num_cols))
+            .sum();
+        item_rows + groups.len() - 1
+    } else {
+        let n: usize = groups.iter().map(|items| items.len()).sum();
+        n.div_ceil(num_cols)
+    };
+
+    // Popup dimensions
+    let popup_h = (total_rows as u16 + 4).min(area.height);
+    let popup_w = area
+        .width
+        .min((num_cols * col_width + 2) as u16)
+        .max(20);
     let popup_x = (area.width.saturating_sub(popup_w)) / 2;
-    let popup_y = area.y + area.height.saturating_sub(popup_h + 1); // above status bar
+    let popup_y = area.y + area.height.saturating_sub(popup_h + 1);
 
     let popup = Rect::new(area.x + popup_x, popup_y, popup_w, popup_h);
     f.render_widget(Clear, popup);
@@ -55,48 +85,92 @@ pub(super) fn render_which_key(
 
     let iw = inner.width as usize;
 
-    // Render hints in column-major order (fill columns top-to-bottom, then left-to-right)
+    // Build render lines
     let mut lines: Vec<ListItem> = Vec::new();
-    for row in 0..num_rows {
-        let mut spans: Vec<Span> = Vec::new();
-        for col in 0..num_cols {
-            let idx = col * num_rows + row;
-            if idx < hints.len() {
-                let (key, desc) = hints[idx];
-                // Key badge
+
+    if has_sections {
+        // Grouped layout with dashed separators between groups
+        for (gi, items) in groups.iter().enumerate() {
+            let group_rows = items.len().div_ceil(num_cols);
+            for r in 0..group_rows {
+                let mut spans: Vec<Span> = Vec::new();
+                for c in 0..num_cols {
+                    let idx = r * num_cols + c;
+                    if idx < items.len() {
+                        let (key, desc) = items[idx];
+                        spans.push(Span::styled(
+                            format!(" {key} "),
+                            Style::default().fg(t.bg).bg(t.orange),
+                        ));
+                        let desc_text = format!(" {desc}");
+                        let entry_chars = key.chars().count() + 2 + desc_text.chars().count();
+                        let pad = col_width.saturating_sub(entry_chars);
+                        spans.push(Span::styled(
+                            desc_text,
+                            Style::default().fg(t.fg),
+                        ));
+                        spans.push(Span::raw(" ".repeat(pad)));
+                    } else {
+                        spans.push(Span::raw(" ".repeat(col_width)));
+                    }
+                }
+                let used: usize = spans.iter().map(|s| s.content.chars().count()).sum();
+                if used < iw {
+                    spans.push(Span::raw(" ".repeat(iw - used)));
+                }
+                lines.push(ListItem::new(Line::from(spans)));
+            }
+            // Dashed separator between groups (not after last)
+            if gi < groups.len() - 1 {
+                lines.push(ListItem::new(Line::from(Span::styled(
+                    "\u{254c}".repeat(iw),
+                    Style::default().fg(t.border_inactive),
+                ))));
+            }
+        }
+    } else {
+        // Flat column-major layout (for small leaders without sections)
+        let all_items: Vec<(&str, &str)> =
+            groups.into_iter().flatten().collect();
+        let num_rows = all_items.len().div_ceil(num_cols);
+
+        for row in 0..num_rows {
+            let mut spans: Vec<Span> = Vec::new();
+            for col in 0..num_cols {
+                let idx = col * num_rows + row;
+                if idx < all_items.len() {
+                    let (key, desc) = all_items[idx];
+                    spans.push(Span::styled(
+                        format!(" {key} "),
+                        Style::default().fg(t.bg).bg(t.orange),
+                    ));
+                    let desc_text = format!(" {desc}");
+                    let entry_chars = key.chars().count() + 2 + desc_text.chars().count();
+                    let pad = col_width.saturating_sub(entry_chars);
+                    spans.push(Span::styled(
+                        desc_text,
+                        Style::default().fg(t.fg).bg(t.bg_light),
+                    ));
+                    spans.push(Span::styled(
+                        " ".repeat(pad),
+                        Style::default().bg(t.bg_light),
+                    ));
+                } else {
+                    spans.push(Span::styled(
+                        " ".repeat(col_width),
+                        Style::default().bg(t.bg_light),
+                    ));
+                }
+            }
+            let used: usize = spans.iter().map(|s| s.content.chars().count()).sum();
+            if used < iw {
                 spans.push(Span::styled(
-                    format!(" {key} "),
-                    Style::default().fg(t.bg).bg(t.orange),
-                ));
-                // Description + padding to fill column
-                let desc_text = format!(" {desc}");
-                let entry_chars = key.chars().count() + 2 + desc_text.chars().count();
-                let pad = col_width.saturating_sub(entry_chars);
-                spans.push(Span::styled(
-                    desc_text,
-                    Style::default().fg(t.fg).bg(t.bg_light),
-                ));
-                spans.push(Span::styled(
-                    " ".repeat(pad),
-                    Style::default().bg(t.bg_light),
-                ));
-            } else {
-                // Empty cell
-                spans.push(Span::styled(
-                    " ".repeat(col_width),
+                    " ".repeat(iw - used),
                     Style::default().bg(t.bg_light),
                 ));
             }
+            lines.push(ListItem::new(Line::from(spans)));
         }
-        // Fill remaining width
-        let used: usize = spans.iter().map(|s| s.content.chars().count()).sum();
-        if used < iw {
-            spans.push(Span::styled(
-                " ".repeat(iw - used),
-                Style::default().bg(t.bg_light),
-            ));
-        }
-        lines.push(ListItem::new(Line::from(spans)));
     }
 
     let list_height = inner.height.saturating_sub(2) as usize;
@@ -334,6 +408,8 @@ pub(super) fn render_help(f: &mut Frame, t: &Theme, area: Rect) {
             &[
                 ("m{a-z}", "Set mark"),
                 ("'{a-z}", "Go to mark"),
+                ("b", "Add bookmark"),
+                ("B", "Bookmarks"),
                 ("T", "Theme picker"),
                 ("Ctrl-r", "Refresh"),
             ],
@@ -388,23 +464,28 @@ pub(super) fn render_help(f: &mut Frame, t: &Theme, area: Rect) {
 pub(super) fn render_input_popup(f: &mut Frame, app: &App, area: Rect) {
     let t = &app.theme;
 
-    let is_rename = app.mode == Mode::Rename;
-
-    let (title, accent) = if is_rename {
-        (" 󰑕 Rename ", t.yellow)
-    } else {
-        (" 󰝒 New ", t.cyan)
-    };
-
-    // Context line for rename: show original name
-    let context: Option<String> = if is_rename {
-        app.tab()
-            .active_panel()
-            .selected_entry()
-            .filter(|e| e.name != "..")
-            .map(|e| e.name.clone())
-    } else {
-        None
+    let (title, accent, context) = match app.mode {
+        Mode::Rename => {
+            let ctx = app
+                .tab()
+                .active_panel()
+                .selected_entry()
+                .filter(|e| e.name != "..")
+                .map(|e| e.name.clone());
+            (" 󰑕 Rename ", t.yellow, ctx)
+        }
+        Mode::BookmarkAdd => {
+            let ctx = app
+                .bookmark_add_path
+                .as_ref()
+                .map(|p| p.to_string_lossy().into_owned());
+            (" 󰃀 Bookmark ", t.yellow, ctx)
+        }
+        Mode::BookmarkRename => {
+            let ctx = app.bookmark_rename_old.clone();
+            (" 󰃀 Rename Bookmark ", t.yellow, ctx)
+        }
+        _ => (" 󰝒 New ", t.cyan, None),
     };
 
     // Height: border(2) + context(0-1) + input(1) + separator(1) + hints(1)
@@ -495,14 +576,8 @@ pub(super) fn render_input_popup(f: &mut Frame, app: &App, area: Rect) {
     row += 1;
 
     // Hint line
-    let hint_line = if is_rename {
-        Line::from(vec![
-            Span::styled(" \u{23ce}", Style::default().fg(accent)),
-            Span::styled(" confirm  ", Style::default().fg(t.fg_dim)),
-            Span::styled("esc", Style::default().fg(accent)),
-            Span::styled(" cancel", Style::default().fg(t.fg_dim)),
-        ])
-    } else {
+    let is_create = app.mode == Mode::Create;
+    let hint_line = if is_create {
         Line::from(vec![
             Span::styled(" \u{23ce}", Style::default().fg(accent)),
             Span::styled(" confirm  ", Style::default().fg(t.fg_dim)),
@@ -510,6 +585,13 @@ pub(super) fn render_input_popup(f: &mut Frame, app: &App, area: Rect) {
             Span::styled(" cancel  ", Style::default().fg(t.fg_dim)),
             Span::styled("name/", Style::default().fg(accent)),
             Span::styled(" = dir", Style::default().fg(t.fg_dim)),
+        ])
+    } else {
+        Line::from(vec![
+            Span::styled(" \u{23ce}", Style::default().fg(accent)),
+            Span::styled(" confirm  ", Style::default().fg(t.fg_dim)),
+            Span::styled("esc", Style::default().fg(accent)),
+            Span::styled(" cancel", Style::default().fg(t.fg_dim)),
         ])
     };
     let hint_area = Rect::new(inner.x, inner.y + row, inner.width, 1);
@@ -939,6 +1021,121 @@ fn render_preview_panel(f: &mut Frame, pt: &Theme, area: Rect) {
         let row_area = Rect::new(inner.x, inner.y + i as u16, inner.width, 1);
         f.render_widget(Paragraph::new(line), row_area);
     }
+}
+
+pub(super) fn render_bookmarks(f: &mut Frame, app: &App, area: Rect) {
+    let t = &app.theme;
+    let accent = t.yellow;
+    let bm = &app.bookmarks;
+    let len = bm.len();
+    if len == 0 {
+        return;
+    }
+
+    let max_list = 12usize;
+    let list_h = len.min(max_list);
+    let h = (list_h as u16 + 4).min(area.height);
+    let w = 50u16.min(area.width.saturating_sub(4)).max(30);
+    let x = (area.width.saturating_sub(w)) / 2;
+    let y = (area.height.saturating_sub(h)) / 2;
+    let popup = Rect::new(area.x + x, area.y + y, w, h);
+
+    f.render_widget(Clear, popup);
+
+    let title = format!(" \u{f02e6} Bookmarks ({len}) ");
+    let block = Block::default()
+        .borders(Borders::ALL)
+        .border_style(Style::default().fg(accent))
+        .title(title)
+        .title_style(Style::default().fg(accent));
+
+    let inner = block.inner(popup);
+    f.render_widget(block, popup);
+
+    let iw = inner.width as usize;
+    let list_height = inner.height.saturating_sub(2) as usize;
+    let scroll = app.bookmark_scroll.min(len.saturating_sub(list_height.max(1)));
+
+    let home = dirs::home_dir().unwrap_or_default();
+
+    let mut items: Vec<ListItem> = Vec::new();
+    for (i, (name, path)) in bm.iter().enumerate().skip(scroll).take(list_height) {
+        let is_cursor = i == app.bookmark_cursor;
+
+        let marker = if is_cursor { "\u{25b8} " } else { "  " };
+
+        // Shorten path with ~
+        let path_str = path.to_string_lossy();
+        let home_str = home.to_string_lossy();
+        let short_path = if !home_str.is_empty() && path_str.starts_with(home_str.as_ref()) {
+            format!("~{}", &path_str[home_str.len()..])
+        } else {
+            path_str.into_owned()
+        };
+
+        let marker_w = marker.chars().count();
+        let name_col = format!("{name}  ");
+        let name_w = name_col.chars().count();
+        let path_max = iw.saturating_sub(marker_w + name_w);
+        let path_display = if short_path.chars().count() > path_max {
+            let start = short_path.chars().count() - path_max.saturating_sub(1);
+            let tail: String = short_path.chars().skip(start).collect();
+            format!("\u{2026}{tail}")
+        } else {
+            short_path.clone()
+        };
+        let pad = iw.saturating_sub(marker_w + name_w + path_display.chars().count());
+
+        if is_cursor {
+            let cursor_style = Style::default().fg(t.bg).bg(t.blue);
+            let line = Line::from(vec![
+                Span::styled(marker, cursor_style),
+                Span::styled(name_col, cursor_style),
+                Span::styled(path_display, cursor_style),
+                Span::styled(" ".repeat(pad), cursor_style),
+            ]);
+            items.push(ListItem::new(line));
+        } else {
+            let line = Line::from(vec![
+                Span::styled(marker, Style::default().fg(t.fg_dim)),
+                Span::styled(name_col, Style::default().fg(accent)),
+                Span::styled(path_display, Style::default().fg(t.fg_dim)),
+                Span::styled(" ".repeat(pad), Style::default()),
+            ]);
+            items.push(ListItem::new(line));
+        }
+    }
+
+    let list_area = Rect::new(inner.x, inner.y, inner.width, list_height as u16);
+    f.render_widget(List::new(items), list_area);
+
+    // Separator
+    let sep_y = inner.y + list_height as u16;
+    let sep_area = Rect::new(inner.x, sep_y, inner.width, 1);
+    f.render_widget(
+        Paragraph::new(Line::from(Span::styled(
+            "\u{2500}".repeat(iw),
+            Style::default().fg(t.border_inactive),
+        ))),
+        sep_area,
+    );
+
+    // Hint line
+    let hint_line = Line::from(vec![
+        Span::styled(" \u{23ce}", Style::default().fg(accent)),
+        Span::styled(" go  ", Style::default().fg(t.fg_dim)),
+        Span::styled("a", Style::default().fg(accent)),
+        Span::styled(" add  ", Style::default().fg(t.fg_dim)),
+        Span::styled("d", Style::default().fg(accent)),
+        Span::styled(" del  ", Style::default().fg(t.fg_dim)),
+        Span::styled("e", Style::default().fg(accent)),
+        Span::styled(" rename  ", Style::default().fg(t.fg_dim)),
+        Span::styled("esc", Style::default().fg(accent)),
+        Span::styled(" close", Style::default().fg(t.fg_dim)),
+    ]);
+    let hint_y = inner.y + inner.height.saturating_sub(1);
+    let hint_area = Rect::new(inner.x, hint_y, inner.width, 1);
+    f.render_widget(Paragraph::new(hint_line), hint_area);
 }
 
 pub(super) fn render_search_popup(f: &mut Frame, app: &App, area: Rect) {
