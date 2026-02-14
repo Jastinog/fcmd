@@ -34,6 +34,8 @@ Navigate two directories side-by-side with `Tab` to switch focus. Each panel mai
 
 Full Vim motions: `hjkl`, `gg`/`G`, `Ctrl-d`/`Ctrl-u`, `/` incremental search with `n`/`N`. Feels natural if you live in the terminal.
 
+![Incremental search](assets/search.png)
+
 ### Three Selection Modes
 
 - **Visual** (`v`) — select contiguous ranges like Vim visual mode
@@ -43,6 +45,8 @@ Full Vim motions: `hjkl`, `gg`/`G`, `Ctrl-d`/`Ctrl-u`, `/` incremental search wi
 ### File Operations with Undo
 
 Yank (`yy`), delete (`dd`), paste (`p`/`P`), rename (`r`), create (`a`). All destructive operations are undoable (`u`) with a 50-step stack. Paste runs in the background with a progress indicator.
+
+![Delete confirmation](assets/delete-confirm.png)
 
 ### Telescope-Style Fuzzy Find
 
@@ -57,6 +61,8 @@ Yank (`yy`), delete (`dd`), paste (`p`/`P`), rename (`r`), create (`a`). All des
 ### File Preview
 
 `Enter` on a file opens a preview popup with syntax-aware content display. `Space p` toggles a persistent side preview panel. Scroll with `j`/`k`, open in your editor with `o`.
+
+![File preview popup](assets/file-preview.png)
 
 ### Tabs
 
@@ -170,6 +176,8 @@ cargo install --path .
 ### Space Leader
 
 Press `Space` to open a which-key style popup with all available commands:
+
+![Space leader menu](assets/space-menu.png)
 
 | Key | Action |
 |-----|--------|
