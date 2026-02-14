@@ -19,11 +19,11 @@ pub(super) fn render_which_key(
     t: &Theme,
     area: Rect,
 ) {
-    let leader_label = match leader {
-        ' ' => "Space",
-        's' => "Sort",
-        'g' => "Go",
-        'y' => "Yank",
+    let (leader_icon, leader_label) = match leader {
+        ' ' => ("󱁐 ", "Space"),
+        's' => ("󰒓 ", "Sort"),
+        'g' => (" ", "Go"),
+        'y' => ("󰆏 ", "Yank"),
         _ => return,
     };
 
@@ -33,8 +33,8 @@ pub(super) fn render_which_key(
     let num_cols = (usable_width / col_width).max(1);
     let num_rows = (hints.len() + num_cols - 1) / num_cols;
 
-    // Popup dimensions: rows + 2 border + 1 title
-    let popup_h = (num_rows as u16 + 2).min(area.height);
+    // Popup dimensions: rows + 2 border + 2 (separator + hint)
+    let popup_h = (num_rows as u16 + 4).min(area.height);
     let popup_w = area.width.min((num_cols * col_width + 2) as u16).max(20);
     let popup_x = (area.width.saturating_sub(popup_w)) / 2;
     let popup_y = area.y + area.height.saturating_sub(popup_h + 1); // above status bar
@@ -44,8 +44,8 @@ pub(super) fn render_which_key(
 
     let block = Block::default()
         .borders(Borders::ALL)
-        .border_style(Style::default().fg(t.border_inactive))
-        .title(format!(" {leader_label} "))
+        .border_style(Style::default().fg(t.orange))
+        .title(format!(" {leader_icon}{leader_label} "))
         .title_style(Style::default().fg(t.orange));
 
     let inner = block.inner(popup);
@@ -64,7 +64,7 @@ pub(super) fn render_which_key(
                 // Key badge
                 spans.push(Span::styled(
                     format!(" {key} "),
-                    Style::default().fg(t.bg).bg(t.blue),
+                    Style::default().fg(t.bg).bg(t.orange),
                 ));
                 // Description + padding to fill column
                 let desc_text = format!(" {desc}");
@@ -97,7 +97,30 @@ pub(super) fn render_which_key(
         lines.push(ListItem::new(Line::from(spans)));
     }
 
-    f.render_widget(List::new(lines), inner);
+    let list_height = inner.height.saturating_sub(2) as usize;
+    lines.truncate(list_height);
+    let list_area = Rect::new(inner.x, inner.y, inner.width, list_height as u16);
+    f.render_widget(List::new(lines), list_area);
+
+    // Separator
+    let sep_y = inner.y + list_height as u16;
+    let sep_area = Rect::new(inner.x, sep_y, inner.width, 1);
+    f.render_widget(
+        Paragraph::new(Line::from(Span::styled(
+            "\u{2500}".repeat(iw),
+            Style::default().fg(t.border_inactive),
+        ))),
+        sep_area,
+    );
+
+    // Hint line
+    let hint_line = Line::from(vec![
+        Span::styled(" esc", Style::default().fg(t.orange)),
+        Span::styled(" cancel", Style::default().fg(t.fg_dim)),
+    ]);
+    let hint_y = inner.y + inner.height.saturating_sub(1);
+    let hint_area = Rect::new(inner.x, hint_y, inner.width, 1);
+    f.render_widget(Paragraph::new(hint_line), hint_area);
 }
 
 pub(super) fn render_sort(f: &mut Frame, app: &App, area: Rect) {
