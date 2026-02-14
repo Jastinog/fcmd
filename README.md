@@ -26,10 +26,10 @@
   - **Visual** (`v`) — select contiguous ranges
   - **Select** (`Shift+Up/Down`) — toggle individual files
   - **Glob** — `:select *.rs`, `:unselect *.log`
-- **File operations** — yank (`yy`), delete (`dd`), paste (`p`/`P`), rename (`r`), create (`a`), undo (`u`)
+- **File operations** — yank (`yy`), delete (`dd`), paste (`p`/`P`), rename (`r`), create (`a`), undo (`u`), open in `$EDITOR` (`o`)
 - **Telescope-style fuzzy find** — `f` local, `F` global (macOS `mdfind`)
 - **Tree sidebar** — `Space t` to toggle, navigate with `j`/`k`
-- **File preview** — `Space p` to toggle, `J`/`K` to scroll
+- **File preview** — `Enter` on a file opens preview popup, `Space p` toggles side panel, `J`/`K` to scroll
 - **Tabs** — `:tabnew`, `:tabclose`, `gt`/`gT` to switch
 - **28 built-in color themes** — `T` to cycle, `:theme <name>` to set
 - **Git status indicators** — auto-detected, per-file status in panels
@@ -65,6 +65,7 @@ cargo build --release
 |-----|--------|
 | `j` / `k` | Move down / up |
 | `h` / `l` | Go parent / enter directory |
+| `Enter` | Enter directory / preview file |
 | `gg` / `G` | Top / bottom |
 | `Ctrl-d` / `Ctrl-u` | Half-page down / up |
 | `Tab` | Switch panel |
@@ -83,6 +84,7 @@ cargo build --release
 | `a` | Create file or directory |
 | `u` | Undo last operation |
 | `yp` | Copy path to clipboard |
+| `o` | Open in `$EDITOR` |
 
 ### Selection
 
@@ -94,6 +96,17 @@ cargo build --release
 | `Space n` | Unselect all |
 | `:select <glob>` | Select by pattern |
 | `:unselect <glob>` | Unselect by pattern |
+
+### Preview Popup
+
+| Key | Action |
+|-----|--------|
+| `Enter` | Open preview on a file |
+| `j` / `k` | Scroll down / up |
+| `G` / `g` | Jump to bottom / top |
+| `Ctrl-d` / `Ctrl-u` | Half-page down / up |
+| `o` | Open in `$EDITOR` |
+| `Esc` / `q` | Close preview |
 
 ### Find
 
