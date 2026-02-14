@@ -67,11 +67,14 @@ pub(super) fn render_find(f: &mut Frame, fs: &FindState, t: &Theme, area: Rect) 
     let prefix_len = prefix.chars().count();
     let field_w = lw.saturating_sub(prefix_len);
     let input = &fs.query;
-    let (visible_input, cursor_pos) = if input.len() < field_w {
-        (input.as_str(), input.len())
+    let input_chars: Vec<char> = input.chars().collect();
+    let input_char_len = input_chars.len();
+    let (visible_input, cursor_pos) = if input_char_len < field_w {
+        (input.clone(), input_char_len)
     } else {
-        let start = input.len() + 1 - field_w;
-        (&input[start..], field_w - 1)
+        let start = input_char_len + 1 - field_w;
+        let s: String = input_chars[start..].iter().collect();
+        (s, field_w - 1)
     };
     let before: String = visible_input.chars().take(cursor_pos).collect();
     let after: String = visible_input.chars().skip(cursor_pos).collect();
@@ -275,7 +278,7 @@ pub(super) fn render_find(f: &mut Frame, fs: &FindState, t: &Theme, area: Rect) 
             let center_y = inner.y + inner.height / 2;
             let placeholder_area = Rect::new(right_x, center_y, right_w, 1);
             let text = "󰈈 No preview";
-            let pad = (right_w as usize).saturating_sub(text.len()) / 2;
+            let pad = (right_w as usize).saturating_sub(text.chars().count()) / 2;
             f.render_widget(
                 Paragraph::new(Line::from(Span::styled(
                     format!("{}{text}", " ".repeat(pad)),

@@ -34,6 +34,7 @@ impl App {
 
     pub(super) fn next_tab(&mut self) {
         if self.tabs.len() > 1 {
+            self.exit_mode_on_tab_switch();
             self.active_tab = (self.active_tab + 1) % self.tabs.len();
             self.preview_path = None;
         }
@@ -41,12 +42,26 @@ impl App {
 
     pub(super) fn prev_tab(&mut self) {
         if self.tabs.len() > 1 {
+            self.exit_mode_on_tab_switch();
             self.active_tab = if self.active_tab == 0 {
                 self.tabs.len() - 1
             } else {
                 self.active_tab - 1
             };
             self.preview_path = None;
+        }
+    }
+
+    fn exit_mode_on_tab_switch(&mut self) {
+        match self.mode {
+            Mode::Visual => {
+                self.active_panel_mut().visual_anchor = None;
+                self.mode = Mode::Normal;
+            }
+            Mode::Select => {
+                self.mode = Mode::Normal;
+            }
+            _ => {}
         }
     }
 
@@ -217,6 +232,12 @@ impl App {
             ("y", "yank"),
             ("p", "yank path"),
         ];
+        const DELETE_HINTS: &[(&str, &str)] = &[
+            ("d", "delete"),
+        ];
+        const MARK_HINTS: &[(&str, &str)] = &[
+            ("a-z", "go to mark"),
+        ];
         let pending = self.pending_key?;
         let time = self.pending_key_time?;
         if time.elapsed() < std::time::Duration::from_millis(400) {
@@ -227,6 +248,8 @@ impl App {
             's' => Some(SORT_HINTS),
             'g' => Some(GOTO_HINTS),
             'y' => Some(YANK_HINTS),
+            'd' => Some(DELETE_HINTS),
+            '\'' => Some(MARK_HINTS),
             _ => None,
         }
     }

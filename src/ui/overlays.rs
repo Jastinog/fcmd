@@ -24,6 +24,8 @@ pub(super) fn render_which_key(
         's' => ("󰒓 ", "Sort"),
         'g' => (" ", "Go"),
         'y' => ("󰆏 ", "Yank"),
+        'd' => ("󰗨 ", "Delete"),
+        '\'' => (" ", "Mark"),
         _ => return,
     };
 
@@ -431,8 +433,11 @@ pub(super) fn render_input_popup(f: &mut Frame, app: &App, area: Rect) {
     if let Some(ref orig) = context {
         let label = " 󰈔 ";
         let max_name = iw.saturating_sub(label.chars().count());
-        let name_display = if orig.len() > max_name {
-            format!("\u{2026}{}", &orig[orig.len() - max_name + 1..])
+        let orig_chars: Vec<char> = orig.chars().collect();
+        let name_display = if orig_chars.len() > max_name {
+            let start = orig_chars.len() - max_name.saturating_sub(1);
+            let tail: String = orig_chars[start..].iter().collect();
+            format!("\u{2026}{tail}")
         } else {
             orig.clone()
         };
@@ -453,11 +458,14 @@ pub(super) fn render_input_popup(f: &mut Frame, app: &App, area: Rect) {
     let prefix_len = prefix.chars().count();
     let field_w = iw.saturating_sub(prefix_len);
 
-    let (visible_input, cursor_pos) = if input.len() < field_w {
-        (input.as_str(), input.len())
+    let input_chars: Vec<char> = input.chars().collect();
+    let input_char_len = input_chars.len();
+    let (visible_input, cursor_pos) = if input_char_len < field_w {
+        (input.clone(), input_char_len)
     } else {
-        let start = input.len() + 1 - field_w;
-        (&input[start..], field_w - 1)
+        let start = input_char_len + 1 - field_w;
+        let s: String = input_chars[start..].iter().collect();
+        (s, field_w - 1)
     };
 
     // Build input spans: prefix + text before cursor + cursor char + text after cursor + padding
@@ -652,11 +660,14 @@ pub(super) fn render_search_popup(f: &mut Frame, app: &App, area: Rect) {
     let prefix_len = prefix.chars().count();
     let field_w = iw.saturating_sub(prefix_len);
 
-    let (visible_input, cursor_pos) = if input.len() < field_w {
-        (input.as_str(), input.len())
+    let input_chars: Vec<char> = input.chars().collect();
+    let input_char_len = input_chars.len();
+    let (visible_input, cursor_pos) = if input_char_len < field_w {
+        (input.clone(), input_char_len)
     } else {
-        let start = input.len() + 1 - field_w;
-        (&input[start..], field_w - 1)
+        let start = input_char_len + 1 - field_w;
+        let s: String = input_chars[start..].iter().collect();
+        (s, field_w - 1)
     };
 
     let before: String = visible_input.chars().take(cursor_pos).collect();

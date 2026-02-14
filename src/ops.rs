@@ -331,6 +331,12 @@ pub fn undo(records: &[OpRecord]) -> std::io::Result<String> {
                 fs::rename(dst, src)?;
             }
             OpRecord::Deleted { original, trash } => {
+                if original.exists() {
+                    return Err(std::io::Error::new(
+                        std::io::ErrorKind::AlreadyExists,
+                        format!("Cannot restore: {} already exists", original.display()),
+                    ));
+                }
                 fs::rename(trash, original)?;
             }
             OpRecord::Created { path } => remove_path(path)?,

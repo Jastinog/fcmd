@@ -91,6 +91,7 @@ impl App {
             panel.path = path;
             panel.selected = 0;
             panel.offset = 0;
+            panel.marked.clear();
             let _ = panel.load_dir();
         } else if let Some(parent) = path.parent() {
             let name = path
@@ -100,6 +101,7 @@ impl App {
             panel.path = parent.to_path_buf();
             panel.selected = 0;
             panel.offset = 0;
+            panel.marked.clear();
             let _ = panel.load_dir();
             if let Some(name) = name {
                 panel.select_by_name(&name);

@@ -23,7 +23,7 @@ pub fn progress_bar(pct: u8, width: usize) -> String {
     let filled = (pct as usize * width / 100).min(width);
     let empty = width - filled;
     format!(
-        "\u{2503}{}\u{2591}{}\u{2503}",
+        "\u{2503}{}{}\u{2503}",
         "\u{2588}".repeat(filled),
         "\u{2591}".repeat(empty),
     )

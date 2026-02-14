@@ -163,7 +163,7 @@ impl App {
     }
 
     pub(super) fn exit_select(&mut self) {
-        self.active_panel_mut().marked.clear();
+        // Keep marks intact — user can clear with Space+n if needed
         self.mode = Mode::Normal;
     }
 }

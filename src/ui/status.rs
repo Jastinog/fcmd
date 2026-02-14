@@ -181,7 +181,7 @@ pub(super) fn render_status(f: &mut Frame, app: &App, area: Rect) {
     };
 
     // Cap info width so right segments always stay at the right edge
-    let mode_width = mode_str.len() + 2 + 1; // " MODE " + SEP_RIGHT
+    let mode_width = mode_str.chars().count() + 2 + 1; // " MODE " + SEP_RIGHT
     let info_sep_width = 1;
     let max_info = width.saturating_sub(mode_width + info_sep_width + right_used);
 
