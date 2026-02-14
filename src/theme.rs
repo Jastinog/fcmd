@@ -26,6 +26,7 @@ struct RawTheme {
     file_color: String,
 }
 
+#[derive(Clone)]
 pub struct Theme {
     pub bg: Color,
     pub bg_light: Color,

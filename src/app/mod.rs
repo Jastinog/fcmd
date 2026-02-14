@@ -56,6 +56,7 @@ pub enum Mode {
     Rename,
     Create,
     Preview,
+    ThemePicker,
 }
 
 #[derive(PartialEq, Eq, Clone, Copy)]
@@ -163,6 +164,9 @@ pub struct App {
     pub theme: Theme,
     pub theme_list: Vec<String>,
     pub theme_index: Option<usize>,
+    pub theme_cursor: usize,
+    pub theme_scroll: usize,
+    pub theme_preview: Option<Theme>,
     // Per-directory sort preferences
     pub dir_sorts: HashMap<PathBuf, (SortMode, bool)>,
     // Sort popup
@@ -287,6 +291,9 @@ impl App {
             theme,
             theme_list: Vec::new(),
             theme_index,
+            theme_cursor: 0,
+            theme_scroll: 0,
+            theme_preview: None,
             sort_cursor: 0,
             git_statuses: HashMap::new(),
             git_root: None,
@@ -370,6 +377,7 @@ impl App {
             Mode::Rename => self.handle_rename(key),
             Mode::Create => self.handle_create(key),
             Mode::Preview => self.handle_preview(key),
+            Mode::ThemePicker => self.handle_theme_picker(key),
         }
 
         self.update_preview();

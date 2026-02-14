@@ -109,7 +109,7 @@ impl App {
 
             // Toggles & settings
             KeyCode::Char('r') if ctrl => self.refresh_current_panel(),
-            KeyCode::Char('T') => self.cycle_theme(true),
+            KeyCode::Char('T') => self.enter_theme_picker(),
 
             // Open in editor
             KeyCode::Char('o') => {

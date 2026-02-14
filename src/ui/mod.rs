@@ -196,6 +196,10 @@ pub fn render(f: &mut Frame, app: &mut App) {
         overlays::render_sort(f, app, full_area);
     }
 
+    if app.mode == Mode::ThemePicker {
+        overlays::render_theme_picker(f, app, full_area);
+    }
+
     if app.mode == Mode::Rename || app.mode == Mode::Create {
         overlays::render_input_popup(f, app, full_area);
     }

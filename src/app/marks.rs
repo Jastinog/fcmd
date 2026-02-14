@@ -217,4 +217,66 @@ impl App {
             _ => {}
         }
     }
+
+    pub(super) fn enter_theme_picker(&mut self) {
+        if self.theme_list.is_empty() {
+            self.theme_list = Theme::list_available();
+            if self.theme_list.is_empty() {
+                self.status_message = "No themes found".into();
+                return;
+            }
+        }
+        self.theme_cursor = self.theme_index.unwrap_or(0);
+        self.theme_scroll = self.theme_cursor.saturating_sub(5);
+        self.theme_preview = Theme::load_by_name(&self.theme_list[self.theme_cursor]);
+        self.mode = Mode::ThemePicker;
+    }
+
+    pub(super) fn handle_theme_picker(&mut self, key: KeyEvent) {
+        let len = self.theme_list.len();
+        if len == 0 {
+            self.mode = Mode::Normal;
+            return;
+        }
+        match key.code {
+            KeyCode::Char('j') | KeyCode::Down => {
+                self.theme_cursor = (self.theme_cursor + 1).min(len - 1);
+                self.adjust_theme_scroll();
+                self.theme_preview = Theme::load_by_name(&self.theme_list[self.theme_cursor]);
+            }
+            KeyCode::Char('k') | KeyCode::Up => {
+                self.theme_cursor = self.theme_cursor.saturating_sub(1);
+                self.adjust_theme_scroll();
+                self.theme_preview = Theme::load_by_name(&self.theme_list[self.theme_cursor]);
+            }
+            KeyCode::Enter => {
+                let name = &self.theme_list[self.theme_cursor];
+                if let Some(preview) = self.theme_preview.take() {
+                    self.theme = preview;
+                }
+                self.theme_index = Some(self.theme_cursor);
+                if let Some(ref db) = self.db {
+                    let _ = db.save_theme(name);
+                }
+                self.status_message = format!("Theme: {name}");
+                self.mode = Mode::Normal;
+            }
+            KeyCode::Esc | KeyCode::Char('q') => {
+                self.theme_preview = None;
+                self.mode = Mode::Normal;
+            }
+            _ => {}
+        }
+    }
+
+    fn adjust_theme_scroll(&mut self) {
+        // Use visible_height to estimate list area (popup height - 4 for borders/separator/hint)
+        let max_h = (self.visible_height * 70 / 100).max(2);
+        let list_h = max_h.saturating_sub(4).max(1);
+        if self.theme_cursor < self.theme_scroll {
+            self.theme_scroll = self.theme_cursor;
+        } else if self.theme_cursor >= self.theme_scroll + list_h {
+            self.theme_scroll = self.theme_cursor - list_h + 1;
+        }
+    }
 }
