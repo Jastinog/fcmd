@@ -187,14 +187,14 @@ pub(super) fn render_panel(
                 sign_style = sign_style.bg(bg);
             }
 
-            let git_char = ctx.git_statuses.get(&entry.path).copied().unwrap_or(' ');
-            let git_color = match git_char {
-                'M' => Some(t.yellow),
-                'A' => Some(t.green),
-                '?' => Some(t.cyan),
-                'D' => Some(t.red),
-                'R' => Some(t.magenta),
-                _ => None,
+            let git_raw = ctx.git_statuses.get(&entry.path).copied().unwrap_or(' ');
+            let (git_icon, git_color) = match git_raw {
+                'M' => ("●", Some(t.yellow)),
+                'A' => ("●", Some(t.green)),
+                '?' => ("●", Some(t.cyan)),
+                'D' => ("●", Some(t.red)),
+                'R' => ("●", Some(t.magenta)),
+                _ => (" ", None),
             };
             let git_style = match (git_color, row_bg) {
                 (Some(c), Some(_)) => Style::default().fg(t.bg).bg(c),
@@ -224,7 +224,7 @@ pub(super) fn render_panel(
             };
 
             let line = Line::from(vec![
-                Span::styled(format!("{git_char}"), git_style),
+                Span::styled(git_icon, git_style),
                 Span::styled(sign_text, sign_style),
                 Span::styled(icon, icon_style),
                 Span::styled(name_col, name_style),

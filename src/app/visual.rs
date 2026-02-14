@@ -151,7 +151,10 @@ impl App {
                 self.enter_visual();
             }
 
-            KeyCode::Esc => self.exit_select(),
+            KeyCode::Esc => {
+                self.active_panel_mut().marked.clear();
+                self.exit_select();
+            }
 
             KeyCode::Tab => {
                 self.exit_select();
