@@ -1,0 +1,24 @@
+# Catppuccin Frappé — soothing pastel theme (medium dark)
+# catppuccin.com
+
+bg = "#303446"
+bg_light = "#414559"
+fg = "#C6D0F5"
+fg_dim = "#737994"
+
+red = "#E78284"
+green = "#A6D189"
+yellow = "#E5C890"
+blue = "#8CAAEE"
+magenta = "#CA9EE6"
+cyan = "#81C8BE"
+orange = "#EF9F76"
+
+border_active = "blue"
+border_inactive = "#51576D"
+status_bg = "#292C3C"
+cursor_line = "#414559"
+
+dir_color = "blue"
+symlink_color = "#EEBEBE"
+file_color = "fg"

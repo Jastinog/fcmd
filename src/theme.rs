@@ -159,14 +159,14 @@ impl Theme {
     }
 
     pub fn load_by_name(name: &str) -> Option<Self> {
-        let themes_dir = dirs::config_dir()?.join("fcmd").join("themes");
+        let themes_dir = crate::util::config_dir()?.join("themes");
         let path = themes_dir.join(format!("{name}.toml"));
         Self::load(&path)
     }
 
     pub fn list_available() -> Vec<String> {
-        let themes_dir = match dirs::config_dir() {
-            Some(d) => d.join("fcmd").join("themes"),
+        let themes_dir = match crate::util::config_dir() {
+            Some(d) => d.join("themes"),
             None => return Vec::new(),
         };
         let mut names = Vec::new();
@@ -185,10 +185,13 @@ impl Theme {
     }
 
     pub fn from_config() -> Self {
-        let config_dir = match dirs::config_dir() {
-            Some(d) => d.join("fcmd"),
+        let config_dir = match crate::util::config_dir() {
+            Some(d) => d,
             None => return Self::default_theme(),
         };
+
+        // Always deploy any missing builtin themes
+        Self::ensure_default_theme(&config_dir);
 
         // Try loading config.toml for theme name
         let config_path = config_dir.join("config.toml");
@@ -201,9 +204,6 @@ impl Theme {
             }
         }
 
-        // Ensure default theme file exists as a template
-        Self::ensure_default_theme(&config_dir);
-
         Self::default_theme()
     }
 
@@ -211,6 +211,12 @@ impl Theme {
         let content = std::fs::read_to_string(path).ok()?;
         let table: toml::Table = toml::from_str(&content).ok()?;
         table.get("theme")?.as_str().map(|s| s.to_string())
+    }
+
+    pub fn ensure_builtin_themes() {
+        if let Some(config_dir) = crate::util::config_dir() {
+            Self::ensure_default_theme(&config_dir);
+        }
     }
 
     fn ensure_default_theme(config_dir: &std::path::Path) {
@@ -228,65 +234,129 @@ impl Theme {
 const BUILTIN_THEMES: &[(&str, &str)] = &[
     ("ayu-dark.toml", include_str!("../themes/ayu-dark.toml")),
     (
-        "gruvbox-dark.toml",
-        include_str!("../themes/gruvbox-dark.toml"),
+        "ayu-mirage.toml",
+        include_str!("../themes/ayu-mirage.toml"),
+    ),
+    ("andromeda.toml", include_str!("../themes/andromeda.toml")),
+    (
+        "aura-dark.toml",
+        include_str!("../themes/aura-dark.toml"),
+    ),
+    (
+        "bluloco-dark.toml",
+        include_str!("../themes/bluloco-dark.toml"),
+    ),
+    (
+        "carbonfox.toml",
+        include_str!("../themes/carbonfox.toml"),
+    ),
+    (
+        "catppuccin-frappe.toml",
+        include_str!("../themes/catppuccin-frappe.toml"),
+    ),
+    (
+        "catppuccin-macchiato.toml",
+        include_str!("../themes/catppuccin-macchiato.toml"),
     ),
     (
         "catppuccin-mocha.toml",
         include_str!("../themes/catppuccin-mocha.toml"),
     ),
+    ("cobalt2.toml", include_str!("../themes/cobalt2.toml")),
     (
-        "tokyo-night.toml",
-        include_str!("../themes/tokyo-night.toml"),
+        "dark-plus.toml",
+        include_str!("../themes/dark-plus.toml"),
     ),
-    ("rose-pine.toml", include_str!("../themes/rose-pine.toml")),
     ("dracula.toml", include_str!("../themes/dracula.toml")),
-    ("nord.toml", include_str!("../themes/nord.toml")),
-    ("kanagawa.toml", include_str!("../themes/kanagawa.toml")),
+    ("everblush.toml", include_str!("../themes/everblush.toml")),
     (
         "everforest-dark.toml",
         include_str!("../themes/everforest-dark.toml"),
     ),
     (
-        "solarized-dark.toml",
-        include_str!("../themes/solarized-dark.toml"),
-    ),
-    ("one-dark.toml", include_str!("../themes/one-dark.toml")),
-    (
-        "gruvbox-light.toml",
-        include_str!("../themes/gruvbox-light.toml"),
-    ),
-    (
-        "catppuccin-latte.toml",
-        include_str!("../themes/catppuccin-latte.toml"),
-    ),
-    (
-        "monokai-pro.toml",
-        include_str!("../themes/monokai-pro.toml"),
-    ),
-    ("palenight.toml", include_str!("../themes/palenight.toml")),
-    ("horizon.toml", include_str!("../themes/horizon.toml")),
-    ("nightfox.toml", include_str!("../themes/nightfox.toml")),
-    ("moonlight.toml", include_str!("../themes/moonlight.toml")),
-    ("oxocarbon.toml", include_str!("../themes/oxocarbon.toml")),
-    ("vesper.toml", include_str!("../themes/vesper.toml")),
-    ("poimandres.toml", include_str!("../themes/poimandres.toml")),
-    (
-        "modus-vivendi.toml",
-        include_str!("../themes/modus-vivendi.toml"),
+        "fleet-dark.toml",
+        include_str!("../themes/fleet-dark.toml"),
     ),
     (
         "github-dark.toml",
         include_str!("../themes/github-dark.toml"),
     ),
-    ("zenburn.toml", include_str!("../themes/zenburn.toml")),
+    (
+        "github-dimmed.toml",
+        include_str!("../themes/github-dimmed.toml"),
+    ),
+    (
+        "gruvbox-dark.toml",
+        include_str!("../themes/gruvbox-dark.toml"),
+    ),
+    ("horizon.toml", include_str!("../themes/horizon.toml")),
+    ("iceberg.toml", include_str!("../themes/iceberg.toml")),
+    ("kanagawa.toml", include_str!("../themes/kanagawa.toml")),
+    (
+        "kanagawa-dragon.toml",
+        include_str!("../themes/kanagawa-dragon.toml"),
+    ),
+    (
+        "material-ocean.toml",
+        include_str!("../themes/material-ocean.toml"),
+    ),
+    ("melange.toml", include_str!("../themes/melange.toml")),
+    (
+        "modus-vivendi.toml",
+        include_str!("../themes/modus-vivendi.toml"),
+    ),
+    (
+        "monokai-pro.toml",
+        include_str!("../themes/monokai-pro.toml"),
+    ),
+    ("moonfly.toml", include_str!("../themes/moonfly.toml")),
+    ("moonlight.toml", include_str!("../themes/moonlight.toml")),
+    (
+        "night-owl.toml",
+        include_str!("../themes/night-owl.toml"),
+    ),
+    ("nightfox.toml", include_str!("../themes/nightfox.toml")),
+    ("nord.toml", include_str!("../themes/nord.toml")),
+    ("one-dark.toml", include_str!("../themes/one-dark.toml")),
+    ("oxocarbon.toml", include_str!("../themes/oxocarbon.toml")),
+    ("palenight.toml", include_str!("../themes/palenight.toml")),
+    ("poimandres.toml", include_str!("../themes/poimandres.toml")),
+    (
+        "rose-pine.toml",
+        include_str!("../themes/rose-pine.toml"),
+    ),
+    (
+        "rose-pine-moon.toml",
+        include_str!("../themes/rose-pine-moon.toml"),
+    ),
+    (
+        "shades-of-purple.toml",
+        include_str!("../themes/shades-of-purple.toml"),
+    ),
+    (
+        "solarized-dark.toml",
+        include_str!("../themes/solarized-dark.toml"),
+    ),
+    ("sonokai.toml", include_str!("../themes/sonokai.toml")),
+    ("spaceduck.toml", include_str!("../themes/spaceduck.toml")),
     (
         "synthwave84.toml",
         include_str!("../themes/synthwave84.toml"),
     ),
-    ("moonfly.toml", include_str!("../themes/moonfly.toml")),
-    ("sonokai.toml", include_str!("../themes/sonokai.toml")),
-    ("spaceduck.toml", include_str!("../themes/spaceduck.toml")),
+    (
+        "tokyo-night.toml",
+        include_str!("../themes/tokyo-night.toml"),
+    ),
+    (
+        "tokyonight-storm.toml",
+        include_str!("../themes/tokyonight-storm.toml"),
+    ),
+    ("vesper.toml", include_str!("../themes/vesper.toml")),
+    (
+        "vitesse-dark.toml",
+        include_str!("../themes/vitesse-dark.toml"),
+    ),
+    ("zenburn.toml", include_str!("../themes/zenburn.toml")),
 ];
 
 #[cfg(test)]

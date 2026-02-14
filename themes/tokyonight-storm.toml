@@ -1,0 +1,24 @@
+# Tokyo Night Storm — a clean dark theme with storm variant
+# github.com/folke/tokyonight.nvim
+
+bg = "#24283B"
+bg_light = "#292E42"
+fg = "#C0CAF5"
+fg_dim = "#545C7E"
+
+red = "#F7768E"
+green = "#9ECE6A"
+yellow = "#E0AF68"
+blue = "#7AA2F7"
+magenta = "#BB9AF7"
+cyan = "#7DCFFF"
+orange = "#FF9E64"
+
+border_active = "blue"
+border_inactive = "#3B4261"
+status_bg = "#1F2335"
+cursor_line = "#292E42"
+
+dir_color = "blue"
+symlink_color = "cyan"
+file_color = "fg"

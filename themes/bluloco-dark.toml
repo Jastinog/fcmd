@@ -1,0 +1,24 @@
+# Bluloco Dark — a fancy but yet sophisticated dark theme
+# github.com/uloco/theme-bluloco-dark
+
+bg = "#282C34"
+bg_light = "#2C313C"
+fg = "#ABB2BF"
+fg_dim = "#636D83"
+
+red = "#FF6480"
+green = "#3FC56B"
+yellow = "#F9C859"
+blue = "#10B1FE"
+magenta = "#FF78F8"
+cyan = "#3691FF"
+orange = "#FF936A"
+
+border_active = "blue"
+border_inactive = "#3E4452"
+status_bg = "#21252B"
+cursor_line = "#2C313C"
+
+dir_color = "blue"
+symlink_color = "cyan"
+file_color = "fg"

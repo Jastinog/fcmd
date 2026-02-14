@@ -1,0 +1,24 @@
+# Iceberg — well-designed, bluish color scheme
+# cocopon.github.io/iceberg.vim
+
+bg = "#161821"
+bg_light = "#1E2132"
+fg = "#C6C8D1"
+fg_dim = "#6B7089"
+
+red = "#E27878"
+green = "#B4BE82"
+yellow = "#E2A478"
+blue = "#84A0C6"
+magenta = "#A093C7"
+cyan = "#89B8C2"
+orange = "#E2A478"
+
+border_active = "blue"
+border_inactive = "#2E313F"
+status_bg = "#0F1117"
+cursor_line = "#1E2132"
+
+dir_color = "blue"
+symlink_color = "cyan"
+file_color = "fg"

@@ -1,0 +1,24 @@
+# Andromeda — dark theme with vivid colors
+# github.com/EliverLara/Andromeda
+
+bg = "#23262E"
+bg_light = "#2B2E38"
+fg = "#D5CED9"
+fg_dim = "#666D7A"
+
+red = "#F44747"
+green = "#96E072"
+yellow = "#FFE66D"
+blue = "#6DCBFA"
+magenta = "#C74DED"
+cyan = "#00E8C6"
+orange = "#F39C12"
+
+border_active = "cyan"
+border_inactive = "#3B3F4C"
+status_bg = "#1E2025"
+cursor_line = "#2B2E38"
+
+dir_color = "blue"
+symlink_color = "cyan"
+file_color = "fg"

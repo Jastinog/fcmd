@@ -1,0 +1,24 @@
+# Vitesse Dark — Anthony Fu's refined dark theme
+# github.com/antfu/vscode-theme-vitesse
+
+bg = "#121212"
+bg_light = "#1E1E1E"
+fg = "#DBD7CA"
+fg_dim = "#758575"
+
+red = "#CB7676"
+green = "#80A665"
+yellow = "#E6CC77"
+blue = "#6394BF"
+magenta = "#D9739F"
+cyan = "#5DA994"
+orange = "#C99076"
+
+border_active = "cyan"
+border_inactive = "#2A2A2A"
+status_bg = "#0A0A0A"
+cursor_line = "#1E1E1E"
+
+dir_color = "cyan"
+symlink_color = "blue"
+file_color = "fg"

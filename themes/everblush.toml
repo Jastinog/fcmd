@@ -1,0 +1,24 @@
+# Everblush — a dark, vibrant and beautiful theme
+# github.com/Everblush
+
+bg = "#141B1E"
+bg_light = "#1C2326"
+fg = "#DADADA"
+fg_dim = "#3B4244"
+
+red = "#E57474"
+green = "#8CCF7E"
+yellow = "#E5C76B"
+blue = "#67B0E8"
+magenta = "#C47FD5"
+cyan = "#6CBFBF"
+orange = "#E89982"
+
+border_active = "blue"
+border_inactive = "#252D30"
+status_bg = "#0E1416"
+cursor_line = "#1C2326"
+
+dir_color = "blue"
+symlink_color = "cyan"
+file_color = "fg"

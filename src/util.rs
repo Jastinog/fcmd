@@ -1,3 +1,10 @@
+use std::path::PathBuf;
+
+/// Returns `~/.config/fcmd` as the config directory (XDG-style, cross-platform).
+pub fn config_dir() -> Option<PathBuf> {
+    dirs::home_dir().map(|h| h.join(".config").join("fcmd"))
+}
+
 pub fn format_bytes(b: u64) -> String {
     if b < 1024 {
         format!("{b}B")

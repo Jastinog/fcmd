@@ -1,0 +1,24 @@
+# Cobalt2 — a blue-toned dark theme
+# github.com/wesbos/cobalt2-vscode
+
+bg = "#193549"
+bg_light = "#1F4662"
+fg = "#FFFFFF"
+fg_dim = "#0088FF"
+
+red = "#FF628C"
+green = "#3AD900"
+yellow = "#FFC600"
+blue = "#0088FF"
+magenta = "#FF9D00"
+cyan = "#80FCFF"
+orange = "#FF9D00"
+
+border_active = "yellow"
+border_inactive = "#1F4662"
+status_bg = "#122738"
+cursor_line = "#1F4662"
+
+dir_color = "yellow"
+symlink_color = "cyan"
+file_color = "fg"

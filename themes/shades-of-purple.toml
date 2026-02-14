@@ -1,0 +1,24 @@
+# Shades of Purple — a professional dark theme with bold purple
+# github.com/ahmadawais/shades-of-purple-vscode
+
+bg = "#1E1E3F"
+bg_light = "#2D2B55"
+fg = "#FFFFFF"
+fg_dim = "#A599E9"
+
+red = "#EC3A37"
+green = "#A5FF90"
+yellow = "#FAD000"
+blue = "#9EFFFF"
+magenta = "#B362FF"
+cyan = "#80FCFF"
+orange = "#FF9D00"
+
+border_active = "magenta"
+border_inactive = "#3D3B6B"
+status_bg = "#16163A"
+cursor_line = "#2D2B55"
+
+dir_color = "magenta"
+symlink_color = "cyan"
+file_color = "fg"

@@ -171,7 +171,7 @@ impl App {
             self.status_message = format!("Refresh error: {e}");
         }
         self.tree_dirty = true;
-        self.git_status_dir = None; // force re-fetch
+        self.git_checked_dirs = [None, None]; // force re-fetch
         self.refresh_git_status();
     }
 

@@ -1,0 +1,24 @@
+# Kanagawa Dragon — darker variant of Kanagawa
+# github.com/rebelot/kanagawa.nvim
+
+bg = "#181616"
+bg_light = "#282727"
+fg = "#C5C9C5"
+fg_dim = "#737C73"
+
+red = "#C4746E"
+green = "#87A987"
+yellow = "#C4B28A"
+blue = "#8BA4B0"
+magenta = "#A292A3"
+cyan = "#8EA4A2"
+orange = "#B6927B"
+
+border_active = "blue"
+border_inactive = "#282727"
+status_bg = "#0D0C0C"
+cursor_line = "#282727"
+
+dir_color = "blue"
+symlink_color = "cyan"
+file_color = "fg"

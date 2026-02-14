@@ -1,0 +1,24 @@
+# Carbonfox — a dark theme inspired by carbon and neon
+# github.com/EdenEast/nightfox.nvim
+
+bg = "#161616"
+bg_light = "#252525"
+fg = "#F2F4F8"
+fg_dim = "#7B7C7E"
+
+red = "#EE5396"
+green = "#25BE6A"
+yellow = "#08BDBA"
+blue = "#78A9FF"
+magenta = "#BE95FF"
+cyan = "#33B1FF"
+orange = "#3DDBD9"
+
+border_active = "blue"
+border_inactive = "#353535"
+status_bg = "#0C0C0C"
+cursor_line = "#252525"
+
+dir_color = "blue"
+symlink_color = "cyan"
+file_color = "fg"

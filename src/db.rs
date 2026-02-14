@@ -17,9 +17,8 @@ pub struct Db {
 
 impl Db {
     pub fn init() -> rusqlite::Result<Self> {
-        let db_path = dirs::config_dir()
-            .unwrap_or_else(|| PathBuf::from("."))
-            .join("fcmd");
+        let db_path = crate::util::config_dir()
+            .unwrap_or_else(|| PathBuf::from("."));
         std::fs::create_dir_all(&db_path).ok();
         let conn = Connection::open(db_path.join("fcmd.db"))?;
         conn.execute_batch(

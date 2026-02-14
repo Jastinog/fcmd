@@ -1,0 +1,24 @@
+# Ayu Mirage — simple, bright and elegant
+# github.com/ayu-theme
+
+bg = "#1F2430"
+bg_light = "#232834"
+fg = "#CBCCC6"
+fg_dim = "#707A8C"
+
+red = "#FF3333"
+green = "#BAE67E"
+yellow = "#FFD580"
+blue = "#5CCFE6"
+magenta = "#D4BFFF"
+cyan = "#5CCFE6"
+orange = "#FFAE57"
+
+border_active = "blue"
+border_inactive = "#333D4D"
+status_bg = "#191E28"
+cursor_line = "#232834"
+
+dir_color = "blue"
+symlink_color = "cyan"
+file_color = "fg"

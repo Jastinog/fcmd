@@ -1,0 +1,24 @@
+# Melange — a warm dark colorscheme
+# github.com/savq/melange-nvim
+
+bg = "#292522"
+bg_light = "#34302C"
+fg = "#ECE1D7"
+fg_dim = "#867462"
+
+red = "#D47766"
+green = "#85B695"
+yellow = "#EBC06D"
+blue = "#A3A9CE"
+magenta = "#CF9BC2"
+cyan = "#89B3B6"
+orange = "#E49B5D"
+
+border_active = "yellow"
+border_inactive = "#403A36"
+status_bg = "#211E1B"
+cursor_line = "#34302C"
+
+dir_color = "blue"
+symlink_color = "cyan"
+file_color = "fg"

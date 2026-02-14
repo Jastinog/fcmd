@@ -1,0 +1,24 @@
+# GitHub Dimmed — GitHub's softer dark theme
+# github.com
+
+bg = "#22272E"
+bg_light = "#2D333B"
+fg = "#ADBAC7"
+fg_dim = "#768390"
+
+red = "#F47067"
+green = "#57AB5A"
+yellow = "#C69026"
+blue = "#539BF5"
+magenta = "#B083F0"
+cyan = "#39C5CF"
+orange = "#E0823D"
+
+border_active = "blue"
+border_inactive = "#373E47"
+status_bg = "#1C2128"
+cursor_line = "#2D333B"
+
+dir_color = "blue"
+symlink_color = "cyan"
+file_color = "fg"

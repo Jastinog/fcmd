@@ -1,0 +1,24 @@
+# Night Owl — a theme for the night owls out there
+# github.com/sdras/night-owl-vscode-theme
+
+bg = "#011627"
+bg_light = "#0B2942"
+fg = "#D6DEEB"
+fg_dim = "#637777"
+
+red = "#EF5350"
+green = "#22DA6E"
+yellow = "#ADDB67"
+blue = "#82AAFF"
+magenta = "#C792EA"
+cyan = "#7FDBCA"
+orange = "#F78C6C"
+
+border_active = "blue"
+border_inactive = "#1D3B53"
+status_bg = "#011627"
+cursor_line = "#0B2942"
+
+dir_color = "blue"
+symlink_color = "cyan"
+file_color = "fg"

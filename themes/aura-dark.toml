@@ -1,0 +1,24 @@
+# Aura Dark — a beautiful dark theme with soft purple accent
+# github.com/daltonmenezes/aura-theme
+
+bg = "#15141B"
+bg_light = "#1C1B22"
+fg = "#EDECEE"
+fg_dim = "#6D6D6D"
+
+red = "#FF6767"
+green = "#61FFCA"
+yellow = "#FFCA85"
+blue = "#82E2FF"
+magenta = "#A277FF"
+cyan = "#61FFCA"
+orange = "#FFCA85"
+
+border_active = "magenta"
+border_inactive = "#29283B"
+status_bg = "#110F18"
+cursor_line = "#1C1B22"
+
+dir_color = "magenta"
+symlink_color = "cyan"
+file_color = "fg"

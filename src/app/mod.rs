@@ -181,10 +181,10 @@ pub struct App {
     pub bookmark_scroll: usize,
     pub bookmark_rename_old: Option<String>,
     pub bookmark_add_path: Option<PathBuf>,
-    // Git status
+    // Git status (tracked for both panels)
     pub git_statuses: HashMap<PathBuf, char>,
-    pub git_root: Option<PathBuf>,
-    pub(super) git_status_dir: Option<PathBuf>,
+    pub(super) git_roots: [Option<PathBuf>; 2],
+    pub(super) git_checked_dirs: [Option<PathBuf>; 2],
 }
 
 impl App {
@@ -253,6 +253,7 @@ impl App {
             (vec![Tab::new(cwd.clone())?], 0)
         };
 
+        Theme::ensure_builtin_themes();
         let saved_theme_name = db.as_ref().and_then(|d| d.load_theme());
         let theme = match saved_theme_name.as_deref().and_then(Theme::load_by_name) {
             Some(t) => t,
@@ -317,8 +318,8 @@ impl App {
             bookmark_rename_old: None,
             bookmark_add_path: None,
             git_statuses: HashMap::new(),
-            git_root: None,
-            git_status_dir: None,
+            git_roots: [None, None],
+            git_checked_dirs: [None, None],
         };
         app.refresh_git_status();
         // Apply saved sort preferences to restored panels

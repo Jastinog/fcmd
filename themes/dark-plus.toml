@@ -1,0 +1,24 @@
+# Dark+ — VS Code's default dark theme
+# code.visualstudio.com
+
+bg = "#1E1E1E"
+bg_light = "#252526"
+fg = "#D4D4D4"
+fg_dim = "#808080"
+
+red = "#F44747"
+green = "#6A9955"
+yellow = "#DCDCAA"
+blue = "#569CD6"
+magenta = "#C586C0"
+cyan = "#4EC9B0"
+orange = "#CE9178"
+
+border_active = "blue"
+border_inactive = "#333333"
+status_bg = "#181818"
+cursor_line = "#252526"
+
+dir_color = "blue"
+symlink_color = "cyan"
+file_color = "fg"

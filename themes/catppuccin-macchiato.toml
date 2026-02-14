@@ -1,0 +1,24 @@
+# Catppuccin Macchiato — soothing pastel theme (dark)
+# catppuccin.com
+
+bg = "#24273A"
+bg_light = "#363A4F"
+fg = "#CAD3F5"
+fg_dim = "#6E738D"
+
+red = "#ED8796"
+green = "#A6DA95"
+yellow = "#EED49F"
+blue = "#8AADF4"
+magenta = "#C6A0F6"
+cyan = "#8BD5CA"
+orange = "#F5A97F"
+
+border_active = "blue"
+border_inactive = "#494D64"
+status_bg = "#1E2030"
+cursor_line = "#363A4F"
+
+dir_color = "blue"
+symlink_color = "#F0C6C6"
+file_color = "fg"

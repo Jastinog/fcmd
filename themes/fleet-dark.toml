@@ -1,0 +1,24 @@
+# Fleet Dark — JetBrains Fleet dark theme
+# jetbrains.com/fleet
+
+bg = "#1E1F22"
+bg_light = "#2B2D30"
+fg = "#BCBEC4"
+fg_dim = "#6F737A"
+
+red = "#F75464"
+green = "#2BAE72"
+yellow = "#E7CE9E"
+blue = "#87C3FF"
+magenta = "#AF9CFF"
+cyan = "#2AACB8"
+orange = "#E09B70"
+
+border_active = "blue"
+border_inactive = "#393B40"
+status_bg = "#18191C"
+cursor_line = "#2B2D30"
+
+dir_color = "blue"
+symlink_color = "cyan"
+file_color = "fg"

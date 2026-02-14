@@ -1,0 +1,24 @@
+# Material Deep Ocean — material design inspired
+# github.com/material-theme
+
+bg = "#0F111A"
+bg_light = "#1A1C25"
+fg = "#A6ACCD"
+fg_dim = "#717CB4"
+
+red = "#F07178"
+green = "#C3E88D"
+yellow = "#FFCB6B"
+blue = "#82AAFF"
+magenta = "#C792EA"
+cyan = "#89DDFF"
+orange = "#F78C6C"
+
+border_active = "cyan"
+border_inactive = "#232533"
+status_bg = "#090B10"
+cursor_line = "#1A1C25"
+
+dir_color = "blue"
+symlink_color = "cyan"
+file_color = "fg"
