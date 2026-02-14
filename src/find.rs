@@ -146,11 +146,14 @@ impl FindState {
 
         let (tx, rx) = mpsc::channel();
         let query = self.query.clone();
-        let pattern = format!("*{query}*");
+
+        // Sanitize: strip characters that could be interpreted by find/mdfind
+        let sanitized_query: String = query.chars().filter(|c| *c != '\0').collect();
+        let sanitized_pattern = format!("*{sanitized_query}*");
 
         // Try mdfind first (Spotlight), fall back to find from $HOME
         let child_result = Command::new("mdfind")
-            .args(["-name", &query])
+            .args(["-name", &sanitized_query])
             .stdout(Stdio::piped())
             .stderr(Stdio::null())
             .spawn();
@@ -162,10 +165,12 @@ impl FindState {
                 Ok(child)
             }
             Err(_) => {
-                // mdfind not available, use find
+                // mdfind not available, use find from $HOME.
+                // Use -- to prevent path from being interpreted as an option.
                 let home = std::env::var("HOME").unwrap_or_else(|_| "/".to_string());
                 Command::new("find")
-                    .args([&home, "-maxdepth", "6", "-iname", &pattern])
+                    .arg("--")
+                    .args([&home, "-maxdepth", "6", "-iname", &sanitized_pattern])
                     .stdout(Stdio::piped())
                     .stderr(Stdio::null())
                     .spawn()
@@ -188,7 +193,8 @@ impl FindState {
                     if count == 0 {
                         let home = std::env::var("HOME").unwrap_or_else(|_| "/".to_string());
                         if let Ok(mut child) = Command::new("find")
-                            .args([&home, "-maxdepth", "6", "-iname", &pattern])
+                            .arg("--")
+                            .args([&home, "-maxdepth", "6", "-iname", &sanitized_pattern])
                             .stdout(Stdio::piped())
                             .stderr(Stdio::null())
                             .spawn()

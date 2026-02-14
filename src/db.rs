@@ -165,10 +165,15 @@ impl Db {
     }
 
     pub fn load_dir_sizes(&self, dir: &Path) -> rusqlite::Result<HashMap<PathBuf, u64>> {
-        let pattern = format!("{}/%", dir.to_string_lossy());
-        let mut stmt = self
-            .conn
-            .prepare("SELECT path, size_bytes FROM dir_sizes WHERE path LIKE ?1")?;
+        let escaped = dir
+            .to_string_lossy()
+            .replace('\\', "\\\\")
+            .replace('%', "\\%")
+            .replace('_', "\\_");
+        let pattern = format!("{escaped}/%");
+        let mut stmt = self.conn.prepare(
+            "SELECT path, size_bytes FROM dir_sizes WHERE path LIKE ?1 ESCAPE '\\'",
+        )?;
         let rows = stmt.query_map(params![pattern], |row| {
             let p: String = row.get(0)?;
             let s: i64 = row.get(1)?;

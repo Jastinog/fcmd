@@ -318,7 +318,6 @@ const BUILTIN_THEMES: &[(&str, &str)] = &[
     ("synthwave84.toml", include_str!("../themes/synthwave84.toml")),
     ("tender.toml", include_str!("../themes/tender.toml")),
     ("tokyo-night.toml", include_str!("../themes/tokyo-night.toml")),
-    ("tokyo-night-light.toml", include_str!("../themes/tokyo-night-light.toml")),
     ("tokyonight-moon.toml", include_str!("../themes/tokyonight-moon.toml")),
     ("tokyonight-storm.toml", include_str!("../themes/tokyonight-storm.toml")),
     ("tomorrow-night.toml", include_str!("../themes/tomorrow-night.toml")),
