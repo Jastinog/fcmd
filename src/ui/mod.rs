@@ -190,6 +190,10 @@ pub fn render(f: &mut Frame, app: &mut App) {
         overlays::render_sort(f, app, full_area);
     }
 
+    if app.mode == Mode::Rename || app.mode == Mode::Create {
+        overlays::render_input_popup(f, app, full_area);
+    }
+
     if let Some(ref fs) = app.find_state {
         find_overlay::render_find(f, fs, &app.theme, full_area);
     }

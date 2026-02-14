@@ -19,6 +19,7 @@ mod input;
 mod marks;
 mod navigation;
 mod polling;
+mod rename;
 mod search;
 mod tree;
 mod visual;
@@ -51,6 +52,8 @@ pub enum Mode {
     Find,
     Help,
     Sort,
+    Rename,
+    Create,
 }
 
 #[derive(PartialEq, Eq, Clone, Copy)]
@@ -108,6 +111,7 @@ pub struct App {
     pub active_tab: usize,
     pub mode: Mode,
     pub command_input: String,
+    pub rename_input: String,
     pub should_quit: bool,
     pub status_message: String,
     pub pending_key: Option<char>,
@@ -228,6 +232,7 @@ impl App {
             active_tab,
             mode: Mode::Normal,
             command_input: String::new(),
+            rename_input: String::new(),
             should_quit: false,
             status_message: String::new(),
             pending_key: None,
@@ -328,6 +333,8 @@ impl App {
             Mode::Find => self.handle_find(key),
             Mode::Help => self.handle_help(key),
             Mode::Sort => self.handle_sort(key),
+            Mode::Rename => self.handle_rename(key),
+            Mode::Create => self.handle_create(key),
         }
 
         self.update_preview();

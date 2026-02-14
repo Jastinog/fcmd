@@ -81,6 +81,10 @@ impl App {
             KeyCode::Char('m') => self.toggle_visual_mark(),
             KeyCode::Char('M') => self.jump_next_visual_mark(),
 
+            // Rename / Create
+            KeyCode::Char('r') if !ctrl => self.enter_rename(),
+            KeyCode::Char('a') => self.enter_create(),
+
             // Toggles & settings
             KeyCode::Char('r') if ctrl => self.refresh_current_panel(),
             KeyCode::Char('T') => self.cycle_theme(true),
@@ -153,5 +157,19 @@ impl App {
     pub(super) fn enter_command(&mut self) {
         self.mode = Mode::Command;
         self.command_input.clear();
+    }
+
+    pub(super) fn enter_rename(&mut self) {
+        let entry = match self.active_panel().selected_entry().filter(|e| e.name != "..") {
+            Some(e) => e,
+            None => return,
+        };
+        self.rename_input = entry.name.clone();
+        self.mode = Mode::Rename;
+    }
+
+    pub(super) fn enter_create(&mut self) {
+        self.rename_input.clear();
+        self.mode = Mode::Create;
     }
 }
