@@ -66,7 +66,9 @@ Yank (`yy`), delete (`dd`), paste (`p`/`P`), rename (`r`), create (`a`). All des
 
 ### Tabs
 
-`:tabnew` creates a new tab, `gt`/`gT` switches between them. Each tab has its own pair of panels and state. Session restores all tabs on next launch.
+![Tabs](assets/tabs.png)
+
+`Ctrl+T` creates a new tab, `Ctrl+W` closes it, `gt`/`gT` switches between them. Each tab has its own pair of panels and state. Session restores all tabs on next launch.
 
 ### 28 Built-In Themes
 
@@ -86,7 +88,7 @@ Auto-detected per-file git status indicators directly in the file list — modif
 
 ### Session Persistence
 
-Tabs, paths, theme, sort modes, and visual marks are saved automatically in a local SQLite database and restored on next launch.
+Tabs, paths, cursor positions, theme, sort modes, and visual marks are saved automatically in a local SQLite database and restored on next launch.
 
 ## Installation
 
@@ -128,6 +130,9 @@ cargo install --path .
 | `gg` / `G` | Jump to top / bottom |
 | `Ctrl-d` / `Ctrl-u` | Half-page down / up |
 | `Tab` | Switch panel |
+| `gt` / `gT` | Next / previous tab |
+| `Ctrl+T` | New tab |
+| `Ctrl+W` | Close tab |
 | `~` | Go to home directory |
 | `/` | Incremental search |
 | `n` / `N` | Next / previous search match |
@@ -207,8 +212,8 @@ Press `Space` to open a which-key style popup with all available commands:
 | `:select <glob>` | Select files matching pattern |
 | `:unselect <glob>` | Unselect files matching pattern |
 | `:du` | Calculate directory sizes |
-| `:tabnew` | Open new tab |
-| `:tabclose` | Close current tab |
+| `:tabnew` / `Ctrl+T` | Open new tab |
+| `:tabclose` / `Ctrl+W` | Close current tab |
 | `:q` | Quit |
 
 ### Sort Shortcuts
