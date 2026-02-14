@@ -67,11 +67,7 @@ impl App {
                 String::new()
             };
 
-            let size_text = format!(
-                "{}/{}",
-                format_bytes(bytes_done),
-                format_bytes(bytes_total)
-            );
+            let size_text = format!("{}/{}", format_bytes(bytes_done), format_bytes(bytes_total));
 
             self.status_message = format!(
                 "{verb} {bar} {pct}% ({size_text}){eta} [{}/{}]",
@@ -102,8 +98,7 @@ impl App {
                 };
                 let dur = format_duration(elapsed);
                 let size = format_bytes(bytes_total);
-                self.status_message =
-                    format!("{verb} {n} item(s), {size} in {dur}");
+                self.status_message = format!("{verb} {n} item(s), {size} in {dur}");
             }
 
             self.register = None;
@@ -174,7 +169,11 @@ impl App {
         }
 
         if let Some(DuMsg::Finished { sizes }) = finished {
-            let elapsed = self.du_progress.as_ref().unwrap().started_at.elapsed();
+            let elapsed = self
+                .du_progress
+                .as_ref()
+                .map(|p| p.started_at.elapsed())
+                .unwrap_or_default();
             let count = sizes.len();
             let total: u64 = sizes.iter().map(|(_, s)| s).sum();
 
@@ -184,18 +183,17 @@ impl App {
             }
 
             // Save to DB
-            if let Some(ref db) = self.db {
-                if let Err(e) = db.save_dir_sizes(&sizes) {
-                    self.status_message = format!("Sizes calculated but DB save failed: {e}");
-                    self.du_progress = None;
-                    return;
-                }
+            if let Some(ref db) = self.db
+                && let Err(e) = db.save_dir_sizes(&sizes)
+            {
+                self.status_message = format!("Sizes calculated but DB save failed: {e}");
+                self.du_progress = None;
+                return;
             }
 
             let secs = elapsed.as_secs_f64();
             let total_str = format_bytes(total);
-            self.status_message =
-                format!("{count} dirs measured: {total_str} total ({secs:.1}s)");
+            self.status_message = format!("{count} dirs measured: {total_str} total ({secs:.1}s)");
             self.du_progress = None;
         }
     }

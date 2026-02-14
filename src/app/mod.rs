@@ -226,8 +226,11 @@ impl App {
                         };
                         let _ = tab.left.load_dir();
                         let _ = tab.right.load_dir();
-                        tab.left.selected = st.left_cursor.min(tab.left.entries.len().saturating_sub(1));
-                        tab.right.selected = st.right_cursor.min(tab.right.entries.len().saturating_sub(1));
+                        tab.left.selected =
+                            st.left_cursor.min(tab.left.entries.len().saturating_sub(1));
+                        tab.right.selected = st
+                            .right_cursor
+                            .min(tab.right.entries.len().saturating_sub(1));
                         tabs.push(tab);
                     }
                     let at = at.min(tabs.len().saturating_sub(1));
@@ -305,12 +308,12 @@ impl App {
         // Apply saved sort preferences to restored panels
         for tab in &mut app.tabs {
             for panel in [&mut tab.left, &mut tab.right] {
-                if let Some(&(mode, rev)) = app.dir_sorts.get(&panel.path) {
-                    if panel.sort_mode != mode || panel.sort_reverse != rev {
-                        panel.sort_mode = mode;
-                        panel.sort_reverse = rev;
-                        let _ = panel.load_dir();
-                    }
+                if let Some(&(mode, rev)) = app.dir_sorts.get(&panel.path)
+                    && (panel.sort_mode != mode || panel.sort_reverse != rev)
+                {
+                    panel.sort_mode = mode;
+                    panel.sort_reverse = rev;
+                    let _ = panel.load_dir();
                 }
             }
         }

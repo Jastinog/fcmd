@@ -151,16 +151,14 @@ impl App {
                 self.mode = Mode::Find;
             }
 
-            "sort" => {
-                match arg.map(|a| a.to_lowercase()).as_deref() {
-                    Some("name" | "n") => self.set_sort(SortMode::Name),
-                    Some("size" | "s") => self.set_sort(SortMode::Size),
-                    Some("mod" | "modified" | "m" | "date" | "d") => self.set_sort(SortMode::Modified),
-                    Some("cre" | "created" | "c") => self.set_sort(SortMode::Created),
-                    Some("ext" | "e" | "extension") => self.set_sort(SortMode::Extension),
-                    _ => self.status_message = "Usage: :sort name|size|mod|cre|ext".into(),
-                }
-            }
+            "sort" => match arg.map(|a| a.to_lowercase()).as_deref() {
+                Some("name" | "n") => self.set_sort(SortMode::Name),
+                Some("size" | "s") => self.set_sort(SortMode::Size),
+                Some("mod" | "modified" | "m" | "date" | "d") => self.set_sort(SortMode::Modified),
+                Some("cre" | "created" | "c") => self.set_sort(SortMode::Created),
+                Some("ext" | "e" | "extension") => self.set_sort(SortMode::Extension),
+                _ => self.status_message = "Usage: :sort name|size|mod|cre|ext".into(),
+            },
 
             "hidden" => {
                 self.toggle_hidden();

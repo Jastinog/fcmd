@@ -1,9 +1,9 @@
 use ratatui::{
+    Frame,
     layout::Rect,
     style::Style,
     text::{Line, Span},
     widgets::{Block, Borders, List, ListItem},
-    Frame,
 };
 
 use crate::app::App;
@@ -76,10 +76,7 @@ pub(super) fn render_tree(f: &mut Frame, app: &App, area: Rect) {
             let (icon_style, name_style) = if is_cursor || line.is_current {
                 let s = Style::default().fg(t.yellow);
                 (s, s)
-            } else if line.is_on_path {
-                let s = Style::default().fg(t.dir_color);
-                (s, s)
-            } else if line.is_dir {
+            } else if line.is_on_path || line.is_dir {
                 let s = Style::default().fg(t.dir_color);
                 (s, s)
             } else {

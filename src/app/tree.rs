@@ -3,11 +3,14 @@ use super::*;
 impl App {
     pub(super) fn handle_tree_input(&mut self, key: KeyEvent) {
         // Handle pending key
-        if let Some(pending) = { self.pending_key_time = None; self.pending_key.take() } {
-            if pending == 'g' && key.code == KeyCode::Char('g') {
-                self.tree_selected = 0;
-                return;
-            }
+        if let Some(pending) = {
+            self.pending_key_time = None;
+            self.pending_key.take()
+        } && pending == 'g'
+            && key.code == KeyCode::Char('g')
+        {
+            self.tree_selected = 0;
+            return;
         }
 
         let ctrl = key.modifiers.contains(KeyModifiers::CONTROL);
@@ -37,7 +40,10 @@ impl App {
             KeyCode::Char('k') | KeyCode::Up => {
                 self.tree_selected = self.tree_selected.saturating_sub(1);
             }
-            KeyCode::Char('g') => { self.pending_key = Some('g'); self.pending_key_time = Some(Instant::now()); },
+            KeyCode::Char('g') => {
+                self.pending_key = Some('g');
+                self.pending_key_time = Some(Instant::now());
+            }
             KeyCode::Char('G') => {
                 if !self.tree_data.is_empty() {
                     self.tree_selected = self.tree_data.len() - 1;
@@ -93,9 +99,7 @@ impl App {
                 }
             } else if let Some(parent) = path.parent() {
                 // File: navigate panel to parent dir and select the file
-                let file_name = path
-                    .file_name()
-                    .map(|n| n.to_string_lossy().into_owned());
+                let file_name = path.file_name().map(|n| n.to_string_lossy().into_owned());
                 let panel = self.active_panel_mut();
                 panel.path = parent.to_path_buf();
                 panel.selected = 0;

@@ -2,11 +2,11 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 
 use ratatui::{
+    Frame,
     layout::{Constraint, Direction, Layout, Rect},
     style::Style,
     text::{Line, Span},
     widgets::Paragraph,
-    Frame,
 };
 
 use crate::app::{App, Mode, PanelSide};
@@ -118,10 +118,10 @@ pub fn render(f: &mut Frame, app: &mut App) {
             app.tree_dirty = false;
         }
         // If not focused, auto-position cursor on current dir
-        if !app.tree_focused {
-            if let Some(idx) = app.tree_data.iter().position(|l| l.is_current) {
-                app.tree_selected = idx;
-            }
+        if !app.tree_focused
+            && let Some(idx) = app.tree_data.iter().position(|l| l.is_current)
+        {
+            app.tree_selected = idx;
         }
     }
 
@@ -155,12 +155,26 @@ pub fn render(f: &mut Frame, app: &mut App) {
     if app.preview_mode {
         match tab.active {
             PanelSide::Left => {
-                panel::render_panel(f, &tab.left, panel_areas[0], panels_active, left_phantoms, &ctx);
+                panel::render_panel(
+                    f,
+                    &tab.left,
+                    panel_areas[0],
+                    panels_active,
+                    left_phantoms,
+                    &ctx,
+                );
                 preview::render_preview(f, &app.preview, panel_areas[1], ctx.theme);
             }
             PanelSide::Right => {
                 preview::render_preview(f, &app.preview, panel_areas[0], ctx.theme);
-                panel::render_panel(f, &tab.right, panel_areas[1], panels_active, right_phantoms, &ctx);
+                panel::render_panel(
+                    f,
+                    &tab.right,
+                    panel_areas[1],
+                    panels_active,
+                    right_phantoms,
+                    &ctx,
+                );
             }
         }
     } else {
@@ -217,7 +231,13 @@ pub fn render(f: &mut Frame, app: &mut App) {
     }
 
     if let Some(hints) = app.which_key_hints() {
-        overlays::render_which_key(f, hints, app.pending_key.unwrap_or(' '), &app.theme, full_area);
+        overlays::render_which_key(
+            f,
+            hints,
+            app.pending_key.unwrap_or(' '),
+            &app.theme,
+            full_area,
+        );
     }
 }
 
@@ -240,9 +260,7 @@ fn render_tab_bar(f: &mut Frame, app: &App, area: Rect) {
         if is_active {
             spans.push(Span::styled(
                 format!("  {}: {dir_name} ", i + 1),
-                Style::default()
-                    .fg(t.bg)
-                    .bg(t.blue),
+                Style::default().fg(t.bg).bg(t.blue),
             ));
             spans.push(Span::styled(
                 SEP_RIGHT,

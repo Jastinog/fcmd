@@ -86,7 +86,10 @@ impl Panel {
         self.load_dir_with_sizes(&HashMap::new())
     }
 
-    pub fn load_dir_with_sizes(&mut self, dir_sizes: &HashMap<PathBuf, u64>) -> std::io::Result<()> {
+    pub fn load_dir_with_sizes(
+        &mut self,
+        dir_sizes: &HashMap<PathBuf, u64>,
+    ) -> std::io::Result<()> {
         self.entries.clear();
 
         if let Some(parent) = self.path.parent() {
@@ -104,10 +107,7 @@ impl Panel {
         let mut dirs = Vec::new();
         let mut files = Vec::new();
 
-        let read_dir = match fs::read_dir(&self.path) {
-            Ok(rd) => rd,
-            Err(e) => return Err(e),
-        };
+        let read_dir = fs::read_dir(&self.path)?;
 
         for entry in read_dir.flatten() {
             let metadata = match entry.metadata() {
@@ -223,33 +223,36 @@ impl Panel {
     }
 
     pub fn enter_selected(&mut self) -> std::io::Result<bool> {
-        if let Some(entry) = self.entries.get(self.selected) {
-            if entry.is_dir {
-                let new_path = entry.path.clone();
-                self.path = new_path;
-                self.selected = 0;
-                self.offset = 0;
-                self.marked.clear();
-                self.load_dir()?;
-                return Ok(true);
-            }
+        if let Some(entry) = self.entries.get(self.selected)
+            && entry.is_dir
+        {
+            let new_path = entry.path.clone();
+            self.path = new_path;
+            self.selected = 0;
+            self.offset = 0;
+            self.marked.clear();
+            self.load_dir()?;
+            return Ok(true);
         }
         Ok(false)
     }
 
     pub fn go_parent(&mut self) -> std::io::Result<bool> {
         if let Some(parent) = self.path.parent().map(|p| p.to_path_buf()) {
-            let old_name = self.path.file_name().map(|n| n.to_string_lossy().into_owned());
+            let old_name = self
+                .path
+                .file_name()
+                .map(|n| n.to_string_lossy().into_owned());
             self.path = parent;
             self.selected = 0;
             self.offset = 0;
             self.marked.clear();
             self.load_dir()?;
 
-            if let Some(name) = old_name {
-                if let Some(pos) = self.entries.iter().position(|e| e.name == name) {
-                    self.selected = pos;
-                }
+            if let Some(name) = old_name
+                && let Some(pos) = self.entries.iter().position(|e| e.name == name)
+            {
+                self.selected = pos;
             }
             return Ok(true);
         }
@@ -273,9 +276,8 @@ impl Panel {
 
     /// Returns the visual selection range (lo, hi) inclusive, or None.
     pub fn visual_range(&self) -> Option<(usize, usize)> {
-        self.visual_anchor.map(|anchor| {
-            (anchor.min(self.selected), anchor.max(self.selected))
-        })
+        self.visual_anchor
+            .map(|anchor| (anchor.min(self.selected), anchor.max(self.selected)))
     }
 
     /// Paths of currently "targeted" entries.
@@ -322,24 +324,24 @@ impl Panel {
 
     /// Toggle mark on current entry and move cursor down.
     pub fn toggle_mark(&mut self) {
-        if let Some(entry) = self.entries.get(self.selected) {
-            if entry.name != ".." {
-                let path = entry.path.clone();
-                if !self.marked.remove(&path) {
-                    self.marked.insert(path);
-                }
+        if let Some(entry) = self.entries.get(self.selected)
+            && entry.name != ".."
+        {
+            let path = entry.path.clone();
+            if !self.marked.remove(&path) {
+                self.marked.insert(path);
             }
         }
         self.move_down();
     }
 
     pub fn toggle_mark_up(&mut self) {
-        if let Some(entry) = self.entries.get(self.selected) {
-            if entry.name != ".." {
-                let path = entry.path.clone();
-                if !self.marked.remove(&path) {
-                    self.marked.insert(path);
-                }
+        if let Some(entry) = self.entries.get(self.selected)
+            && entry.name != ".."
+        {
+            let path = entry.path.clone();
+            if !self.marked.remove(&path) {
+                self.marked.insert(path);
             }
         }
         self.move_up();

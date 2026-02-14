@@ -95,9 +95,7 @@ impl App {
             let _ = panel.load_dir();
             self.apply_dir_sort();
         } else if let Some(parent) = path.parent() {
-            let name = path
-                .file_name()
-                .map(|n| n.to_string_lossy().into_owned());
+            let name = path.file_name().map(|n| n.to_string_lossy().into_owned());
             let panel = self.active_panel_mut();
             panel.path = parent.to_path_buf();
             panel.selected = 0;

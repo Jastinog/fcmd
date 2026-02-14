@@ -5,10 +5,10 @@ impl App {
         let dir = self.active_panel().path.clone();
 
         // Check if current dir is inside the cached git root — statuses still valid
-        if let Some(ref root) = self.git_root {
-            if dir.starts_with(root) {
-                return;
-            }
+        if let Some(ref root) = self.git_root
+            && dir.starts_with(root)
+        {
+            return;
         }
         // Different repo or not cached yet — need to check
         if self.git_status_dir.as_ref() == Some(&dir) {
@@ -29,16 +29,20 @@ impl App {
             .args(["-C", &dir.to_string_lossy(), "rev-parse", "--show-toplevel"])
             .output();
         let root = match root_output {
-            Ok(o) if o.status.success() => {
-                PathBuf::from(String::from_utf8_lossy(&o.stdout).trim())
-            }
+            Ok(o) if o.status.success() => PathBuf::from(String::from_utf8_lossy(&o.stdout).trim()),
             _ => return,
         };
         self.git_root = Some(root.clone());
 
         // Get porcelain status
         let status_output = std::process::Command::new("git")
-            .args(["-C", &root.to_string_lossy(), "status", "--porcelain=v1", "-uall"])
+            .args([
+                "-C",
+                &root.to_string_lossy(),
+                "status",
+                "--porcelain=v1",
+                "-uall",
+            ])
             .output();
         let output = match status_output {
             Ok(o) if o.status.success() => o,

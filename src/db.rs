@@ -69,24 +69,20 @@ impl Db {
     }
 
     pub fn load_visual_marks(&self) -> rusqlite::Result<HashMap<PathBuf, u8>> {
-        let mut stmt = self
-            .conn
-            .prepare("SELECT path, level FROM visual_marks")?;
+        let mut stmt = self.conn.prepare("SELECT path, level FROM visual_marks")?;
         let rows = stmt.query_map([], |row| {
             let s: String = row.get(0)?;
             let level: i64 = row.get(1)?;
             Ok((PathBuf::from(s), level as u8))
         })?;
         let mut map = HashMap::new();
-        for row in rows {
-            if let Ok((p, l)) = row {
-                map.insert(p, l);
-            }
+        for (p, l) in rows.flatten() {
+            map.insert(p, l);
         }
         Ok(map)
     }
 
-    pub fn set_visual_mark(&self, path: &PathBuf, level: u8) -> rusqlite::Result<()> {
+    pub fn set_visual_mark(&self, path: &Path, level: u8) -> rusqlite::Result<()> {
         self.conn.execute(
             "INSERT OR REPLACE INTO visual_marks (path, level) VALUES (?1, ?2)",
             params![path.to_string_lossy().as_ref(), level as i64],
@@ -94,7 +90,7 @@ impl Db {
         Ok(())
     }
 
-    pub fn remove_visual_mark(&self, path: &PathBuf) -> rusqlite::Result<()> {
+    pub fn remove_visual_mark(&self, path: &Path) -> rusqlite::Result<()> {
         self.conn.execute(
             "DELETE FROM visual_marks WHERE path = ?1",
             params![path.to_string_lossy().as_ref()],
@@ -176,17 +172,20 @@ impl Db {
             Ok((PathBuf::from(p), s as u64))
         })?;
         let mut map = HashMap::new();
-        for row in rows {
-            if let Ok((p, s)) = row {
-                map.insert(p, s);
-            }
+        for (p, s) in rows.flatten() {
+            map.insert(p, s);
         }
         Ok(map)
     }
 
     // --- Per-directory sort persistence ---
 
-    pub fn save_dir_sort(&self, path: &Path, mode_label: &str, reverse: bool) -> rusqlite::Result<()> {
+    pub fn save_dir_sort(
+        &self,
+        path: &Path,
+        mode_label: &str,
+        reverse: bool,
+    ) -> rusqlite::Result<()> {
         if mode_label == "name" && !reverse {
             // Default sort — remove row to keep table clean
             self.conn.execute(
@@ -202,16 +201,10 @@ impl Db {
         Ok(())
     }
 
-    pub fn remove_dir_sort(&self, path: &Path) -> rusqlite::Result<()> {
-        self.conn.execute(
-            "DELETE FROM dir_sort WHERE path = ?1",
-            params![path.to_string_lossy().as_ref()],
-        )?;
-        Ok(())
-    }
-
     pub fn load_dir_sorts(&self) -> rusqlite::Result<HashMap<PathBuf, (String, bool)>> {
-        let mut stmt = self.conn.prepare("SELECT path, sort_mode, sort_reverse FROM dir_sort")?;
+        let mut stmt = self
+            .conn
+            .prepare("SELECT path, sort_mode, sort_reverse FROM dir_sort")?;
         let rows = stmt.query_map([], |row| {
             let p: String = row.get(0)?;
             let m: String = row.get(1)?;
@@ -219,10 +212,8 @@ impl Db {
             Ok((PathBuf::from(p), (m, r != 0)))
         })?;
         let mut map = HashMap::new();
-        for row in rows {
-            if let Ok((p, mr)) = row {
-                map.insert(p, mr);
-            }
+        for (p, mr) in rows.flatten() {
+            map.insert(p, mr);
         }
         Ok(map)
     }

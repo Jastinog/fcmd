@@ -1,9 +1,9 @@
 use ratatui::{
+    Frame,
     layout::{Constraint, Direction, Layout, Rect},
     style::Style,
     text::{Line, Span},
     widgets::{Block, Borders, Clear, List, ListItem, Paragraph},
-    Frame,
 };
 
 use crate::app::{App, Mode};
@@ -33,7 +33,7 @@ pub(super) fn render_which_key(
     let col_width = 18usize;
     let usable_width = area.width.saturating_sub(2) as usize; // -2 for borders
     let num_cols = (usable_width / col_width).max(1);
-    let num_rows = (hints.len() + num_cols - 1) / num_cols;
+    let num_rows = hints.len().div_ceil(num_cols);
 
     // Popup dimensions: rows + 2 border + 2 (separator + hint)
     let popup_h = (num_rows as u16 + 4).min(area.height);
@@ -135,7 +135,11 @@ pub(super) fn render_sort(f: &mut Frame, app: &App, area: Rect) {
     let popup = Rect::new(area.x + x, area.y + y, w, h);
     f.render_widget(Clear, popup);
 
-    let dir_arrow = if panel.sort_reverse { "\u{2191}" } else { "\u{2193}" };
+    let dir_arrow = if panel.sort_reverse {
+        "\u{2191}"
+    } else {
+        "\u{2193}"
+    };
     let block = Block::default()
         .borders(Borders::ALL)
         .border_style(Style::default().fg(t.cyan))
@@ -344,15 +348,11 @@ pub(super) fn render_help(f: &mut Frame, t: &Theme, area: Rect) {
         }
         lines.push(ListItem::new(Line::from(Span::styled(
             format!(" {section}"),
-            Style::default()
-                .fg(t.cyan),
+            Style::default().fg(t.cyan),
         ))));
         for (key, desc) in *keys {
             let line = Line::from(vec![
-                Span::styled(
-                    format!("   {key:<16}"),
-                    Style::default().fg(t.yellow),
-                ),
+                Span::styled(format!("   {key:<16}"), Style::default().fg(t.yellow)),
                 Span::styled(*desc, Style::default().fg(t.fg)),
             ]);
             lines.push(ListItem::new(line));
@@ -611,7 +611,9 @@ pub(super) fn render_confirm_popup(f: &mut Frame, app: &App, area: Rect) {
 
 pub(super) fn render_preview_popup(f: &mut Frame, app: &App, area: Rect) {
     let t = &app.theme;
-    let Some(ref p) = app.file_preview else { return };
+    let Some(ref p) = app.file_preview else {
+        return;
+    };
 
     let popup = centered_rect(75, 80, area);
     f.render_widget(Clear, popup);
@@ -719,8 +721,12 @@ pub(super) fn render_theme_picker(f: &mut Frame, app: &App, area: Rect) {
         let active_index = app.theme_index;
 
         let mut items: Vec<ListItem> = Vec::new();
-        for i in scroll..len.min(scroll + list_height) {
-            let name = &list[i];
+        for (i, name) in list
+            .iter()
+            .enumerate()
+            .take(len.min(scroll + list_height))
+            .skip(scroll)
+        {
             let is_cursor = i == cursor;
             let is_active = active_index == Some(i);
 
@@ -759,7 +765,12 @@ pub(super) fn render_theme_picker(f: &mut Frame, app: &App, area: Rect) {
             }
         }
 
-        let list_area = Rect::new(left_inner.x, left_inner.y, left_inner.width, list_height as u16);
+        let list_area = Rect::new(
+            left_inner.x,
+            left_inner.y,
+            left_inner.width,
+            list_height as u16,
+        );
         f.render_widget(List::new(items), list_area);
 
         // Separator
@@ -815,14 +826,54 @@ fn render_preview_panel(f: &mut Frame, pt: &Theme, area: Rect) {
     }
 
     let entries: &[MockEntry] = &[
-        MockEntry { name: "Documents", is_dir: true, meta: "<DIR>", date: "Feb 14" },
-        MockEntry { name: "Downloads", is_dir: true, meta: "<DIR>", date: "Feb 13" },
-        MockEntry { name: "Projects", is_dir: true, meta: "<DIR>", date: "Feb 10" },
-        MockEntry { name: ".config", is_dir: true, meta: "<DIR>", date: "Jan 28" },
-        MockEntry { name: "readme.md", is_dir: false, meta: "1.2K", date: "Feb 14" },
-        MockEntry { name: "setup.sh", is_dir: false, meta: "840", date: "Feb 12" },
-        MockEntry { name: "photo.png", is_dir: false, meta: "2.4M", date: "Feb 01" },
-        MockEntry { name: "notes.txt", is_dir: false, meta: "512", date: "Jan 15" },
+        MockEntry {
+            name: "Documents",
+            is_dir: true,
+            meta: "<DIR>",
+            date: "Feb 14",
+        },
+        MockEntry {
+            name: "Downloads",
+            is_dir: true,
+            meta: "<DIR>",
+            date: "Feb 13",
+        },
+        MockEntry {
+            name: "Projects",
+            is_dir: true,
+            meta: "<DIR>",
+            date: "Feb 10",
+        },
+        MockEntry {
+            name: ".config",
+            is_dir: true,
+            meta: "<DIR>",
+            date: "Jan 28",
+        },
+        MockEntry {
+            name: "readme.md",
+            is_dir: false,
+            meta: "1.2K",
+            date: "Feb 14",
+        },
+        MockEntry {
+            name: "setup.sh",
+            is_dir: false,
+            meta: "840",
+            date: "Feb 12",
+        },
+        MockEntry {
+            name: "photo.png",
+            is_dir: false,
+            meta: "2.4M",
+            date: "Feb 01",
+        },
+        MockEntry {
+            name: "notes.txt",
+            is_dir: false,
+            meta: "512",
+            date: "Jan 15",
+        },
     ];
 
     let cursor_row = 2usize; // "Projects/" row
@@ -841,8 +892,16 @@ fn render_preview_panel(f: &mut Frame, pt: &Theme, area: Rect) {
             entry.name.to_string()
         };
 
-        let name_color = if entry.is_dir { pt.dir_color } else { pt.file_color };
-        let cursor_bg = if is_cursor { Some(pt.cursor_line) } else { None };
+        let name_color = if entry.is_dir {
+            pt.dir_color
+        } else {
+            pt.file_color
+        };
+        let cursor_bg = if is_cursor {
+            Some(pt.cursor_line)
+        } else {
+            None
+        };
 
         // Layout: " icon name     meta   date "
         let meta_date = format!("{}  {}", entry.meta, entry.date);
@@ -851,7 +910,11 @@ fn render_preview_panel(f: &mut Frame, pt: &Theme, area: Rect) {
         let meta_w = meta_date.chars().count() + 1; // +1 for trailing space
         let name_w = iw.saturating_sub(prefix_w + meta_w);
         let name_display: String = if display_name.chars().count() > name_w {
-            display_name.chars().take(name_w.saturating_sub(1)).chain(std::iter::once('\u{2026}')).collect()
+            display_name
+                .chars()
+                .take(name_w.saturating_sub(1))
+                .chain(std::iter::once('\u{2026}'))
+                .collect()
         } else {
             let pad = name_w.saturating_sub(display_name.chars().count());
             format!("{display_name}{}", " ".repeat(pad))
@@ -976,4 +1039,3 @@ pub(super) fn render_search_popup(f: &mut Frame, app: &App, area: Rect) {
     let hint_area = Rect::new(inner.x, inner.y + row, inner.width, 1);
     f.render_widget(Paragraph::new(hint_line), hint_area);
 }
-

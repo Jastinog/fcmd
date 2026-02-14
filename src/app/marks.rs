@@ -11,24 +11,28 @@ impl App {
         let path = entry.path.clone();
         let name = entry.name.clone();
         let current_level = self.visual_marks.get(&path).copied().unwrap_or(0);
-        let next_level = if current_level >= 3 { 0 } else { current_level + 1 };
+        let next_level = if current_level >= 3 {
+            0
+        } else {
+            current_level + 1
+        };
 
         if next_level == 0 {
             self.visual_marks.remove(&path);
-            if let Some(ref db) = self.db {
-                if let Err(e) = db.remove_visual_mark(&path) {
-                    self.status_message = format!("Unmark error: {e}");
-                    return;
-                }
+            if let Some(ref db) = self.db
+                && let Err(e) = db.remove_visual_mark(&path)
+            {
+                self.status_message = format!("Unmark error: {e}");
+                return;
             }
             self.status_message = format!("Unmarked: {name}");
         } else {
             self.visual_marks.insert(path.clone(), next_level);
-            if let Some(ref db) = self.db {
-                if let Err(e) = db.set_visual_mark(&path, next_level) {
-                    self.status_message = format!("Mark error: {e}");
-                    return;
-                }
+            if let Some(ref db) = self.db
+                && let Err(e) = db.set_visual_mark(&path, next_level)
+            {
+                self.status_message = format!("Mark error: {e}");
+                return;
             }
             let label = match next_level {
                 1 => "●1",
@@ -114,7 +118,11 @@ impl App {
                 self.active_panel_mut().sort_mode = mode;
                 self.reload_active_panel();
                 self.save_current_sort();
-                let arrow = if self.active_panel().sort_reverse { "\u{2191}" } else { "\u{2193}" };
+                let arrow = if self.active_panel().sort_reverse {
+                    "\u{2191}"
+                } else {
+                    "\u{2193}"
+                };
                 self.status_message = format!("Sort: {}{arrow}", mode.label());
                 self.mode = Mode::Normal;
             }

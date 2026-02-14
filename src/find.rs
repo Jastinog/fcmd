@@ -8,8 +8,16 @@ use std::time::Instant;
 const MAX_ENTRIES: usize = 5000;
 const MAX_DEPTH: usize = 12;
 const SKIP_DIRS: &[&str] = &[
-    ".git", ".svn", ".hg", "target", "node_modules",
-    "__pycache__", ".cache", "build", "dist", ".next",
+    ".git",
+    ".svn",
+    ".hg",
+    "target",
+    "node_modules",
+    "__pycache__",
+    ".cache",
+    "build",
+    "dist",
+    ".next",
 ];
 
 const MDFIND_LIMIT: usize = 5000;
@@ -166,7 +174,9 @@ impl FindState {
 
         match child_result {
             Ok(mut child) => {
-                let stdout = child.stdout.take().unwrap();
+                let Some(stdout) = child.stdout.take() else {
+                    return;
+                };
                 self.search_child = Some(child);
                 self.rx = Some(rx);
                 self.loading = true;
@@ -199,7 +209,10 @@ impl FindState {
 
     /// Spinner character for the current tick.
     pub fn spinner(&self) -> &'static str {
-        const FRAMES: &[&str] = &["\u{280b}", "\u{2819}", "\u{2839}", "\u{2838}", "\u{283c}", "\u{2834}", "\u{2826}", "\u{2827}", "\u{2807}", "\u{280f}"];
+        const FRAMES: &[&str] = &[
+            "\u{280b}", "\u{2819}", "\u{2839}", "\u{2838}", "\u{283c}", "\u{2834}", "\u{2826}",
+            "\u{2827}", "\u{2807}", "\u{280f}",
+        ];
         FRAMES[self.tick % FRAMES.len()]
     }
 
@@ -331,10 +344,10 @@ impl FindState {
 }
 
 fn abbreviate_home(path: &str) -> String {
-    if let Ok(home) = std::env::var("HOME") {
-        if let Some(rest) = path.strip_prefix(&home) {
-            return format!("~{rest}");
-        }
+    if let Ok(home) = std::env::var("HOME")
+        && let Some(rest) = path.strip_prefix(&home)
+    {
+        return format!("~{rest}");
     }
     path.to_string()
 }
@@ -366,13 +379,7 @@ fn global_search_read(stdout: std::process::ChildStdout, tx: &mpsc::Sender<Entry
     count
 }
 
-fn walk_send(
-    dir: &Path,
-    base: &Path,
-    tx: &mpsc::Sender<Entry>,
-    depth: usize,
-    count: &mut usize,
-) {
+fn walk_send(dir: &Path, base: &Path, tx: &mpsc::Sender<Entry>, depth: usize, count: &mut usize) {
     if depth > MAX_DEPTH || *count >= MAX_ENTRIES {
         return;
     }
@@ -445,12 +452,7 @@ fn fuzzy_score_pre(query_chars: &[char], text_lower: &str, text_len: usize) -> O
             qi += 1;
             consecutive += 1;
             score += consecutive;
-            if ti == 0
-                || matches!(
-                    t.get(ti.wrapping_sub(1)),
-                    Some('/' | '_' | '-' | '.' | ' ')
-                )
-            {
+            if ti == 0 || matches!(t.get(ti.wrapping_sub(1)), Some('/' | '_' | '-' | '.' | ' ')) {
                 score += 5;
             }
         } else {

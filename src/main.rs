@@ -4,9 +4,11 @@ use std::time::Duration;
 use crossterm::{
     event::{self, Event, KeyEventKind},
     execute,
-    terminal::{self, disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
+    terminal::{
+        self, EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode,
+    },
 };
-use ratatui::{backend::CrosstermBackend, Terminal};
+use ratatui::{Terminal, backend::CrosstermBackend};
 
 mod app;
 mod db;
@@ -63,9 +65,7 @@ fn open_in_editor(
         .or_else(|_| std::env::var("EDITOR"))
         .unwrap_or_else(|_| "vi".into());
 
-    let result = std::process::Command::new(&editor)
-        .arg(path)
-        .status();
+    let result = std::process::Command::new(&editor).arg(path).status();
 
     // Restore TUI: enter alternate screen, force full repaint
     execute!(
@@ -124,4 +124,3 @@ fn run(
         }
     }
 }
-

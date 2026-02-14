@@ -2,18 +2,23 @@ use super::*;
 
 impl App {
     pub(super) fn handle_visual(&mut self, key: KeyEvent) {
-        if let Some('g') = { self.pending_key_time = None; self.pending_key.take() } {
-            if key.code == KeyCode::Char('g') {
-                self.active_panel_mut().go_top();
-                return;
-            }
+        if let Some('g') = {
+            self.pending_key_time = None;
+            self.pending_key.take()
+        } && key.code == KeyCode::Char('g')
+        {
+            self.active_panel_mut().go_top();
+            return;
         }
 
         match key.code {
             KeyCode::Char('j') | KeyCode::Down => self.active_panel_mut().move_down(),
             KeyCode::Char('k') | KeyCode::Up => self.active_panel_mut().move_up(),
             KeyCode::Char('G') => self.active_panel_mut().go_bottom(),
-            KeyCode::Char('g') => { self.pending_key = Some('g'); self.pending_key_time = Some(Instant::now()); },
+            KeyCode::Char('g') => {
+                self.pending_key = Some('g');
+                self.pending_key_time = Some(Instant::now());
+            }
             KeyCode::Char('d') if key.modifiers.contains(KeyModifiers::CONTROL) => {
                 let half = self.visible_height / 2;
                 self.active_panel_mut().page_down(half);
@@ -95,11 +100,13 @@ impl App {
     }
 
     pub(super) fn handle_select(&mut self, key: KeyEvent) {
-        if let Some('g') = { self.pending_key_time = None; self.pending_key.take() } {
-            if key.code == KeyCode::Char('g') {
-                self.active_panel_mut().go_top();
-                return;
-            }
+        if let Some('g') = {
+            self.pending_key_time = None;
+            self.pending_key.take()
+        } && key.code == KeyCode::Char('g')
+        {
+            self.active_panel_mut().go_top();
+            return;
         }
 
         let shift = key.modifiers.contains(KeyModifiers::SHIFT);
@@ -111,7 +118,10 @@ impl App {
             KeyCode::Char('j') | KeyCode::Down => self.active_panel_mut().move_down(),
             KeyCode::Char('k') | KeyCode::Up => self.active_panel_mut().move_up(),
             KeyCode::Char('G') => self.active_panel_mut().go_bottom(),
-            KeyCode::Char('g') => { self.pending_key = Some('g'); self.pending_key_time = Some(Instant::now()); },
+            KeyCode::Char('g') => {
+                self.pending_key = Some('g');
+                self.pending_key_time = Some(Instant::now());
+            }
             KeyCode::Char('d') if key.modifiers.contains(KeyModifiers::CONTROL) => {
                 let half = self.visible_height / 2;
                 self.active_panel_mut().page_down(half);

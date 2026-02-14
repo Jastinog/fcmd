@@ -3,6 +3,7 @@ use std::path::{Path, PathBuf};
 use std::sync::mpsc;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
+#[allow(dead_code)]
 pub enum RegisterOp {
     Yank,
     Cut,
@@ -29,7 +30,9 @@ pub struct UndoStack {
 
 impl UndoStack {
     pub fn new() -> Self {
-        Self { entries: Vec::new() }
+        Self {
+            entries: Vec::new(),
+        }
     }
 
     pub fn push(&mut self, records: Vec<OpRecord>) {
@@ -198,7 +201,7 @@ pub fn paste_in_background(
             let result = match op {
                 RegisterOp::Yank => copy_path_progress(src, &dst_dir, &mut ctx),
                 RegisterOp::Cut => {
-                    if src.parent().map_or(false, |p| p == dst_dir) {
+                    if src.parent().is_some_and(|p| p == dst_dir) {
                         continue;
                     }
                     move_path_progress(src, &dst_dir, &mut ctx)
@@ -303,9 +306,9 @@ pub fn touch(dir: &Path, name: &str) -> std::io::Result<OpRecord> {
 }
 
 pub fn rename_path(path: &Path, new_name: &str) -> std::io::Result<OpRecord> {
-    let parent = path.parent().ok_or_else(|| {
-        std::io::Error::new(std::io::ErrorKind::InvalidInput, "no parent dir")
-    })?;
+    let parent = path
+        .parent()
+        .ok_or_else(|| std::io::Error::new(std::io::ErrorKind::InvalidInput, "no parent dir"))?;
     let new = parent.join(new_name);
     if new.exists() {
         return Err(std::io::Error::new(
@@ -435,10 +438,7 @@ mod tests {
 
     fn tmp_dir() -> PathBuf {
         let n = TEST_COUNTER.fetch_add(1, Ordering::Relaxed);
-        let dir = std::env::temp_dir().join(format!(
-            "fc_test_{}_{n}",
-            std::process::id()
-        ));
+        let dir = std::env::temp_dir().join(format!("fc_test_{}_{n}", std::process::id()));
         let _ = fs::remove_dir_all(&dir);
         fs::create_dir_all(&dir).unwrap();
         dir

@@ -1,9 +1,9 @@
 use ratatui::{
+    Frame,
     layout::Rect,
     style::Style,
     text::{Line, Span},
     widgets::{Block, Borders, Clear, List, ListItem, Paragraph},
-    Frame,
 };
 
 use crate::find::{FindScope, FindState};
@@ -123,10 +123,7 @@ pub(super) fn render_find(f: &mut Frame, fs: &FindState, t: &Theme, area: Rect) 
                 let (rel_path, is_dir) = fs.get_item(idx)?;
                 let is_selected = idx == fs.selected;
 
-                let icon = file_icon(
-                    rel_path.rsplit('/').next().unwrap_or(rel_path),
-                    is_dir,
-                );
+                let icon = file_icon(rel_path.rsplit('/').next().unwrap_or(rel_path), is_dir);
 
                 let display = if is_dir {
                     format!("{rel_path}/")
@@ -226,7 +223,9 @@ pub(super) fn render_find(f: &mut Frame, fs: &FindState, t: &Theme, area: Rect) 
             let preview_title = format!(" 󰈈 {} [{}] ", p.title, p.info);
             let title_chars: Vec<char> = preview_title.chars().collect();
             let title_display = if title_chars.len() > right_w as usize {
-                let truncated: String = title_chars[..right_w.saturating_sub(2) as usize].iter().collect();
+                let truncated: String = title_chars[..right_w.saturating_sub(2) as usize]
+                    .iter()
+                    .collect();
                 format!("{truncated}\u{2026} ")
             } else {
                 preview_title

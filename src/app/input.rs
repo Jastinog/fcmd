@@ -8,10 +8,12 @@ impl App {
             return;
         }
 
-        if let Some(pending) = { self.pending_key_time = None; self.pending_key.take() } {
-            if self.handle_pending_sequence(pending, key) {
-                return;
-            }
+        if let Some(pending) = {
+            self.pending_key_time = None;
+            self.pending_key.take()
+        } && self.handle_pending_sequence(pending, key)
+        {
+            return;
         }
 
         let ctrl = key.modifiers.contains(KeyModifiers::CONTROL);
@@ -43,14 +45,18 @@ impl App {
                 self.active_panel_mut().page_up(half);
             }
             KeyCode::Char('l') | KeyCode::Right | KeyCode::Enter => {
-                let is_file = self.active_panel().selected_entry()
+                let is_file = self
+                    .active_panel()
+                    .selected_entry()
                     .map(|e| !e.is_dir && e.name != "..")
                     .unwrap_or(false);
                 if is_file && key.code == KeyCode::Enter {
-                    let path = self.active_panel().selected_entry().unwrap().path.clone();
-                    self.file_preview = Some(Preview::load(&path));
-                    self.file_preview_path = Some(path);
-                    self.mode = Mode::Preview;
+                    if let Some(entry) = self.active_panel().selected_entry() {
+                        let path = entry.path.clone();
+                        self.file_preview = Some(Preview::load(&path));
+                        self.file_preview_path = Some(path);
+                        self.mode = Mode::Preview;
+                    }
                 } else if let Err(e) = self.active_panel_mut().enter_selected() {
                     self.status_message = format!("Error: {e}");
                 } else {
@@ -76,17 +82,35 @@ impl App {
             KeyCode::Char('w') if ctrl => self.close_tab(),
 
             // Pending key sequences
-            KeyCode::Char('g') => { self.pending_key = Some('g'); self.pending_key_time = Some(Instant::now()); },
-            KeyCode::Char('d') => { self.pending_key = Some('d'); self.pending_key_time = Some(Instant::now()); },
-            KeyCode::Char('y') => { self.pending_key = Some('y'); self.pending_key_time = Some(Instant::now()); },
-            KeyCode::Char('s') => { self.pending_key = Some('s'); self.pending_key_time = Some(Instant::now()); },
-            KeyCode::Char('\'') => { self.pending_key = Some('\''); self.pending_key_time = Some(Instant::now()); },
+            KeyCode::Char('g') => {
+                self.pending_key = Some('g');
+                self.pending_key_time = Some(Instant::now());
+            }
+            KeyCode::Char('d') => {
+                self.pending_key = Some('d');
+                self.pending_key_time = Some(Instant::now());
+            }
+            KeyCode::Char('y') => {
+                self.pending_key = Some('y');
+                self.pending_key_time = Some(Instant::now());
+            }
+            KeyCode::Char('s') => {
+                self.pending_key = Some('s');
+                self.pending_key_time = Some(Instant::now());
+            }
+            KeyCode::Char('\'') => {
+                self.pending_key = Some('\'');
+                self.pending_key_time = Some(Instant::now());
+            }
 
             // File operations
             KeyCode::Char('p') => self.paste(false),
             KeyCode::Char('P') => self.paste(true),
             KeyCode::Char('u') => self.undo(),
-            KeyCode::Char(' ') => { self.pending_key = Some(' '); self.pending_key_time = Some(Instant::now()); },
+            KeyCode::Char(' ') => {
+                self.pending_key = Some(' ');
+                self.pending_key_time = Some(Instant::now());
+            }
 
             // Mode switches
             KeyCode::Char('v') | KeyCode::Char('V') => self.enter_visual(),
@@ -115,11 +139,12 @@ impl App {
 
             // Open in editor
             KeyCode::Char('o') => {
-                if let Some(entry) = self.active_panel().selected_entry() {
-                    if !entry.is_dir && entry.name != ".." {
-                        let path = entry.path.clone();
-                        self.request_open_editor(path);
-                    }
+                if let Some(entry) = self.active_panel().selected_entry()
+                    && !entry.is_dir
+                    && entry.name != ".."
+                {
+                    let path = entry.path.clone();
+                    self.request_open_editor(path);
                 }
             }
 
@@ -151,7 +176,9 @@ impl App {
             ('\'', KeyCode::Char(c)) if c.is_ascii_lowercase() => self.goto_mark(c),
             ('s', KeyCode::Char('n')) => self.set_sort(SortMode::Name),
             ('s', KeyCode::Char('s')) => self.set_sort(SortMode::Size),
-            ('s', KeyCode::Char('d')) | ('s', KeyCode::Char('m')) => self.set_sort(SortMode::Modified),
+            ('s', KeyCode::Char('d')) | ('s', KeyCode::Char('m')) => {
+                self.set_sort(SortMode::Modified)
+            }
             ('s', KeyCode::Char('c')) => self.set_sort(SortMode::Created),
             ('s', KeyCode::Char('e')) => self.set_sort(SortMode::Extension),
             ('s', KeyCode::Char('r')) => self.toggle_sort_reverse(),
@@ -163,7 +190,8 @@ impl App {
             (' ', KeyCode::Char(',')) => self.open_find_local(),
             (' ', KeyCode::Char('.')) => self.open_find_global(),
             (' ', KeyCode::Char('s')) => {
-                self.sort_cursor = SortMode::ALL.iter()
+                self.sort_cursor = SortMode::ALL
+                    .iter()
                     .position(|&m| m == self.active_panel().sort_mode)
                     .unwrap_or(0);
                 self.mode = Mode::Sort;
@@ -194,7 +222,11 @@ impl App {
     }
 
     pub(super) fn enter_rename(&mut self) {
-        let entry = match self.active_panel().selected_entry().filter(|e| e.name != "..") {
+        let entry = match self
+            .active_panel()
+            .selected_entry()
+            .filter(|e| e.name != "..")
+        {
             Some(e) => e,
             None => return,
         };

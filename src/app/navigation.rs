@@ -105,39 +105,6 @@ impl App {
         };
     }
 
-    pub(super) fn cycle_theme(&mut self, forward: bool) {
-        if self.theme_list.is_empty() {
-            self.theme_list = Theme::list_available();
-            if self.theme_list.is_empty() {
-                self.status_message = "No themes found".into();
-                return;
-            }
-        }
-        let len = self.theme_list.len();
-        let idx = match self.theme_index {
-            Some(i) => {
-                if forward {
-                    (i + 1) % len
-                } else {
-                    (i + len - 1) % len
-                }
-            }
-            None => 0,
-        };
-        let name = &self.theme_list[idx];
-        match Theme::load_by_name(name) {
-            Some(t) => {
-                self.theme = t;
-                self.theme_index = Some(idx);
-                self.status_message = format!("Theme [{}/{}]: {name}", idx + 1, len);
-                if let Some(ref db) = self.db {
-                    let _ = db.save_theme(name);
-                }
-            }
-            None => self.status_message = format!("Failed to load theme: {name}"),
-        }
-    }
-
     pub(super) fn toggle_tree(&mut self) {
         self.show_tree = !self.show_tree;
         if !self.show_tree {
@@ -267,21 +234,10 @@ impl App {
             ("e", "extension"),
             ("r", "reverse"),
         ];
-        const GOTO_HINTS: &[(&str, &str)] = &[
-            ("g", "top"),
-            ("t", "next tab"),
-            ("T", "prev tab"),
-        ];
-        const YANK_HINTS: &[(&str, &str)] = &[
-            ("y", "yank"),
-            ("p", "yank path"),
-        ];
-        const DELETE_HINTS: &[(&str, &str)] = &[
-            ("d", "delete"),
-        ];
-        const MARK_HINTS: &[(&str, &str)] = &[
-            ("a-z", "go to mark"),
-        ];
+        const GOTO_HINTS: &[(&str, &str)] = &[("g", "top"), ("t", "next tab"), ("T", "prev tab")];
+        const YANK_HINTS: &[(&str, &str)] = &[("y", "yank"), ("p", "yank path")];
+        const DELETE_HINTS: &[(&str, &str)] = &[("d", "delete")];
+        const MARK_HINTS: &[(&str, &str)] = &[("a-z", "go to mark")];
         let pending = self.pending_key?;
         let time = self.pending_key_time?;
         if time.elapsed() < std::time::Duration::from_millis(400) {

@@ -1,9 +1,9 @@
 use ratatui::{
+    Frame,
     layout::Rect,
     style::Style,
     text::{Line, Span},
     widgets::{Block, Borders, List, ListItem},
-    Frame,
 };
 
 use crate::app::PhantomEntry;
@@ -77,7 +77,10 @@ pub(super) fn render_panel(
             };
             let name_chars = display_name.chars().count();
             let name_col = if name_chars > name_width {
-                let truncated: String = display_name.chars().take(name_width.saturating_sub(1)).collect();
+                let truncated: String = display_name
+                    .chars()
+                    .take(name_width.saturating_sub(1))
+                    .collect();
                 format!("{truncated}\u{2026}")
             } else {
                 let pad = name_width.saturating_sub(name_chars);
@@ -110,21 +113,21 @@ pub(super) fn render_panel(
 
             let is_cursor = i == panel.selected;
             let is_active_cursor = is_cursor && is_active;
-            let in_reg = ctx.register.map_or(false, |r| r.paths.contains(&entry.path));
-            let reg_color = ctx.register.and_then(|r| if in_reg {
-                Some(match r.op {
-                    RegisterOp::Yank => t.cyan,
-                    RegisterOp::Cut => t.red,
-                })
-            } else {
-                None
+            let in_reg = ctx.register.is_some_and(|r| r.paths.contains(&entry.path));
+            let reg_color = ctx.register.and_then(|r| {
+                if in_reg {
+                    Some(match r.op {
+                        RegisterOp::Yank => t.cyan,
+                        RegisterOp::Cut => t.red,
+                    })
+                } else {
+                    None
+                }
             });
 
             // Determine styles per segment
             let (icon_style, name_style, meta_style) = if is_active_cursor {
-                let base = Style::default()
-                    .bg(t.blue)
-                    .fg(t.bg);
+                let base = Style::default().bg(t.blue).fg(t.bg);
                 (base, base, base)
             } else if in_visual && is_active {
                 let base = Style::default().bg(t.magenta).fg(t.bg);
@@ -150,8 +153,7 @@ pub(super) fn render_panel(
                     Style::default().fg(t.fg_dim)
                 };
                 let nc = if entry.is_dir {
-                    Style::default()
-                        .fg(t.dir_color)
+                    Style::default().fg(t.dir_color)
                 } else if entry.is_symlink {
                     Style::default().fg(t.symlink_color)
                 } else {
@@ -211,7 +213,9 @@ pub(super) fn render_panel(
                 ("\u{258a}", s)
             } else {
                 let mut s = meta_style;
-                if let Some(bg) = row_bg { s = s.bg(bg); }
+                if let Some(bg) = row_bg {
+                    s = s.bg(bg);
+                }
                 (" ", s)
             };
 
@@ -245,7 +249,8 @@ pub(super) fn render_panel(
             };
             let name_chars = display.chars().count();
             let name_col = if name_chars > name_width {
-                let truncated: String = display.chars().take(name_width.saturating_sub(1)).collect();
+                let truncated: String =
+                    display.chars().take(name_width.saturating_sub(1)).collect();
                 format!("{truncated}\u{2026}")
             } else {
                 let pad = name_width.saturating_sub(name_chars);

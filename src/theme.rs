@@ -173,10 +173,10 @@ impl Theme {
         if let Ok(entries) = std::fs::read_dir(&themes_dir) {
             for entry in entries.flatten() {
                 let path = entry.path();
-                if path.extension().is_some_and(|e| e == "toml") {
-                    if let Some(stem) = path.file_stem().and_then(|s| s.to_str()) {
-                        names.push(stem.to_string());
-                    }
+                if path.extension().is_some_and(|e| e == "toml")
+                    && let Some(stem) = path.file_stem().and_then(|s| s.to_str())
+                {
+                    names.push(stem.to_string());
                 }
             }
         }
@@ -227,19 +227,43 @@ impl Theme {
 
 const BUILTIN_THEMES: &[(&str, &str)] = &[
     ("ayu-dark.toml", include_str!("../themes/ayu-dark.toml")),
-    ("gruvbox-dark.toml", include_str!("../themes/gruvbox-dark.toml")),
-    ("catppuccin-mocha.toml", include_str!("../themes/catppuccin-mocha.toml")),
-    ("tokyo-night.toml", include_str!("../themes/tokyo-night.toml")),
+    (
+        "gruvbox-dark.toml",
+        include_str!("../themes/gruvbox-dark.toml"),
+    ),
+    (
+        "catppuccin-mocha.toml",
+        include_str!("../themes/catppuccin-mocha.toml"),
+    ),
+    (
+        "tokyo-night.toml",
+        include_str!("../themes/tokyo-night.toml"),
+    ),
     ("rose-pine.toml", include_str!("../themes/rose-pine.toml")),
     ("dracula.toml", include_str!("../themes/dracula.toml")),
     ("nord.toml", include_str!("../themes/nord.toml")),
     ("kanagawa.toml", include_str!("../themes/kanagawa.toml")),
-    ("everforest-dark.toml", include_str!("../themes/everforest-dark.toml")),
-    ("solarized-dark.toml", include_str!("../themes/solarized-dark.toml")),
+    (
+        "everforest-dark.toml",
+        include_str!("../themes/everforest-dark.toml"),
+    ),
+    (
+        "solarized-dark.toml",
+        include_str!("../themes/solarized-dark.toml"),
+    ),
     ("one-dark.toml", include_str!("../themes/one-dark.toml")),
-    ("gruvbox-light.toml", include_str!("../themes/gruvbox-light.toml")),
-    ("catppuccin-latte.toml", include_str!("../themes/catppuccin-latte.toml")),
-    ("monokai-pro.toml", include_str!("../themes/monokai-pro.toml")),
+    (
+        "gruvbox-light.toml",
+        include_str!("../themes/gruvbox-light.toml"),
+    ),
+    (
+        "catppuccin-latte.toml",
+        include_str!("../themes/catppuccin-latte.toml"),
+    ),
+    (
+        "monokai-pro.toml",
+        include_str!("../themes/monokai-pro.toml"),
+    ),
     ("palenight.toml", include_str!("../themes/palenight.toml")),
     ("horizon.toml", include_str!("../themes/horizon.toml")),
     ("nightfox.toml", include_str!("../themes/nightfox.toml")),
@@ -247,10 +271,19 @@ const BUILTIN_THEMES: &[(&str, &str)] = &[
     ("oxocarbon.toml", include_str!("../themes/oxocarbon.toml")),
     ("vesper.toml", include_str!("../themes/vesper.toml")),
     ("poimandres.toml", include_str!("../themes/poimandres.toml")),
-    ("modus-vivendi.toml", include_str!("../themes/modus-vivendi.toml")),
-    ("github-dark.toml", include_str!("../themes/github-dark.toml")),
+    (
+        "modus-vivendi.toml",
+        include_str!("../themes/modus-vivendi.toml"),
+    ),
+    (
+        "github-dark.toml",
+        include_str!("../themes/github-dark.toml"),
+    ),
     ("zenburn.toml", include_str!("../themes/zenburn.toml")),
-    ("synthwave84.toml", include_str!("../themes/synthwave84.toml")),
+    (
+        "synthwave84.toml",
+        include_str!("../themes/synthwave84.toml"),
+    ),
     ("moonfly.toml", include_str!("../themes/moonfly.toml")),
     ("sonokai.toml", include_str!("../themes/sonokai.toml")),
     ("spaceduck.toml", include_str!("../themes/spaceduck.toml")),
@@ -263,8 +296,8 @@ mod tests {
     #[test]
     fn all_builtin_themes_parse() {
         for (name, content) in BUILTIN_THEMES {
-            let raw: RawTheme = toml::from_str(content)
-                .unwrap_or_else(|e| panic!("{name}: TOML parse error: {e}"));
+            let raw: RawTheme =
+                toml::from_str(content).unwrap_or_else(|e| panic!("{name}: TOML parse error: {e}"));
             let _theme = raw.into_theme();
         }
     }

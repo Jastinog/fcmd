@@ -1,9 +1,9 @@
 use ratatui::{
+    Frame,
     layout::Rect,
     style::{Color, Style},
     text::{Line, Span},
     widgets::{Block, Paragraph},
-    Frame,
 };
 
 use crate::app::{App, Mode};
@@ -30,12 +30,7 @@ pub(super) fn render_status(f: &mut Frame, app: &App, area: Rect) {
     // Confirm mode — overlay handles the popup, status bar shows mode
     if app.mode == Mode::Confirm {
         let mut spans = vec![
-            Span::styled(
-                " 󰗨 CONFIRM ",
-                Style::default()
-                    .fg(t.bg)
-                    .bg(t.red),
-            ),
+            Span::styled(" 󰗨 CONFIRM ", Style::default().fg(t.bg).bg(t.red)),
             Span::styled(SEP_RIGHT, Style::default().fg(t.red).bg(t.status_bg)),
         ];
 
@@ -73,29 +68,24 @@ pub(super) fn render_status(f: &mut Frame, app: &App, area: Rect) {
 
     let mode_span = Span::styled(
         format!(" {mode_str} "),
-        Style::default()
-            .fg(t.bg)
-            .bg(mode_bg),
+        Style::default().fg(t.bg).bg(mode_bg),
     );
-    let mode_sep = Span::styled(
-        SEP_RIGHT,
-        Style::default().fg(mode_bg).bg(t.bg_light),
-    );
+    let mode_sep = Span::styled(SEP_RIGHT, Style::default().fg(mode_bg).bg(t.bg_light));
 
     // ── Right side segments (built first to compute width) ────────────────
     let mut right_parts: Vec<(String, Color, Color)> = Vec::new();
 
     // Position segment (rightmost)
-    let pos_text = format!(
-        " {}/{} ",
-        panel.selected + 1,
-        panel.entries.len()
-    );
+    let pos_text = format!(" {}/{} ", panel.selected + 1, panel.entries.len());
     right_parts.push((pos_text, t.bg, t.blue));
 
     // Sort segment (always visible)
     {
-        let arrow = if panel.sort_reverse { "\u{2191}" } else { "\u{2193}" };
+        let arrow = if panel.sort_reverse {
+            "\u{2191}"
+        } else {
+            "\u{2193}"
+        };
         let sort_fg = if panel.sort_mode != SortMode::Name || panel.sort_reverse {
             t.cyan
         } else {
@@ -119,11 +109,7 @@ pub(super) fn render_status(f: &mut Frame, app: &App, area: Rect) {
 
     // Search pattern
     if !app.search_query.is_empty() && app.mode == Mode::Normal {
-        right_parts.push((
-            format!(" /{} ", app.search_query),
-            t.yellow,
-            t.bg_light,
-        ));
+        right_parts.push((format!(" /{} ", app.search_query), t.yellow, t.bg_light));
     }
 
     // Preview indicator
@@ -203,10 +189,7 @@ pub(super) fn render_status(f: &mut Frame, app: &App, area: Rect) {
         info_display.clone(),
         Style::default().fg(t.fg).bg(t.bg_light),
     );
-    let info_sep = Span::styled(
-        SEP_RIGHT,
-        Style::default().fg(t.bg_light).bg(t.status_bg),
-    );
+    let info_sep = Span::styled(SEP_RIGHT, Style::default().fg(t.bg_light).bg(t.status_bg));
 
     // Calculate fill to push right segments to the edge
     let left_used: usize = mode_width + info_display.chars().count() + info_sep_width;
@@ -222,16 +205,22 @@ pub(super) fn render_status(f: &mut Frame, app: &App, area: Rect) {
     f.render_widget(Paragraph::new(Line::from(all_spans)), area);
 }
 
-fn render_status_input(f: &mut Frame, area: Rect, prefix: &str, input: &str, accent: Color, t: &Theme) {
-    let label = if prefix == "/" { " 󰍉 SEARCH " } else { "  CMD " };
+fn render_status_input(
+    f: &mut Frame,
+    area: Rect,
+    prefix: &str,
+    input: &str,
+    accent: Color,
+    t: &Theme,
+) {
+    let label = if prefix == "/" {
+        " 󰍉 SEARCH "
+    } else {
+        "  CMD "
+    };
 
     let mut spans = vec![
-        Span::styled(
-            label,
-            Style::default()
-                .fg(t.bg)
-                .bg(accent),
-        ),
+        Span::styled(label, Style::default().fg(t.bg).bg(accent)),
         Span::styled(SEP_RIGHT, Style::default().fg(accent).bg(t.bg_light)),
         Span::styled(
             format!(" {prefix}{input} "),

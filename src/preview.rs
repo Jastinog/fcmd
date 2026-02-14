@@ -93,7 +93,7 @@ impl Preview {
                         }
                     })
                     .collect();
-                names.sort_by(|a, b| a.to_lowercase().cmp(&b.to_lowercase()));
+                names.sort_by_key(|a| a.to_lowercase());
                 let info = format!("{} entries", names.len());
                 Preview {
                     lines: names,
