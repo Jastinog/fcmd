@@ -1,0 +1,24 @@
+# Jellybeans — dark colorful Vim theme
+# by nanotech
+
+bg = "#151515"
+bg_light = "#1C1C1C"
+fg = "#E8E8D3"
+fg_dim = "#605958"
+
+red = "#CF6A4C"
+green = "#99AD6A"
+yellow = "#FAD07A"
+blue = "#8197BF"
+magenta = "#C6B6EE"
+cyan = "#668799"
+orange = "#FFAF00"
+
+border_active = "blue"
+border_inactive = "#333333"
+status_bg = "#0D0D0D"
+cursor_line = "#1C1C1C"
+
+dir_color = "blue"
+symlink_color = "cyan"
+file_color = "fg"

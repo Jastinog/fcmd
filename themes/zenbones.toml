@@ -1,0 +1,24 @@
+# Zenbones Dark — minimal dark colorscheme
+# by mcchrish
+
+bg = "#1C1917"
+bg_light = "#282420"
+fg = "#B4BDC3"
+fg_dim = "#6E6763"
+
+red = "#DE6E7C"
+green = "#819B69"
+yellow = "#B77E64"
+blue = "#6099C0"
+magenta = "#B279A7"
+cyan = "#66A5AD"
+orange = "#CF9C76"
+
+border_active = "blue"
+border_inactive = "#3A3530"
+status_bg = "#131110"
+cursor_line = "#282420"
+
+dir_color = "blue"
+symlink_color = "cyan"
+file_color = "fg"

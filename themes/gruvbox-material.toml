@@ -1,0 +1,24 @@
+# Gruvbox Material — softer contrast Gruvbox variant
+# by sainnhe
+
+bg = "#282828"
+bg_light = "#32302F"
+fg = "#D4BE98"
+fg_dim = "#7C6F64"
+
+red = "#EA6962"
+green = "#A9B665"
+yellow = "#D8A657"
+blue = "#7DAEA3"
+magenta = "#D3869B"
+cyan = "#89B482"
+orange = "#E78A4E"
+
+border_active = "blue"
+border_inactive = "#3C3836"
+status_bg = "#1D2021"
+cursor_line = "#32302F"
+
+dir_color = "blue"
+symlink_color = "cyan"
+file_color = "fg"

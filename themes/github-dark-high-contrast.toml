@@ -1,0 +1,24 @@
+# GitHub Dark High Contrast — high contrast variant
+# by GitHub
+
+bg = "#0A0C10"
+bg_light = "#272B33"
+fg = "#F0F3F6"
+fg_dim = "#9EA7B3"
+
+red = "#FF9492"
+green = "#26CD4D"
+yellow = "#F0B72F"
+blue = "#71B7FF"
+magenta = "#CB9EFF"
+cyan = "#76E3EA"
+orange = "#F0B72F"
+
+border_active = "blue"
+border_inactive = "#7A828E"
+status_bg = "#010409"
+cursor_line = "#272B33"
+
+dir_color = "blue"
+symlink_color = "cyan"
+file_color = "fg"

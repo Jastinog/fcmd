@@ -1,0 +1,24 @@
+# Min Dark — minimal dark monochrome theme
+# inspired by minimalist editors
+
+bg = "#1A1A1A"
+bg_light = "#252525"
+fg = "#D0D0D0"
+fg_dim = "#666666"
+
+red = "#D07070"
+green = "#70D070"
+yellow = "#D0D070"
+blue = "#7070D0"
+magenta = "#D070D0"
+cyan = "#70D0D0"
+orange = "#D09070"
+
+border_active = "blue"
+border_inactive = "#333333"
+status_bg = "#111111"
+cursor_line = "#252525"
+
+dir_color = "blue"
+symlink_color = "cyan"
+file_color = "fg"

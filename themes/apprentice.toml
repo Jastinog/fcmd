@@ -1,0 +1,24 @@
+# Apprentice — dark, low-contrast Vim colorscheme
+# by romainl
+
+bg = "#1c1c1c"
+bg_light = "#303030"
+fg = "#bcbcbc"
+fg_dim = "#585858"
+
+red = "#af5f5f"
+green = "#5f875f"
+yellow = "#87875f"
+blue = "#5f87af"
+magenta = "#5f5f87"
+cyan = "#5f8787"
+orange = "#ff8700"
+
+border_active = "blue"
+border_inactive = "#444444"
+status_bg = "#121212"
+cursor_line = "#303030"
+
+dir_color = "blue"
+symlink_color = "cyan"
+file_color = "fg"

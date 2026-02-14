@@ -1,0 +1,24 @@
+# Doom One — inspired by Atom One Dark for Doom Emacs
+# by Henrik Lissner
+
+bg = "#282C34"
+bg_light = "#21242B"
+fg = "#BBC2CF"
+fg_dim = "#5B6268"
+
+red = "#FF6C6B"
+green = "#98BE65"
+yellow = "#ECBE7B"
+blue = "#51AFEF"
+magenta = "#C678DD"
+cyan = "#46D9FF"
+orange = "#DA8548"
+
+border_active = "blue"
+border_inactive = "#3F444A"
+status_bg = "#1B2229"
+cursor_line = "#23272E"
+
+dir_color = "blue"
+symlink_color = "cyan"
+file_color = "fg"

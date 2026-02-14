@@ -1,0 +1,23 @@
+# One Dark Vivid — more vivid One Dark variant
+
+bg = "#282C34"
+bg_light = "#2C313C"
+fg = "#ABB2BF"
+fg_dim = "#5C6370"
+
+red = "#EF596F"
+green = "#89CA78"
+yellow = "#E5C07B"
+blue = "#61AFEF"
+magenta = "#D55FDE"
+cyan = "#2BBAC5"
+orange = "#D19A66"
+
+border_active = "blue"
+border_inactive = "#3E4451"
+status_bg = "#21252B"
+cursor_line = "#2C313C"
+
+dir_color = "blue"
+symlink_color = "cyan"
+file_color = "fg"

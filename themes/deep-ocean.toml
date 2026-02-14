@@ -1,0 +1,24 @@
+# Deep Ocean — Material Theme deep ocean variant
+# by Mattia Astorino
+
+bg = "#0F111A"
+bg_light = "#181A29"
+fg = "#A6ACCD"
+fg_dim = "#464B5D"
+
+red = "#FF5370"
+green = "#C3E88D"
+yellow = "#FFCB6B"
+blue = "#82AAFF"
+magenta = "#C792EA"
+cyan = "#89DDFF"
+orange = "#F78C6C"
+
+border_active = "cyan"
+border_inactive = "#1F2233"
+status_bg = "#090B13"
+cursor_line = "#181A29"
+
+dir_color = "blue"
+symlink_color = "cyan"
+file_color = "fg"

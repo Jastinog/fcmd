@@ -1,0 +1,24 @@
+# Midnight — deep dark blue theme
+# inspired by classic midnight editors
+
+bg = "#0B0E14"
+bg_light = "#131721"
+fg = "#B5BFE2"
+fg_dim = "#484E5B"
+
+red = "#E65050"
+green = "#7FD962"
+yellow = "#E6B450"
+blue = "#399EE6"
+magenta = "#D2A6FF"
+cyan = "#73D0FF"
+orange = "#FF8F40"
+
+border_active = "blue"
+border_inactive = "#1D2433"
+status_bg = "#060810"
+cursor_line = "#131721"
+
+dir_color = "blue"
+symlink_color = "cyan"
+file_color = "fg"

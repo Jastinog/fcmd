@@ -1,0 +1,23 @@
+# Pine — dark green-focused natural theme
+
+bg = "#0F1419"
+bg_light = "#182028"
+fg = "#B2C9BD"
+fg_dim = "#536B5E"
+
+red = "#D8737F"
+green = "#83C092"
+yellow = "#D4BB6E"
+blue = "#72A7BC"
+magenta = "#B08CCC"
+cyan = "#7DBBB0"
+orange = "#CCA37A"
+
+border_active = "green"
+border_inactive = "#273038"
+status_bg = "#080C0F"
+cursor_line = "#182028"
+
+dir_color = "green"
+symlink_color = "cyan"
+file_color = "fg"

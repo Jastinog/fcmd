@@ -1,0 +1,24 @@
+# Snazzy — elegant dark theme with bright accents
+# by Sindre Sorhus
+
+bg = "#282A36"
+bg_light = "#34353E"
+fg = "#EFF0EB"
+fg_dim = "#606580"
+
+red = "#FF5C57"
+green = "#5AF78E"
+yellow = "#F3F99D"
+blue = "#57C7FF"
+magenta = "#FF6AC1"
+cyan = "#9AEDFE"
+orange = "#FF9F43"
+
+border_active = "magenta"
+border_inactive = "#43454F"
+status_bg = "#1E1F29"
+cursor_line = "#34353E"
+
+dir_color = "blue"
+symlink_color = "cyan"
+file_color = "fg"

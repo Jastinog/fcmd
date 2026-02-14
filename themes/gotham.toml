@@ -1,0 +1,24 @@
+# Gotham — very dark city-inspired colorscheme
+# by whatyouhide
+
+bg = "#0A0F14"
+bg_light = "#11151C"
+fg = "#98D1CE"
+fg_dim = "#245361"
+
+red = "#C23127"
+green = "#33859E"
+yellow = "#EDB443"
+blue = "#195466"
+magenta = "#888CA6"
+cyan = "#599CAA"
+orange = "#D26937"
+
+border_active = "cyan"
+border_inactive = "#091F2E"
+status_bg = "#050911"
+cursor_line = "#11151C"
+
+dir_color = "cyan"
+symlink_color = "magenta"
+file_color = "fg"

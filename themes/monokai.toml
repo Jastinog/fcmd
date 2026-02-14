@@ -1,0 +1,24 @@
+# Monokai — the original dark theme
+# by Wimer Hazenberg
+
+bg = "#272822"
+bg_light = "#3E3D32"
+fg = "#F8F8F2"
+fg_dim = "#75715E"
+
+red = "#F92672"
+green = "#A6E22E"
+yellow = "#E6DB74"
+blue = "#66D9EF"
+magenta = "#AE81FF"
+cyan = "#A1EFE4"
+orange = "#FD971F"
+
+border_active = "magenta"
+border_inactive = "#49483E"
+status_bg = "#1E1F1C"
+cursor_line = "#3E3D32"
+
+dir_color = "blue"
+symlink_color = "cyan"
+file_color = "fg"

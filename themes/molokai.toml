@@ -1,0 +1,24 @@
+# Molokai — dark Vim colorscheme inspired by Monokai
+# by tomasr
+
+bg = "#1B1D1E"
+bg_light = "#293739"
+fg = "#F8F8F2"
+fg_dim = "#75715E"
+
+red = "#F92672"
+green = "#A6E22E"
+yellow = "#E6DB74"
+blue = "#66D9EF"
+magenta = "#AE81FF"
+cyan = "#A1EFE4"
+orange = "#FD971F"
+
+border_active = "blue"
+border_inactive = "#465457"
+status_bg = "#121314"
+cursor_line = "#293739"
+
+dir_color = "blue"
+symlink_color = "cyan"
+file_color = "fg"

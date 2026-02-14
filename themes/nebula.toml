@@ -1,0 +1,23 @@
+# Nebula — cosmic purple dark theme
+
+bg = "#17141F"
+bg_light = "#221F2E"
+fg = "#D0C8E0"
+fg_dim = "#5E5478"
+
+red = "#E8567F"
+green = "#8CCF7E"
+yellow = "#E0D06E"
+blue = "#6E98E0"
+magenta = "#C07EDC"
+cyan = "#6EC8D0"
+orange = "#E09B6E"
+
+border_active = "magenta"
+border_inactive = "#2F2B3D"
+status_bg = "#0F0D15"
+cursor_line = "#221F2E"
+
+dir_color = "blue"
+symlink_color = "cyan"
+file_color = "fg"

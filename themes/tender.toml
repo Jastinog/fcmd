@@ -1,0 +1,24 @@
+# Tender — comfortable dark colorscheme
+# by jacoborus
+
+bg = "#282828"
+bg_light = "#323232"
+fg = "#EEEEEE"
+fg_dim = "#666666"
+
+red = "#F43753"
+green = "#C9D05C"
+yellow = "#FFC24B"
+blue = "#B3DEEF"
+magenta = "#D3B987"
+cyan = "#73CEF4"
+orange = "#FFC24B"
+
+border_active = "cyan"
+border_inactive = "#444444"
+status_bg = "#1D1D1D"
+cursor_line = "#323232"
+
+dir_color = "cyan"
+symlink_color = "magenta"
+file_color = "fg"

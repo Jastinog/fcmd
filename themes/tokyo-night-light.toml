@@ -1,0 +1,24 @@
+# Tokyo Night Light — light variant of Tokyo Night (actually a day theme)
+# by folke
+
+bg = "#D5D6DB"
+bg_light = "#CBCCD1"
+fg = "#343B58"
+fg_dim = "#9699A3"
+
+red = "#8C4351"
+green = "#485E30"
+yellow = "#8F5E15"
+blue = "#34548A"
+magenta = "#5A4A78"
+cyan = "#0F4B6E"
+orange = "#965027"
+
+border_active = "blue"
+border_inactive = "#A8A9B1"
+status_bg = "#E5E6EB"
+cursor_line = "#CBCCD1"
+
+dir_color = "blue"
+symlink_color = "cyan"
+file_color = "fg"

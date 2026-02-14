@@ -1,0 +1,24 @@
+# Oceanic Next — dark oceanic Vim/editor theme
+# by Dmitri Voronianski
+
+bg = "#1B2B34"
+bg_light = "#253740"
+fg = "#CDD3DE"
+fg_dim = "#65737E"
+
+red = "#EC5F67"
+green = "#99C794"
+yellow = "#FAC863"
+blue = "#6699CC"
+magenta = "#C594C5"
+cyan = "#5FB3B3"
+orange = "#F99157"
+
+border_active = "cyan"
+border_inactive = "#343D46"
+status_bg = "#141F27"
+cursor_line = "#253740"
+
+dir_color = "blue"
+symlink_color = "cyan"
+file_color = "fg"

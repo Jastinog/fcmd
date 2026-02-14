@@ -1,0 +1,24 @@
+# GitHub Dark Default — GitHub's standard dark theme
+# by GitHub
+
+bg = "#0D1117"
+bg_light = "#161B22"
+fg = "#C9D1D9"
+fg_dim = "#484F58"
+
+red = "#FF7B72"
+green = "#7EE787"
+yellow = "#E3B341"
+blue = "#79C0FF"
+magenta = "#D2A8FF"
+cyan = "#A5D6FF"
+orange = "#FFA657"
+
+border_active = "blue"
+border_inactive = "#21262D"
+status_bg = "#010409"
+cursor_line = "#161B22"
+
+dir_color = "blue"
+symlink_color = "cyan"
+file_color = "fg"

@@ -1,0 +1,24 @@
+# Tomorrow Night — classic dark variant of Tomorrow theme
+# by Chris Kempson
+
+bg = "#1D1F21"
+bg_light = "#282A2E"
+fg = "#C5C8C6"
+fg_dim = "#969896"
+
+red = "#CC6666"
+green = "#B5BD68"
+yellow = "#F0C674"
+blue = "#81A2BE"
+magenta = "#B294BB"
+cyan = "#8ABEB7"
+orange = "#DE935F"
+
+border_active = "blue"
+border_inactive = "#373B41"
+status_bg = "#141516"
+cursor_line = "#282A2E"
+
+dir_color = "blue"
+symlink_color = "cyan"
+file_color = "fg"

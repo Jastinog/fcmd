@@ -1,0 +1,24 @@
+# Wombat — dark warm-toned Vim colorscheme
+# by Lars H. Nielsen
+
+bg = "#242424"
+bg_light = "#333333"
+fg = "#E3E0D7"
+fg_dim = "#857B6F"
+
+red = "#E5786D"
+green = "#95E454"
+yellow = "#CAE682"
+blue = "#8AC6F2"
+magenta = "#D787FF"
+cyan = "#88D8B0"
+orange = "#F2C68A"
+
+border_active = "blue"
+border_inactive = "#444444"
+status_bg = "#1A1A1A"
+cursor_line = "#333333"
+
+dir_color = "blue"
+symlink_color = "cyan"
+file_color = "fg"

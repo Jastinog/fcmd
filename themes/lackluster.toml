@@ -1,0 +1,24 @@
+# Lackluster — delightfully desaturated dark theme
+# by slugbyte
+
+bg = "#101010"
+bg_light = "#1A1A1A"
+fg = "#CCCCCC"
+fg_dim = "#555555"
+
+red = "#D6656B"
+green = "#789978"
+yellow = "#CFCF9F"
+blue = "#7788AA"
+magenta = "#AA7788"
+cyan = "#7EC4CF"
+orange = "#CFCF9F"
+
+border_active = "blue"
+border_inactive = "#333333"
+status_bg = "#080808"
+cursor_line = "#1A1A1A"
+
+dir_color = "blue"
+symlink_color = "cyan"
+file_color = "fg"

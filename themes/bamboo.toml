@@ -1,0 +1,24 @@
+# Bamboo — warm earthy dark theme
+# by rilke
+
+bg = "#252623"
+bg_light = "#2F312C"
+fg = "#E1CEAC"
+fg_dim = "#7A7560"
+
+red = "#E75A7C"
+green = "#8FB573"
+yellow = "#CEAC67"
+blue = "#57A5E5"
+magenta = "#AE7DDD"
+cyan = "#70BFB0"
+orange = "#D48D6E"
+
+border_active = "green"
+border_inactive = "#3B3D38"
+status_bg = "#1B1C19"
+cursor_line = "#2F312C"
+
+dir_color = "blue"
+symlink_color = "cyan"
+file_color = "fg"

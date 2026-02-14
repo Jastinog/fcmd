@@ -1,0 +1,24 @@
+# Doom Vibrant — more vivid variant of Doom One
+# by Henrik Lissner
+
+bg = "#242730"
+bg_light = "#2A2E38"
+fg = "#BFC7D5"
+fg_dim = "#4E5166"
+
+red = "#FF665C"
+green = "#7BC275"
+yellow = "#FCCE7B"
+blue = "#51AFEF"
+magenta = "#C57BDB"
+cyan = "#5CEFFF"
+orange = "#E69055"
+
+border_active = "cyan"
+border_inactive = "#3D4451"
+status_bg = "#1C1F26"
+cursor_line = "#2A2E38"
+
+dir_color = "blue"
+symlink_color = "cyan"
+file_color = "fg"

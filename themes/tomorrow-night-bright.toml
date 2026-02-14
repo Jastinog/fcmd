@@ -1,0 +1,24 @@
+# Tomorrow Night Bright — brighter Tomorrow Night variant
+# by Chris Kempson
+
+bg = "#000000"
+bg_light = "#1A1A1A"
+fg = "#EAEAEA"
+fg_dim = "#969896"
+
+red = "#D54E53"
+green = "#B9CA4A"
+yellow = "#E7C547"
+blue = "#7AA6DA"
+magenta = "#C397D8"
+cyan = "#70C0B1"
+orange = "#E78C45"
+
+border_active = "blue"
+border_inactive = "#2A2A2A"
+status_bg = "#000000"
+cursor_line = "#1A1A1A"
+
+dir_color = "blue"
+symlink_color = "cyan"
+file_color = "fg"

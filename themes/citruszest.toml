@@ -1,0 +1,24 @@
+# Citruszest — vibrant citrus-colored dark theme
+# by zootedb0t
+
+bg = "#121212"
+bg_light = "#1E1E1E"
+fg = "#BFBFBF"
+fg_dim = "#585858"
+
+red = "#FF5454"
+green = "#00CC7A"
+yellow = "#F0C674"
+blue = "#00AAFF"
+magenta = "#CC75F0"
+cyan = "#00D4AA"
+orange = "#FF8C00"
+
+border_active = "green"
+border_inactive = "#333333"
+status_bg = "#0A0A0A"
+cursor_line = "#1E1E1E"
+
+dir_color = "blue"
+symlink_color = "cyan"
+file_color = "fg"

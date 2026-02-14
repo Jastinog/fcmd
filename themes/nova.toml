@@ -1,0 +1,24 @@
+# Nova — modern dark colorscheme
+# by Trevor D. Miller
+
+bg = "#3C4C55"
+bg_light = "#475B66"
+fg = "#C5D4DD"
+fg_dim = "#899BA6"
+
+red = "#DF8C8C"
+green = "#A8CE93"
+yellow = "#DADA93"
+blue = "#83AFE5"
+magenta = "#9A93E1"
+cyan = "#7FC1CA"
+orange = "#F2C38F"
+
+border_active = "cyan"
+border_inactive = "#556873"
+status_bg = "#2E3C44"
+cursor_line = "#475B66"
+
+dir_color = "blue"
+symlink_color = "cyan"
+file_color = "fg"

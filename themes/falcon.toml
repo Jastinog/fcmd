@@ -1,0 +1,24 @@
+# Falcon — dark midnight blue Vim colorscheme
+# by fenetikm
+
+bg = "#020221"
+bg_light = "#0B0B2B"
+fg = "#B4B4B9"
+fg_dim = "#57575E"
+
+red = "#FF3600"
+green = "#718E3F"
+yellow = "#FFC552"
+blue = "#3C7DD2"
+magenta = "#FF761A"
+cyan = "#34BFA4"
+orange = "#FF8E78"
+
+border_active = "yellow"
+border_inactive = "#2F2F3A"
+status_bg = "#000004"
+cursor_line = "#0B0B2B"
+
+dir_color = "blue"
+symlink_color = "cyan"
+file_color = "fg"

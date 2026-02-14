@@ -1,0 +1,24 @@
+# Material Darker — Material Theme darker variant
+# by Mattia Astorino
+
+bg = "#212121"
+bg_light = "#2C2C2C"
+fg = "#EEFFFF"
+fg_dim = "#545454"
+
+red = "#FF5370"
+green = "#C3E88D"
+yellow = "#FFCB6B"
+blue = "#82AAFF"
+magenta = "#C792EA"
+cyan = "#89DDFF"
+orange = "#F78C6C"
+
+border_active = "cyan"
+border_inactive = "#383838"
+status_bg = "#1A1A1A"
+cursor_line = "#2C2C2C"
+
+dir_color = "blue"
+symlink_color = "cyan"
+file_color = "fg"

@@ -1,0 +1,24 @@
+# Eldritch — dark lovecraftian-inspired theme
+# by eldritch-theme
+
+bg = "#212337"
+bg_light = "#2D2F48"
+fg = "#EBFAFA"
+fg_dim = "#636DA6"
+
+red = "#F16C75"
+green = "#37F499"
+yellow = "#F7C67F"
+blue = "#04D1F9"
+magenta = "#A48CF2"
+cyan = "#04D1F9"
+orange = "#F7C67F"
+
+border_active = "green"
+border_inactive = "#3B3D5B"
+status_bg = "#191A2E"
+cursor_line = "#2D2F48"
+
+dir_color = "blue"
+symlink_color = "cyan"
+file_color = "fg"

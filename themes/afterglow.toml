@@ -1,0 +1,24 @@
+# Afterglow — warm dark theme
+# by YabataDesign
+
+bg = "#2c2c2c"
+bg_light = "#393939"
+fg = "#d6d6d6"
+fg_dim = "#797979"
+
+red = "#ac4142"
+green = "#90a959"
+yellow = "#f4bf75"
+blue = "#6a9fb5"
+magenta = "#aa759f"
+cyan = "#75b5aa"
+orange = "#d28445"
+
+border_active = "blue"
+border_inactive = "#444444"
+status_bg = "#232323"
+cursor_line = "#393939"
+
+dir_color = "blue"
+symlink_color = "cyan"
+file_color = "fg"

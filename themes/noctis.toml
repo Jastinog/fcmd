@@ -1,0 +1,24 @@
+# Noctis — balanced dark theme with warm accents
+# by Liviu Schera
+
+bg = "#292D36"
+bg_light = "#30353F"
+fg = "#C5CDD3"
+fg_dim = "#5B6370"
+
+red = "#E66533"
+green = "#16B673"
+yellow = "#D5971A"
+blue = "#49ACE9"
+magenta = "#DF769B"
+cyan = "#7060EB"
+orange = "#D67E5C"
+
+border_active = "blue"
+border_inactive = "#3B414F"
+status_bg = "#1F2229"
+cursor_line = "#30353F"
+
+dir_color = "blue"
+symlink_color = "cyan"
+file_color = "fg"

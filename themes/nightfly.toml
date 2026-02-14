@@ -1,0 +1,24 @@
+# Nightfly — dark midnight colorscheme
+# by bluz71
+
+bg = "#011627"
+bg_light = "#092236"
+fg = "#C3CCDC"
+fg_dim = "#637777"
+
+red = "#FC514E"
+green = "#A1CD5E"
+yellow = "#E3D18A"
+blue = "#82AAFF"
+magenta = "#C792EA"
+cyan = "#7FDBCA"
+orange = "#F78C6C"
+
+border_active = "blue"
+border_inactive = "#1D3B53"
+status_bg = "#001020"
+cursor_line = "#092236"
+
+dir_color = "blue"
+symlink_color = "cyan"
+file_color = "fg"

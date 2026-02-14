@@ -1,0 +1,24 @@
+# PaperColor Dark — dark variant of PaperColor theme
+# by Nikyle Nguyen
+
+bg = "#1C1C1C"
+bg_light = "#303030"
+fg = "#D0D0D0"
+fg_dim = "#585858"
+
+red = "#D75F5F"
+green = "#AFAF00"
+yellow = "#FFAF00"
+blue = "#5FAFD7"
+magenta = "#D787AF"
+cyan = "#5FD7D7"
+orange = "#FF5F00"
+
+border_active = "blue"
+border_inactive = "#444444"
+status_bg = "#121212"
+cursor_line = "#303030"
+
+dir_color = "blue"
+symlink_color = "cyan"
+file_color = "fg"

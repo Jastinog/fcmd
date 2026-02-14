@@ -1,0 +1,24 @@
+# Challenger Deep — dark vibrant colorscheme
+# by Max Szymansky
+
+bg = "#1E1C31"
+bg_light = "#2D2B40"
+fg = "#CBE3E7"
+fg_dim = "#565575"
+
+red = "#FF8080"
+green = "#95FFA4"
+yellow = "#FFE9AA"
+blue = "#91DDFF"
+magenta = "#C991E1"
+cyan = "#AAFFE4"
+orange = "#FF5458"
+
+border_active = "magenta"
+border_inactive = "#3B3A52"
+status_bg = "#100E23"
+cursor_line = "#2D2B40"
+
+dir_color = "blue"
+symlink_color = "cyan"
+file_color = "fg"

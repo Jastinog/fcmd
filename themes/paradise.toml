@@ -1,0 +1,24 @@
+# Paradise — soft dark colorscheme
+# by mcchrish
+
+bg = "#151515"
+bg_light = "#1F1F1F"
+fg = "#E8E3E3"
+fg_dim = "#585858"
+
+red = "#B66467"
+green = "#8B9862"
+yellow = "#D9BC8C"
+blue = "#8DA3B9"
+magenta = "#A988B0"
+cyan = "#8AA6A2"
+orange = "#D08B65"
+
+border_active = "blue"
+border_inactive = "#333333"
+status_bg = "#0D0D0D"
+cursor_line = "#1F1F1F"
+
+dir_color = "blue"
+symlink_color = "cyan"
+file_color = "fg"

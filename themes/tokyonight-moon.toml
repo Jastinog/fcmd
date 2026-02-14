@@ -1,0 +1,24 @@
+# Tokyo Night Moon — warmer Tokyo Night variant
+# by folke
+
+bg = "#222436"
+bg_light = "#2F334D"
+fg = "#C8D3F5"
+fg_dim = "#545C7E"
+
+red = "#FF757F"
+green = "#C3E88D"
+yellow = "#FFC777"
+blue = "#82AAFF"
+magenta = "#C099FF"
+cyan = "#86E1FC"
+orange = "#FF966C"
+
+border_active = "blue"
+border_inactive = "#3B4261"
+status_bg = "#1B1D2B"
+cursor_line = "#2F334D"
+
+dir_color = "blue"
+symlink_color = "cyan"
+file_color = "fg"

@@ -1,0 +1,24 @@
+# Darcula — JetBrains IDEs default dark theme
+# by JetBrains
+
+bg = "#2B2B2B"
+bg_light = "#3C3F41"
+fg = "#A9B7C6"
+fg_dim = "#606366"
+
+red = "#FF6B68"
+green = "#A5C261"
+yellow = "#FFC66D"
+blue = "#6897BB"
+magenta = "#CC7832"
+cyan = "#6A8759"
+orange = "#E8BF6A"
+
+border_active = "blue"
+border_inactive = "#4E5254"
+status_bg = "#1E1E1E"
+cursor_line = "#323232"
+
+dir_color = "blue"
+symlink_color = "cyan"
+file_color = "fg"

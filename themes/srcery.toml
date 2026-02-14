@@ -1,0 +1,24 @@
+# Srcery — dark colorscheme with vivid colors
+# by Daniel Berg
+
+bg = "#1C1B19"
+bg_light = "#2D2B28"
+fg = "#FCE8C3"
+fg_dim = "#918175"
+
+red = "#EF2F27"
+green = "#519F50"
+yellow = "#FBB829"
+blue = "#2C78BF"
+magenta = "#E02C6D"
+cyan = "#0AAEB3"
+orange = "#FF5F00"
+
+border_active = "yellow"
+border_inactive = "#3A3A3A"
+status_bg = "#121110"
+cursor_line = "#2D2B28"
+
+dir_color = "blue"
+symlink_color = "cyan"
+file_color = "fg"
