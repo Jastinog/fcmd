@@ -64,6 +64,7 @@ pub(super) fn render_status(f: &mut Frame, app: &App, area: Rect) {
             Mode::Visual => ("󰒉 VISUAL", t.magenta),
             Mode::Select => ("󰄵 SELECT", t.orange),
             Mode::Find => (" FIND", t.cyan),
+            Mode::Preview => ("󰈈 PREVIEW", t.cyan),
             Mode::Help => ("󰋖 HELP", t.cyan),
             _ => ("", t.fg_dim),
         }

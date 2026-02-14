@@ -55,6 +55,7 @@ pub enum Mode {
     Sort,
     Rename,
     Create,
+    Preview,
 }
 
 #[derive(PartialEq, Eq, Clone, Copy)]
@@ -114,6 +115,7 @@ pub struct App {
     pub command_input: String,
     pub rename_input: String,
     pub should_quit: bool,
+    pub open_editor: Option<PathBuf>,
     pub status_message: String,
     pub pending_key: Option<char>,
     pub pending_key_time: Option<Instant>,
@@ -133,6 +135,9 @@ pub struct App {
     pub preview_mode: bool,
     pub preview: Option<Preview>,
     pub(super) preview_path: Option<PathBuf>,
+    // File preview popup
+    pub file_preview: Option<Preview>,
+    pub file_preview_path: Option<PathBuf>,
     // Tree
     pub show_tree: bool,
     pub tree_focused: bool,
@@ -236,6 +241,7 @@ impl App {
             command_input: String::new(),
             rename_input: String::new(),
             should_quit: false,
+            open_editor: None,
             status_message: String::new(),
             pending_key: None,
             pending_key_time: None,
@@ -251,6 +257,8 @@ impl App {
             preview_mode: false,
             preview: None,
             preview_path: None,
+            file_preview: None,
+            file_preview_path: None,
             show_tree: false,
             tree_focused: false,
             tree_selected: 0,
@@ -339,6 +347,7 @@ impl App {
             Mode::Sort => self.handle_sort(key),
             Mode::Rename => self.handle_rename(key),
             Mode::Create => self.handle_create(key),
+            Mode::Preview => self.handle_preview(key),
         }
 
         self.update_preview();

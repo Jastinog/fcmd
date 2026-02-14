@@ -609,6 +609,81 @@ pub(super) fn render_confirm_popup(f: &mut Frame, app: &App, area: Rect) {
     f.render_widget(Paragraph::new(hint_line), hint_area);
 }
 
+pub(super) fn render_preview_popup(f: &mut Frame, app: &App, area: Rect) {
+    let t = &app.theme;
+    let Some(ref p) = app.file_preview else { return };
+
+    let popup = centered_rect(75, 80, area);
+    f.render_widget(Clear, popup);
+
+    let block = Block::default()
+        .borders(Borders::ALL)
+        .border_style(Style::default().fg(t.cyan))
+        .title(format!(" 󰈈 {} [{}] ", p.title, p.info))
+        .title_style(Style::default().fg(t.cyan));
+
+    let inner = block.inner(popup);
+    f.render_widget(block, popup);
+
+    let iw = inner.width as usize;
+    let list_height = inner.height.saturating_sub(2) as usize;
+
+    let items: Vec<ListItem> = p
+        .lines
+        .iter()
+        .skip(p.scroll)
+        .take(list_height)
+        .enumerate()
+        .map(|(i, line)| {
+            let line_num = i + p.scroll + 1;
+            let num_width = 4;
+            let max_content = iw.saturating_sub(num_width + 2);
+            let content: String = if line.chars().count() > max_content {
+                line.chars().take(max_content).collect()
+            } else {
+                line.clone()
+            };
+            Line::from(vec![
+                Span::styled(
+                    format!("{line_num:>num_width$} ", num_width = num_width),
+                    Style::default().fg(t.fg_dim),
+                ),
+                Span::styled(content, Style::default().fg(t.fg)),
+            ])
+        })
+        .map(ListItem::new)
+        .collect();
+
+    let list_area = Rect::new(inner.x, inner.y, inner.width, list_height as u16);
+    f.render_widget(List::new(items), list_area);
+
+    // Separator
+    let sep_y = inner.y + list_height as u16;
+    let sep_area = Rect::new(inner.x, sep_y, inner.width, 1);
+    f.render_widget(
+        Paragraph::new(Line::from(Span::styled(
+            "\u{2500}".repeat(iw),
+            Style::default().fg(t.border_inactive),
+        ))),
+        sep_area,
+    );
+
+    // Hint line
+    let hint_line = Line::from(vec![
+        Span::styled(" j/k", Style::default().fg(t.cyan)),
+        Span::styled(" scroll  ", Style::default().fg(t.fg_dim)),
+        Span::styled("G/g", Style::default().fg(t.cyan)),
+        Span::styled(" top/bottom  ", Style::default().fg(t.fg_dim)),
+        Span::styled("o", Style::default().fg(t.cyan)),
+        Span::styled(" edit  ", Style::default().fg(t.fg_dim)),
+        Span::styled("esc", Style::default().fg(t.cyan)),
+        Span::styled(" close", Style::default().fg(t.fg_dim)),
+    ]);
+    let hint_y = inner.y + inner.height.saturating_sub(1);
+    let hint_area = Rect::new(inner.x, hint_y, inner.width, 1);
+    f.render_widget(Paragraph::new(hint_line), hint_area);
+}
+
 pub(super) fn render_search_popup(f: &mut Frame, app: &App, area: Rect) {
     let t = &app.theme;
     let accent = t.blue;

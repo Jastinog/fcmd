@@ -43,7 +43,15 @@ impl App {
                 self.active_panel_mut().page_up(half);
             }
             KeyCode::Char('l') | KeyCode::Right | KeyCode::Enter => {
-                if let Err(e) = self.active_panel_mut().enter_selected() {
+                let is_file = self.active_panel().selected_entry()
+                    .map(|e| !e.is_dir && e.name != "..")
+                    .unwrap_or(false);
+                if is_file && key.code == KeyCode::Enter {
+                    let path = self.active_panel().selected_entry().unwrap().path.clone();
+                    self.file_preview = Some(Preview::load(&path));
+                    self.file_preview_path = Some(path);
+                    self.mode = Mode::Preview;
+                } else if let Err(e) = self.active_panel_mut().enter_selected() {
                     self.status_message = format!("Error: {e}");
                 }
             }
@@ -96,6 +104,16 @@ impl App {
             // Toggles & settings
             KeyCode::Char('r') if ctrl => self.refresh_current_panel(),
             KeyCode::Char('T') => self.cycle_theme(true),
+
+            // Open in editor
+            KeyCode::Char('o') => {
+                if let Some(entry) = self.active_panel().selected_entry() {
+                    if !entry.is_dir && entry.name != ".." {
+                        let path = entry.path.clone();
+                        self.request_open_editor(path);
+                    }
+                }
+            }
 
             // Preview scroll
             KeyCode::Char('J') => {

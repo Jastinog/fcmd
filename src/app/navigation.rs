@@ -191,6 +191,16 @@ impl App {
         self.preview = current_path.map(|p| Preview::load(&p));
     }
 
+    pub(super) fn request_open_editor(&mut self, path: PathBuf) {
+        self.open_editor = Some(path);
+        // If we're in preview mode, close it
+        if self.mode == Mode::Preview {
+            self.file_preview = None;
+            self.file_preview_path = None;
+            self.mode = Mode::Normal;
+        }
+    }
+
     pub(super) fn yank_path(&mut self) {
         let path_str = match self.active_panel().selected_entry() {
             Some(e) => e.path.to_string_lossy().into_owned(),

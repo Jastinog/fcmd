@@ -188,6 +188,10 @@ pub fn render(f: &mut Frame, app: &mut App) {
         overlays::render_help(f, &app.theme, full_area);
     }
 
+    if app.mode == Mode::Preview {
+        overlays::render_preview_popup(f, app, full_area);
+    }
+
     if app.mode == Mode::Sort {
         overlays::render_sort(f, app, full_area);
     }

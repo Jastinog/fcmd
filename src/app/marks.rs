@@ -155,6 +155,56 @@ impl App {
         }
     }
 
+    pub(super) fn handle_preview(&mut self, key: KeyEvent) {
+        let ctrl = key.modifiers.contains(KeyModifiers::CONTROL);
+        match key.code {
+            KeyCode::Esc | KeyCode::Char('q') => {
+                self.file_preview = None;
+                self.file_preview_path = None;
+                self.mode = Mode::Normal;
+            }
+            KeyCode::Char('j') | KeyCode::Down => {
+                if let Some(ref mut p) = self.file_preview {
+                    p.scroll_down(1, self.visible_height);
+                }
+            }
+            KeyCode::Char('k') | KeyCode::Up => {
+                if let Some(ref mut p) = self.file_preview {
+                    p.scroll_up(1);
+                }
+            }
+            KeyCode::Char('d') if ctrl => {
+                if let Some(ref mut p) = self.file_preview {
+                    let half = self.visible_height / 2;
+                    p.scroll_down(half, self.visible_height);
+                }
+            }
+            KeyCode::Char('u') if ctrl => {
+                if let Some(ref mut p) = self.file_preview {
+                    let half = self.visible_height / 2;
+                    p.scroll_up(half);
+                }
+            }
+            KeyCode::Char('G') => {
+                if let Some(ref mut p) = self.file_preview {
+                    let max = p.lines.len().saturating_sub(self.visible_height);
+                    p.scroll = max;
+                }
+            }
+            KeyCode::Char('g') => {
+                if let Some(ref mut p) = self.file_preview {
+                    p.scroll = 0;
+                }
+            }
+            KeyCode::Char('o') => {
+                if let Some(path) = self.file_preview_path.clone() {
+                    self.request_open_editor(path);
+                }
+            }
+            _ => {}
+        }
+    }
+
     pub(super) fn handle_help(&mut self, key: KeyEvent) {
         match key.code {
             KeyCode::Esc | KeyCode::Char('q') | KeyCode::Enter => {
