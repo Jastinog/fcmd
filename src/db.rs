@@ -218,6 +218,36 @@ impl Db {
         Ok(map)
     }
 
+    #[cfg(test)]
+    fn init_in_memory() -> rusqlite::Result<Self> {
+        let conn = Connection::open_in_memory()?;
+        conn.execute_batch(
+            "CREATE TABLE IF NOT EXISTS visual_marks (path TEXT PRIMARY KEY, level INTEGER NOT NULL DEFAULT 1);
+             CREATE TABLE IF NOT EXISTS session_tabs (
+                 idx INTEGER PRIMARY KEY,
+                 left_path TEXT NOT NULL,
+                 right_path TEXT NOT NULL,
+                 active_side TEXT NOT NULL DEFAULT 'left',
+                 left_cursor INTEGER NOT NULL DEFAULT 0,
+                 right_cursor INTEGER NOT NULL DEFAULT 0
+             );
+             CREATE TABLE IF NOT EXISTS session_meta (
+                 key TEXT PRIMARY KEY,
+                 value TEXT NOT NULL
+             );
+             CREATE TABLE IF NOT EXISTS dir_sizes (
+                 path TEXT PRIMARY KEY,
+                 size_bytes INTEGER NOT NULL
+             );
+             CREATE TABLE IF NOT EXISTS dir_sort (
+                 path TEXT PRIMARY KEY,
+                 sort_mode TEXT NOT NULL,
+                 sort_reverse INTEGER NOT NULL DEFAULT 0
+             );",
+        )?;
+        Ok(Db { conn })
+    }
+
     pub fn load_session(&self) -> rusqlite::Result<(Vec<SavedTab>, usize)> {
         let mut stmt = self.conn.prepare(
             "SELECT left_path, right_path, active_side, left_cursor, right_cursor FROM session_tabs ORDER BY idx",
@@ -247,5 +277,141 @@ impl Db {
             .unwrap_or(0);
 
         Ok((tabs, active_tab))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn visual_marks_crud() {
+        let db = Db::init_in_memory().unwrap();
+        let path = PathBuf::from("/tmp/test_file");
+
+        // Initially empty
+        let marks = db.load_visual_marks().unwrap();
+        assert!(marks.is_empty());
+
+        // Set mark
+        db.set_visual_mark(&path, 2).unwrap();
+        let marks = db.load_visual_marks().unwrap();
+        assert_eq!(marks.get(&path), Some(&2));
+
+        // Update mark level
+        db.set_visual_mark(&path, 3).unwrap();
+        let marks = db.load_visual_marks().unwrap();
+        assert_eq!(marks.get(&path), Some(&3));
+
+        // Remove mark
+        db.remove_visual_mark(&path).unwrap();
+        let marks = db.load_visual_marks().unwrap();
+        assert!(marks.is_empty());
+    }
+
+    #[test]
+    fn theme_save_load() {
+        let db = Db::init_in_memory().unwrap();
+
+        // No theme initially
+        assert_eq!(db.load_theme(), None);
+
+        // Save and load
+        db.save_theme("dracula").unwrap();
+        assert_eq!(db.load_theme(), Some("dracula".into()));
+
+        // Overwrite
+        db.save_theme("nord").unwrap();
+        assert_eq!(db.load_theme(), Some("nord".into()));
+    }
+
+    #[test]
+    fn session_save_load() {
+        let db = Db::init_in_memory().unwrap();
+
+        let tabs = vec![
+            SavedTab {
+                left_path: PathBuf::from("/home"),
+                right_path: PathBuf::from("/tmp"),
+                active_side: "left".into(),
+                left_cursor: 5,
+                right_cursor: 10,
+            },
+            SavedTab {
+                left_path: PathBuf::from("/usr"),
+                right_path: PathBuf::from("/var"),
+                active_side: "right".into(),
+                left_cursor: 0,
+                right_cursor: 3,
+            },
+        ];
+
+        db.save_session(&tabs, 1).unwrap();
+        let (loaded, active) = db.load_session().unwrap();
+
+        assert_eq!(active, 1);
+        assert_eq!(loaded.len(), 2);
+        assert_eq!(loaded[0].left_path, PathBuf::from("/home"));
+        assert_eq!(loaded[0].right_path, PathBuf::from("/tmp"));
+        assert_eq!(loaded[0].active_side, "left");
+        assert_eq!(loaded[0].left_cursor, 5);
+        assert_eq!(loaded[1].right_cursor, 3);
+    }
+
+    #[test]
+    fn dir_sizes_save_load() {
+        let db = Db::init_in_memory().unwrap();
+        let entries = vec![
+            (PathBuf::from("/home/user/docs"), 1024u64),
+            (PathBuf::from("/home/user/pics"), 2048u64),
+            (PathBuf::from("/tmp/other"), 512u64),
+        ];
+
+        db.save_dir_sizes(&entries).unwrap();
+
+        // Load sizes for /home/user — should get docs and pics
+        let sizes = db.load_dir_sizes(Path::new("/home/user")).unwrap();
+        assert_eq!(sizes.len(), 2);
+        assert_eq!(sizes[&PathBuf::from("/home/user/docs")], 1024);
+        assert_eq!(sizes[&PathBuf::from("/home/user/pics")], 2048);
+
+        // /tmp should only have "other"
+        let sizes = db.load_dir_sizes(Path::new("/tmp")).unwrap();
+        assert_eq!(sizes.len(), 1);
+    }
+
+    #[test]
+    fn dir_sort_save_load() {
+        let db = Db::init_in_memory().unwrap();
+
+        db.save_dir_sort(Path::new("/home"), "size", true).unwrap();
+        db.save_dir_sort(Path::new("/tmp"), "mod", false).unwrap();
+
+        let sorts = db.load_dir_sorts().unwrap();
+        assert_eq!(sorts[&PathBuf::from("/home")], ("size".into(), true));
+        assert_eq!(sorts[&PathBuf::from("/tmp")], ("mod".into(), false));
+    }
+
+    #[test]
+    fn dir_sort_default_removes_row() {
+        let db = Db::init_in_memory().unwrap();
+
+        // Save non-default sort
+        db.save_dir_sort(Path::new("/home"), "size", true).unwrap();
+        assert_eq!(db.load_dir_sorts().unwrap().len(), 1);
+
+        // Saving default sort (name, not reversed) removes the row
+        db.save_dir_sort(Path::new("/home"), "name", false).unwrap();
+        assert!(db.load_dir_sorts().unwrap().is_empty());
+    }
+
+    #[test]
+    fn session_save_preserves_theme() {
+        let db = Db::init_in_memory().unwrap();
+
+        // Save theme, then save session — theme should survive
+        db.save_theme("dracula").unwrap();
+        db.save_session(&[], 0).unwrap();
+        assert_eq!(db.load_theme(), Some("dracula".into()));
     }
 }

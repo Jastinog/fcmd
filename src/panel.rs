@@ -13,7 +13,7 @@ pub struct FileEntry {
     pub is_symlink: bool,
 }
 
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum SortMode {
     Name,
     Size,
@@ -376,4 +376,235 @@ impl Panel {
 
 fn home_dir() -> Option<PathBuf> {
     std::env::var("HOME").ok().map(PathBuf::from)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn sort_mode_label_roundtrip() {
+        for mode in SortMode::ALL {
+            let label = mode.label();
+            assert_eq!(SortMode::from_label(label), Some(*mode));
+        }
+    }
+
+    #[test]
+    fn sort_mode_from_label_unknown() {
+        assert_eq!(SortMode::from_label("unknown"), None);
+        assert_eq!(SortMode::from_label(""), None);
+    }
+
+    fn make_panel_with_entries(n: usize) -> Panel {
+        let entries: Vec<FileEntry> = (0..n)
+            .map(|i| FileEntry {
+                name: format!("file_{i}"),
+                path: PathBuf::from(format!("/tmp/file_{i}")),
+                is_dir: false,
+                size: i as u64 * 100,
+                modified: None,
+                created: None,
+                is_symlink: false,
+            })
+            .collect();
+        Panel {
+            path: PathBuf::from("/tmp"),
+            entries,
+            selected: 0,
+            offset: 0,
+            visual_anchor: None,
+            marked: HashSet::new(),
+            sort_mode: SortMode::Name,
+            sort_reverse: false,
+            show_hidden: false,
+        }
+    }
+
+    #[test]
+    fn navigation_move_up_down() {
+        let mut p = make_panel_with_entries(5);
+        assert_eq!(p.selected, 0);
+
+        p.move_down();
+        assert_eq!(p.selected, 1);
+        p.move_down();
+        assert_eq!(p.selected, 2);
+
+        p.move_up();
+        assert_eq!(p.selected, 1);
+
+        // move_up at 0 stays at 0
+        p.move_up();
+        p.move_up();
+        assert_eq!(p.selected, 0);
+
+        // move_down at end stays at end
+        p.go_bottom();
+        assert_eq!(p.selected, 4);
+        p.move_down();
+        assert_eq!(p.selected, 4);
+    }
+
+    #[test]
+    fn navigation_go_top_bottom() {
+        let mut p = make_panel_with_entries(10);
+        p.go_bottom();
+        assert_eq!(p.selected, 9);
+        p.go_top();
+        assert_eq!(p.selected, 0);
+    }
+
+    #[test]
+    fn navigation_page_up_down() {
+        let mut p = make_panel_with_entries(20);
+        p.page_down(5);
+        assert_eq!(p.selected, 5);
+        p.page_down(5);
+        assert_eq!(p.selected, 10);
+
+        p.page_up(3);
+        assert_eq!(p.selected, 7);
+
+        // page_up past 0 clamps
+        p.page_up(100);
+        assert_eq!(p.selected, 0);
+
+        // page_down past end clamps
+        p.page_down(100);
+        assert_eq!(p.selected, 19);
+    }
+
+    #[test]
+    fn navigation_empty_panel() {
+        let mut p = make_panel_with_entries(0);
+        p.move_down();
+        assert_eq!(p.selected, 0);
+        p.go_bottom();
+        assert_eq!(p.selected, 0);
+        p.page_down(10);
+        assert_eq!(p.selected, 0);
+    }
+
+    #[test]
+    fn visual_range_none_without_anchor() {
+        let p = make_panel_with_entries(5);
+        assert_eq!(p.visual_range(), None);
+    }
+
+    #[test]
+    fn visual_range_with_anchor() {
+        let mut p = make_panel_with_entries(10);
+        p.visual_anchor = Some(3);
+        p.selected = 7;
+        assert_eq!(p.visual_range(), Some((3, 7)));
+
+        // anchor > selected — should still give (lo, hi)
+        p.visual_anchor = Some(8);
+        p.selected = 2;
+        assert_eq!(p.visual_range(), Some((2, 8)));
+    }
+
+    #[test]
+    fn targeted_paths_single() {
+        let mut p = make_panel_with_entries(3);
+        p.selected = 1;
+        let paths = p.targeted_paths();
+        assert_eq!(paths, vec![PathBuf::from("/tmp/file_1")]);
+    }
+
+    #[test]
+    fn targeted_paths_marks_override() {
+        let mut p = make_panel_with_entries(5);
+        p.marked.insert(PathBuf::from("/tmp/file_0"));
+        p.marked.insert(PathBuf::from("/tmp/file_3"));
+        p.selected = 1; // single selection ignored when marks exist
+        let paths = p.targeted_paths();
+        assert_eq!(paths.len(), 2);
+        assert!(paths.contains(&PathBuf::from("/tmp/file_0")));
+        assert!(paths.contains(&PathBuf::from("/tmp/file_3")));
+    }
+
+    #[test]
+    fn targeted_paths_visual_range() {
+        let mut p = make_panel_with_entries(5);
+        p.visual_anchor = Some(1);
+        p.selected = 3;
+        let paths = p.targeted_paths();
+        assert_eq!(paths.len(), 3); // file_1, file_2, file_3
+    }
+
+    #[test]
+    fn targeted_paths_skips_dotdot() {
+        let mut p = make_panel_with_entries(2);
+        // Insert ".." entry at the beginning
+        p.entries.insert(
+            0,
+            FileEntry {
+                name: "..".into(),
+                path: PathBuf::from("/"),
+                is_dir: true,
+                size: 0,
+                modified: None,
+                created: None,
+                is_symlink: false,
+            },
+        );
+        p.selected = 0; // selecting ".."
+        let paths = p.targeted_paths();
+        assert!(paths.is_empty());
+    }
+
+    #[test]
+    fn toggle_mark_and_move() {
+        let mut p = make_panel_with_entries(3);
+        p.selected = 0;
+        p.toggle_mark();
+        assert!(p.marked.contains(&PathBuf::from("/tmp/file_0")));
+        assert_eq!(p.selected, 1); // cursor moved down
+
+        // Toggle again removes the mark
+        p.selected = 0;
+        p.toggle_mark();
+        assert!(!p.marked.contains(&PathBuf::from("/tmp/file_0")));
+    }
+
+    #[test]
+    fn adjust_scroll_follows_cursor() {
+        let mut p = make_panel_with_entries(20);
+        p.selected = 15;
+        p.adjust_scroll(10);
+        // selected should be visible: offset <= selected < offset + height
+        assert!(p.selected >= p.offset);
+        assert!(p.selected < p.offset + 10);
+
+        p.selected = 0;
+        p.adjust_scroll(10);
+        assert_eq!(p.offset, 0);
+    }
+
+    #[test]
+    fn load_dir_real_filesystem() {
+        let dir = std::env::temp_dir().join("fcmd_panel_test");
+        let _ = fs::create_dir_all(&dir);
+        fs::write(dir.join("alpha.txt"), "").unwrap();
+        fs::write(dir.join("beta.txt"), "").unwrap();
+        let _ = fs::create_dir_all(dir.join("gamma_dir"));
+
+        let panel = Panel::new(dir.clone()).unwrap();
+
+        // Should have ".." + gamma_dir + alpha.txt + beta.txt (dirs first)
+        assert!(panel.entries.len() >= 4);
+        assert_eq!(panel.entries[0].name, "..");
+        // First non-.. entry should be the dir
+        let dir_entries: Vec<_> = panel
+            .entries
+            .iter()
+            .filter(|e| e.name != ".." && e.is_dir)
+            .collect();
+        assert!(!dir_entries.is_empty());
+
+        // Cleanup
+        let _ = fs::remove_dir_all(&dir);
+    }
 }

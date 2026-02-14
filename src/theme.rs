@@ -301,4 +301,95 @@ mod tests {
             let _theme = raw.into_theme();
         }
     }
+
+    #[test]
+    fn parse_hex_valid() {
+        assert_eq!(parse_hex("#000000"), Some(Color::Rgb(0, 0, 0)));
+        assert_eq!(parse_hex("#ffffff"), Some(Color::Rgb(255, 255, 255)));
+        assert_eq!(parse_hex("#ff8040"), Some(Color::Rgb(255, 128, 64)));
+    }
+
+    #[test]
+    fn parse_hex_invalid() {
+        assert_eq!(parse_hex("000000"), None); // no #
+        assert_eq!(parse_hex("#fff"), None); // too short
+        assert_eq!(parse_hex("#gggggg"), None); // not hex
+        assert_eq!(parse_hex(""), None);
+    }
+
+    const TEST_THEME_TOML: &str = r##"
+            bg = "#111111"
+            bg_light = "#222222"
+            fg = "#333333"
+            fg_dim = "#444444"
+            red = "#ff0000"
+            green = "#00ff00"
+            yellow = "#ffff00"
+            blue = "#0000ff"
+            magenta = "#ff00ff"
+            cyan = "#00ffff"
+            orange = "#ff8000"
+            border_active = "#aaaaaa"
+            border_inactive = "#bbbbbb"
+            status_bg = "#cccccc"
+            cursor_line = "#dddddd"
+            dir_color = "#eeeeee"
+            symlink_color = "#999999"
+            file_color = "#888888"
+    "##;
+
+    #[test]
+    fn resolve_color_hex() {
+        let raw: RawTheme = toml::from_str(TEST_THEME_TOML).unwrap();
+        assert_eq!(raw.resolve_color("#ff0000"), Color::Rgb(255, 0, 0));
+    }
+
+    #[test]
+    fn resolve_color_reference() {
+        let raw: RawTheme = toml::from_str(
+            r##"
+            bg = "#111111"
+            bg_light = "#222222"
+            fg = "#333333"
+            fg_dim = "#444444"
+            red = "#ff0000"
+            green = "#00ff00"
+            yellow = "#ffff00"
+            blue = "#0000ff"
+            magenta = "#ff00ff"
+            cyan = "#00ffff"
+            orange = "#ff8000"
+            border_active = "blue"
+            border_inactive = "fg_dim"
+            status_bg = "bg"
+            cursor_line = "#dddddd"
+            dir_color = "cyan"
+            symlink_color = "orange"
+            file_color = "fg"
+            "##,
+        )
+        .unwrap();
+        let theme = raw.into_theme();
+        assert_eq!(theme.border_active, Color::Rgb(0, 0, 255));
+        assert_eq!(theme.border_inactive, Color::Rgb(68, 68, 68));
+        assert_eq!(theme.status_bg, Color::Rgb(17, 17, 17));
+        assert_eq!(theme.dir_color, Color::Rgb(0, 255, 255));
+        assert_eq!(theme.file_color, Color::Rgb(51, 51, 51));
+    }
+
+    #[test]
+    fn resolve_color_unknown_fallback() {
+        let raw: RawTheme = toml::from_str(TEST_THEME_TOML).unwrap();
+        // Unknown reference falls back to Color::White
+        assert_eq!(raw.resolve_color("nonexistent"), Color::White);
+    }
+
+    #[test]
+    fn default_theme_has_distinct_colors() {
+        let t = Theme::default_theme();
+        // Basic sanity: bg and fg should differ
+        assert_ne!(t.bg, t.fg);
+        assert_ne!(t.red, t.green);
+        assert_ne!(t.blue, t.yellow);
+    }
 }
