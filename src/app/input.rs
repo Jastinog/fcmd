@@ -177,6 +177,7 @@ impl App {
             ('d', KeyCode::Char('d')) => self.request_delete(),
             ('y', KeyCode::Char('y')) => self.yank_targeted(),
             ('y', KeyCode::Char('p')) => self.yank_path(),
+            ('y', KeyCode::Char('n')) => self.yank_name(),
             ('\'', KeyCode::Char(c)) if c.is_ascii_lowercase() => self.goto_mark(c),
             ('s', KeyCode::Char('n')) => self.set_sort(SortMode::Name),
             ('s', KeyCode::Char('s')) => self.set_sort(SortMode::Size),

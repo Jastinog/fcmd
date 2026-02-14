@@ -213,6 +213,17 @@ impl App {
         }
     }
 
+    pub(super) fn yank_name(&mut self) {
+        let name = match self.active_panel().selected_entry().filter(|e| e.name != "..") {
+            Some(e) => e.name.clone(),
+            None => return,
+        };
+        match copy_to_clipboard(&name) {
+            Ok(()) => self.status_message = format!("Name: {name}"),
+            Err(_) => self.status_message = "Clipboard not available".into(),
+        }
+    }
+
     pub fn which_key_hints(&self) -> Option<&[(&str, &str)]> {
         const LEADER_HINTS: &[(&str, &str)] = &[
             ("", "Toggle"),
@@ -241,7 +252,7 @@ impl App {
             ("r", "reverse"),
         ];
         const GOTO_HINTS: &[(&str, &str)] = &[("g", "top"), ("t", "next tab"), ("T", "prev tab")];
-        const YANK_HINTS: &[(&str, &str)] = &[("y", "yank"), ("p", "yank path")];
+        const YANK_HINTS: &[(&str, &str)] = &[("y", "yank"), ("p", "yank path"), ("n", "yank name")];
         const DELETE_HINTS: &[(&str, &str)] = &[("d", "delete")];
         const MARK_HINTS: &[(&str, &str)] = &[("a-z", "go to mark")];
         let pending = self.pending_key?;
