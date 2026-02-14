@@ -407,9 +407,13 @@ fn remove_path(path: &Path) -> std::io::Result<()> {
 }
 
 fn trash_dir() -> std::io::Result<PathBuf> {
-    let home = std::env::var("HOME")
-        .map_err(|_| std::io::Error::new(std::io::ErrorKind::NotFound, "HOME not set"))?;
-    let dir = PathBuf::from(home).join(".local/share/fc/trash");
+    let base = dirs::data_local_dir().ok_or_else(|| {
+        std::io::Error::new(
+            std::io::ErrorKind::NotFound,
+            "cannot determine data directory",
+        )
+    })?;
+    let dir = base.join("fc").join("trash");
     fs::create_dir_all(&dir)?;
     Ok(dir)
 }
@@ -422,10 +426,8 @@ fn unique_trash_name(trash: &Path, name: &str) -> PathBuf {
     trash.join(format!("{ts}_{name}"))
 }
 
-/// Check if an IO error is EXDEV (cross-device link).
 fn is_cross_device(e: &std::io::Error) -> bool {
-    // EXDEV = 18 on Linux and macOS
-    e.raw_os_error() == Some(18)
+    e.kind() == std::io::ErrorKind::CrossesDevices
 }
 
 #[cfg(test)]

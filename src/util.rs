@@ -61,9 +61,23 @@ pub fn copy_to_clipboard(text: &str) -> std::io::Result<()> {
             .stdin(std::process::Stdio::piped())
             .spawn()?
     };
-    if let Some(ref mut stdin) = child.stdin {
+    if let Some(ref mut stdin) = child.stdin.take() {
         stdin.write_all(text.as_bytes())?;
     }
-    child.wait()?;
-    Ok(())
+    // Poll with timeout to avoid hanging if clipboard tool is stuck
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(3);
+    loop {
+        match child.try_wait()? {
+            Some(_) => return Ok(()),
+            None if std::time::Instant::now() >= deadline => {
+                let _ = child.kill();
+                let _ = child.wait();
+                return Err(std::io::Error::new(
+                    std::io::ErrorKind::TimedOut,
+                    "clipboard command timed out",
+                ));
+            }
+            None => std::thread::sleep(std::time::Duration::from_millis(10)),
+        }
+    }
 }

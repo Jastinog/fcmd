@@ -25,9 +25,8 @@ impl App {
         self.git_status_dir = Some(dir.clone());
 
         // Detect git root
-        let root_output = std::process::Command::new("git")
-            .args(["-C", &dir.to_string_lossy(), "rev-parse", "--show-toplevel"])
-            .output();
+        let root_output =
+            run_git_command(&["-C", &dir.to_string_lossy(), "rev-parse", "--show-toplevel"]);
         let root = match root_output {
             Ok(o) if o.status.success() => PathBuf::from(String::from_utf8_lossy(&o.stdout).trim()),
             _ => return,
@@ -35,15 +34,13 @@ impl App {
         self.git_root = Some(root.clone());
 
         // Get porcelain status
-        let status_output = std::process::Command::new("git")
-            .args([
-                "-C",
-                &root.to_string_lossy(),
-                "status",
-                "--porcelain=v1",
-                "-uall",
-            ])
-            .output();
+        let status_output = run_git_command(&[
+            "-C",
+            &root.to_string_lossy(),
+            "status",
+            "--porcelain=v1",
+            "-uall",
+        ]);
         let output = match status_output {
             Ok(o) if o.status.success() => o,
             _ => return,
@@ -92,6 +89,52 @@ impl App {
                 }
                 parent = p.parent();
             }
+        }
+    }
+}
+
+use std::time::{Duration, Instant};
+
+const GIT_TIMEOUT: Duration = Duration::from_secs(5);
+
+fn run_git_command(args: &[&str]) -> std::io::Result<std::process::Output> {
+    let mut child = std::process::Command::new("git")
+        .args(args)
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::null())
+        .spawn()?;
+
+    // Read stdout in a background thread to avoid pipe deadlock
+    let stdout_pipe = child.stdout.take();
+    let reader = std::thread::spawn(move || {
+        let mut buf = Vec::new();
+        if let Some(mut out) = stdout_pipe {
+            let _ = std::io::Read::read_to_end(&mut out, &mut buf);
+        }
+        buf
+    });
+
+    // Poll for completion with timeout
+    let deadline = Instant::now() + GIT_TIMEOUT;
+    loop {
+        match child.try_wait()? {
+            Some(status) => {
+                let stdout = reader.join().unwrap_or_default();
+                return Ok(std::process::Output {
+                    status,
+                    stdout,
+                    stderr: Vec::new(),
+                });
+            }
+            None if Instant::now() >= deadline => {
+                let _ = child.kill();
+                let _ = child.wait();
+                return Err(std::io::Error::new(
+                    std::io::ErrorKind::TimedOut,
+                    "git command timed out",
+                ));
+            }
+            None => std::thread::sleep(Duration::from_millis(50)),
         }
     }
 }
