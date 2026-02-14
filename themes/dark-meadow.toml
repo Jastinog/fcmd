@@ -1,0 +1,24 @@
+# Dark Meadow — nature-inspired dark theme with earthy tones
+# by custom
+
+bg = "#141810"
+bg_light = "#1C2018"
+fg = "#C0C8B8"
+fg_dim = "#586850"
+
+red = "#CC6060"
+green = "#88C070"
+yellow = "#C8B860"
+blue = "#6090B0"
+magenta = "#A880A8"
+cyan = "#60B8A0"
+orange = "#C89850"
+
+border_active = "green"
+border_inactive = "#2C3428"
+status_bg = "#0C100A"
+cursor_line = "#202820"
+
+dir_color = "green"
+symlink_color = "cyan"
+file_color = "fg"

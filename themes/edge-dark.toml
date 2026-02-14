@@ -1,0 +1,24 @@
+# Edge Dark — clean dark theme with vivid colors
+# by sainnhe
+
+bg = "#2B2D3A"
+bg_light = "#333648"
+fg = "#C5CDD9"
+fg_dim = "#6B7089"
+
+red = "#EC7279"
+green = "#A0C980"
+yellow = "#DEB974"
+blue = "#6CB6EB"
+magenta = "#D38AEA"
+cyan = "#5DBBC1"
+orange = "#E8A95E"
+
+border_active = "blue"
+border_inactive = "#3E4155"
+status_bg = "#21222D"
+cursor_line = "#333648"
+
+dir_color = "blue"
+symlink_color = "cyan"
+file_color = "fg"

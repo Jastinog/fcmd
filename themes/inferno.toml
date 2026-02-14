@@ -1,0 +1,24 @@
+# Inferno — fire-themed dark colorscheme
+# by custom
+
+bg = "#1A0A0A"
+bg_light = "#251210"
+fg = "#E8D0C0"
+fg_dim = "#7A5A4A"
+
+red = "#FF4444"
+green = "#B8CC52"
+yellow = "#FFB347"
+blue = "#6C99BB"
+magenta = "#C97BDB"
+cyan = "#5FB3B3"
+orange = "#FF6B35"
+
+border_active = "orange"
+border_inactive = "#3D2020"
+status_bg = "#120606"
+cursor_line = "#2A1515"
+
+dir_color = "orange"
+symlink_color = "yellow"
+file_color = "fg"

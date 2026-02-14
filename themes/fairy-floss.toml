@@ -1,0 +1,24 @@
+# Fairy Floss — pastel purple dark theme
+# by sailorhg
+
+bg = "#5A5475"
+bg_light = "#65608A"
+fg = "#F8F8F0"
+fg_dim = "#A8A0C4"
+
+red = "#FF857F"
+green = "#C2FFDF"
+yellow = "#FFF352"
+blue = "#80D4FF"
+magenta = "#FFB8D1"
+cyan = "#C5A3FF"
+orange = "#FFCA85"
+
+border_active = "magenta"
+border_inactive = "#716B8E"
+status_bg = "#4D4868"
+cursor_line = "#65608A"
+
+dir_color = "cyan"
+symlink_color = "green"
+file_color = "fg"

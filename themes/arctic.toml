@@ -1,0 +1,24 @@
+# Arctic — cold blue-white dark theme
+# by custom
+
+bg = "#101820"
+bg_light = "#162030"
+fg = "#E0E8F0"
+fg_dim = "#506878"
+
+red = "#E06080"
+green = "#80C8A0"
+yellow = "#D0C898"
+blue = "#80B0E0"
+magenta = "#B090D0"
+cyan = "#80D0D8"
+orange = "#D0A070"
+
+border_active = "cyan"
+border_inactive = "#283848"
+status_bg = "#0A1018"
+cursor_line = "#182838"
+
+dir_color = "blue"
+symlink_color = "cyan"
+file_color = "fg"

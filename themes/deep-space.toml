@@ -1,0 +1,24 @@
+# Deep Space — dark colorscheme inspired by the cosmos
+# by tyrannicaltoucan
+
+bg = "#1B1E2B"
+bg_light = "#232635"
+fg = "#C8CED8"
+fg_dim = "#51617D"
+
+red = "#B15E7C"
+green = "#709D6C"
+yellow = "#D4A959"
+blue = "#5B8FBB"
+magenta = "#8B6EAD"
+cyan = "#4FA5A3"
+orange = "#C59255"
+
+border_active = "blue"
+border_inactive = "#323850"
+status_bg = "#13151F"
+cursor_line = "#272A3A"
+
+dir_color = "blue"
+symlink_color = "cyan"
+file_color = "fg"

@@ -1,0 +1,24 @@
+# Frozen — icy cold blue dark theme
+# by custom
+
+bg = "#0A1420"
+bg_light = "#101C2C"
+fg = "#D0E0F0"
+fg_dim = "#486080"
+
+red = "#C06078"
+green = "#70B8A0"
+yellow = "#B8C8A0"
+blue = "#6CACD8"
+magenta = "#A080C8"
+cyan = "#70C8E0"
+orange = "#C8A070"
+
+border_active = "cyan"
+border_inactive = "#1C3048"
+status_bg = "#060E18"
+cursor_line = "#142438"
+
+dir_color = "cyan"
+symlink_color = "blue"
+file_color = "fg"

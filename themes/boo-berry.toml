@@ -1,0 +1,24 @@
+# Boo Berry — berry-toned dark colorscheme
+# by custom
+
+bg = "#1A132A"
+bg_light = "#231C38"
+fg = "#E1D8F0"
+fg_dim = "#6B5F84"
+
+red = "#F04A7D"
+green = "#4DE88E"
+yellow = "#FFD166"
+blue = "#688AFF"
+magenta = "#D084E8"
+cyan = "#49D0D0"
+orange = "#FF9E64"
+
+border_active = "magenta"
+border_inactive = "#342B4E"
+status_bg = "#120D1F"
+cursor_line = "#271F3E"
+
+dir_color = "blue"
+symlink_color = "cyan"
+file_color = "fg"

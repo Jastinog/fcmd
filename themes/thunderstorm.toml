@@ -1,0 +1,24 @@
+# Thunderstorm — dark stormy atmosphere
+# by custom
+
+bg = "#0D1018"
+bg_light = "#141825"
+fg = "#B8C0D0"
+fg_dim = "#485068"
+
+red = "#E86070"
+green = "#68B878"
+yellow = "#D8C868"
+blue = "#5888D0"
+magenta = "#A878C0"
+cyan = "#58B0C0"
+orange = "#D09858"
+
+border_active = "blue"
+border_inactive = "#222838"
+status_bg = "#080A10"
+cursor_line = "#181E2E"
+
+dir_color = "blue"
+symlink_color = "cyan"
+file_color = "fg"

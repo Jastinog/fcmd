@@ -1,0 +1,24 @@
+# Espresso — warm coffee-inspired dark theme
+# by Unknown Espresso
+
+bg = "#2A211C"
+bg_light = "#362C25"
+fg = "#BDAE9D"
+fg_dim = "#706050"
+
+red = "#D25252"
+green = "#A5C261"
+yellow = "#FFC66D"
+blue = "#6C99BB"
+magenta = "#D197D9"
+cyan = "#BED6FF"
+orange = "#E8A64E"
+
+border_active = "yellow"
+border_inactive = "#4A3E35"
+status_bg = "#1E1814"
+cursor_line = "#362C25"
+
+dir_color = "blue"
+symlink_color = "cyan"
+file_color = "fg"

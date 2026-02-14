@@ -1,0 +1,24 @@
+# Materia — Material Design inspired dark theme
+# by defman21
+
+bg = "#263238"
+bg_light = "#2E3C43"
+fg = "#CDD3DE"
+fg_dim = "#546E7A"
+
+red = "#EC5F67"
+green = "#8BD649"
+yellow = "#FFCC00"
+blue = "#89DDFF"
+magenta = "#82AAFF"
+cyan = "#80CBC4"
+orange = "#F78C6C"
+
+border_active = "cyan"
+border_inactive = "#37474F"
+status_bg = "#1C272D"
+cursor_line = "#2E3C43"
+
+dir_color = "blue"
+symlink_color = "cyan"
+file_color = "fg"

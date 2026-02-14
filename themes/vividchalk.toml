@@ -1,0 +1,24 @@
+# Vividchalk — vibrant colors on dark background
+# by Tim Pope
+
+bg = "#111111"
+bg_light = "#1E1E1E"
+fg = "#EEEEEE"
+fg_dim = "#666666"
+
+red = "#FF6600"
+green = "#AADE42"
+yellow = "#FFE938"
+blue = "#6EA9FF"
+magenta = "#CC66FF"
+cyan = "#88DDEF"
+orange = "#FF7A30"
+
+border_active = "yellow"
+border_inactive = "#333333"
+status_bg = "#090909"
+cursor_line = "#1E1E1E"
+
+dir_color = "blue"
+symlink_color = "cyan"
+file_color = "fg"

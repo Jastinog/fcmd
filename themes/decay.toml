@@ -1,0 +1,24 @@
+# Decay — elegant muted dark theme
+# by decaycs
+
+bg = "#171B20"
+bg_light = "#1C2128"
+fg = "#B6BEC9"
+fg_dim = "#485263"
+
+red = "#E05F65"
+green = "#78DBA9"
+yellow = "#F1CF8A"
+blue = "#70A5EB"
+magenta = "#C68AEE"
+cyan = "#74BEE9"
+orange = "#E89A6F"
+
+border_active = "green"
+border_inactive = "#2B333E"
+status_bg = "#0F1216"
+cursor_line = "#1E232A"
+
+dir_color = "blue"
+symlink_color = "cyan"
+file_color = "fg"

@@ -1,0 +1,24 @@
+# Dark Violet — deep violet dark theme
+# by custom
+
+bg = "#1A0F22"
+bg_light = "#231830"
+fg = "#D0C8E0"
+fg_dim = "#605580"
+
+red = "#E06080"
+green = "#78C898"
+yellow = "#D0C070"
+blue = "#7090D0"
+magenta = "#C070D0"
+cyan = "#60B8C8"
+orange = "#D09860"
+
+border_active = "magenta"
+border_inactive = "#352850"
+status_bg = "#110A18"
+cursor_line = "#261C38"
+
+dir_color = "blue"
+symlink_color = "cyan"
+file_color = "fg"

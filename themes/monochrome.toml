@@ -1,0 +1,24 @@
+# Monochrome — clean pure monochrome dark theme
+# by custom
+
+bg = "#101010"
+bg_light = "#1A1A1A"
+fg = "#D0D0D0"
+fg_dim = "#585858"
+
+red = "#B0B0B0"
+green = "#A8A8A8"
+yellow = "#C8C8C8"
+blue = "#909090"
+magenta = "#B8B8B8"
+cyan = "#A0A0A0"
+orange = "#C0C0C0"
+
+border_active = "fg"
+border_inactive = "#333333"
+status_bg = "#080808"
+cursor_line = "#1E1E1E"
+
+dir_color = "yellow"
+symlink_color = "blue"
+file_color = "fg"

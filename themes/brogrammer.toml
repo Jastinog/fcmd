@@ -1,0 +1,24 @@
+# Brogrammer — dark theme for the coding bro
+# by tobykurien
+
+bg = "#1A1A1A"
+bg_light = "#2A2A2A"
+fg = "#D6DBD6"
+fg_dim = "#555555"
+
+red = "#D6262B"
+green = "#2DC55E"
+yellow = "#F3BD09"
+blue = "#1081D6"
+magenta = "#5350B9"
+cyan = "#0F7DDB"
+orange = "#E8850C"
+
+border_active = "green"
+border_inactive = "#333333"
+status_bg = "#111111"
+cursor_line = "#262626"
+
+dir_color = "blue"
+symlink_color = "cyan"
+file_color = "fg"

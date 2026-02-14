@@ -1,0 +1,24 @@
+# Forest — deep green forest dark theme
+# by custom
+
+bg = "#0E1410"
+bg_light = "#151D18"
+fg = "#C8D8CC"
+fg_dim = "#4A6050"
+
+red = "#D45050"
+green = "#6EBF6E"
+yellow = "#C8C050"
+blue = "#508CB8"
+magenta = "#A078B8"
+cyan = "#50B8A0"
+orange = "#C89050"
+
+border_active = "green"
+border_inactive = "#263830"
+status_bg = "#080E0A"
+cursor_line = "#182418"
+
+dir_color = "green"
+symlink_color = "cyan"
+file_color = "fg"

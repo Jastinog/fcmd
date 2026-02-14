@@ -1,0 +1,24 @@
+# Nordic — crisp dark theme inspired by the Arctic
+# by AlexVale
+
+bg = "#1E2128"
+bg_light = "#242932"
+fg = "#D8DEE9"
+fg_dim = "#4C566A"
+
+red = "#BF616A"
+green = "#A3BE8C"
+yellow = "#EBCB8B"
+blue = "#81A1C1"
+magenta = "#B48EAD"
+cyan = "#88C0D0"
+orange = "#D08770"
+
+border_active = "blue"
+border_inactive = "#353A45"
+status_bg = "#16181E"
+cursor_line = "#2E3440"
+
+dir_color = "blue"
+symlink_color = "cyan"
+file_color = "fg"

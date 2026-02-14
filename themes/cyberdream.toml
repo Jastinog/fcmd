@@ -1,0 +1,24 @@
+# Cyberdream — high-contrast cyberpunk dark theme
+# by scottmckendry
+
+bg = "#16181A"
+bg_light = "#1E2124"
+fg = "#FFFFFF"
+fg_dim = "#7B8496"
+
+red = "#FF6E5A"
+green = "#5EFF6C"
+yellow = "#F1FF5E"
+blue = "#5EA1FF"
+magenta = "#BD5EFF"
+cyan = "#5EF1FF"
+orange = "#FFBD5E"
+
+border_active = "cyan"
+border_inactive = "#3C4048"
+status_bg = "#0E1012"
+cursor_line = "#1E2124"
+
+dir_color = "blue"
+symlink_color = "cyan"
+file_color = "fg"

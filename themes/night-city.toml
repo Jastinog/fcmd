@@ -1,0 +1,24 @@
+# Night City — cyberpunk city at night
+# by custom
+
+bg = "#110E1A"
+bg_light = "#1A1628"
+fg = "#D0CCE0"
+fg_dim = "#5A5575"
+
+red = "#F74A6C"
+green = "#2BDBA5"
+yellow = "#F9E850"
+blue = "#3498DB"
+magenta = "#D660E0"
+cyan = "#00E8D4"
+orange = "#FF8844"
+
+border_active = "cyan"
+border_inactive = "#2C2640"
+status_bg = "#090712"
+cursor_line = "#1F1A30"
+
+dir_color = "cyan"
+symlink_color = "magenta"
+file_color = "fg"

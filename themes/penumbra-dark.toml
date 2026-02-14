@@ -1,0 +1,24 @@
+# Penumbra Dark — balanced dark colorscheme
+# by Neovim community
+
+bg = "#303338"
+bg_light = "#3A3D42"
+fg = "#CECECE"
+fg_dim = "#636363"
+
+red = "#CA736C"
+green = "#7FAF5C"
+yellow = "#CDA84A"
+blue = "#5794C2"
+magenta = "#A87CB2"
+cyan = "#5DA8A1"
+orange = "#D08B4E"
+
+border_active = "blue"
+border_inactive = "#4A4D52"
+status_bg = "#262830"
+cursor_line = "#3A3D42"
+
+dir_color = "blue"
+symlink_color = "cyan"
+file_color = "fg"

@@ -1,0 +1,24 @@
+# Amber — warm amber terminal aesthetic
+# by classic CRT
+
+bg = "#0A0800"
+bg_light = "#141005"
+fg = "#FFB000"
+fg_dim = "#8A6000"
+
+red = "#FF5533"
+green = "#CCAA00"
+yellow = "#FFCC00"
+blue = "#CC8800"
+magenta = "#DD8855"
+cyan = "#CCBB55"
+orange = "#FF9900"
+
+border_active = "fg"
+border_inactive = "#2A2000"
+status_bg = "#050400"
+cursor_line = "#1A1400"
+
+dir_color = "yellow"
+symlink_color = "cyan"
+file_color = "fg"

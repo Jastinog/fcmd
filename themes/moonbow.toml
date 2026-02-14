@@ -1,0 +1,24 @@
+# Moonbow — soft rainbow on dark background
+# by arturgomes
+
+bg = "#1C1E26"
+bg_light = "#252731"
+fg = "#CACACC"
+fg_dim = "#5A5A5F"
+
+red = "#D95468"
+green = "#8BD49C"
+yellow = "#EBBF83"
+blue = "#539AFC"
+magenta = "#B962C7"
+cyan = "#33CED8"
+orange = "#E87D3E"
+
+border_active = "blue"
+border_inactive = "#333640"
+status_bg = "#14151C"
+cursor_line = "#252731"
+
+dir_color = "blue"
+symlink_color = "cyan"
+file_color = "fg"

@@ -1,0 +1,24 @@
+# Halcyon — dark blue theme with warm accents
+# by Brittany Chiang
+
+bg = "#171C28"
+bg_light = "#1D2433"
+fg = "#A2AABC"
+fg_dim = "#5C6777"
+
+red = "#EF6B73"
+green = "#BAE67E"
+yellow = "#FFD580"
+blue = "#5CCFE6"
+magenta = "#C3A6FF"
+cyan = "#5CCFE6"
+orange = "#FFAE57"
+
+border_active = "yellow"
+border_inactive = "#2F3B54"
+status_bg = "#0E1119"
+cursor_line = "#1D2433"
+
+dir_color = "blue"
+symlink_color = "cyan"
+file_color = "fg"

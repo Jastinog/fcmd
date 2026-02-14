@@ -1,0 +1,24 @@
+# Earthsong — earthy warm tones dark theme
+# by daylerees
+
+bg = "#292521"
+bg_light = "#332E29"
+fg = "#EBD1B7"
+fg_dim = "#7A6C5B"
+
+red = "#DB784D"
+green = "#95CC5E"
+yellow = "#E6D369"
+blue = "#60A0BF"
+magenta = "#D28B71"
+cyan = "#7EC1B7"
+orange = "#DB784D"
+
+border_active = "green"
+border_inactive = "#443D36"
+status_bg = "#1F1C18"
+cursor_line = "#332E29"
+
+dir_color = "blue"
+symlink_color = "cyan"
+file_color = "fg"

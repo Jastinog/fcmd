@@ -1,0 +1,24 @@
+# One Monokai — fusion of One Dark and Monokai
+# by azemoh
+
+bg = "#282C34"
+bg_light = "#2F3440"
+fg = "#BBBBBB"
+fg_dim = "#636D83"
+
+red = "#E06C75"
+green = "#A6E22E"
+yellow = "#E5C07B"
+blue = "#61AFEF"
+magenta = "#AE81FF"
+cyan = "#56B6C2"
+orange = "#D19A66"
+
+border_active = "blue"
+border_inactive = "#3E4452"
+status_bg = "#1E2228"
+cursor_line = "#2F3440"
+
+dir_color = "blue"
+symlink_color = "cyan"
+file_color = "fg"

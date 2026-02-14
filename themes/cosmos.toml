@@ -1,0 +1,24 @@
+# Cosmos — cosmic deep space dark theme
+# by custom
+
+bg = "#0F0E17"
+bg_light = "#181625"
+fg = "#E0DEF4"
+fg_dim = "#615F80"
+
+red = "#FF5370"
+green = "#C3E88D"
+yellow = "#FFCB6B"
+blue = "#82AAFF"
+magenta = "#C792EA"
+cyan = "#89DDFF"
+orange = "#F78C6C"
+
+border_active = "magenta"
+border_inactive = "#2A2842"
+status_bg = "#08070F"
+cursor_line = "#1E1C30"
+
+dir_color = "blue"
+symlink_color = "cyan"
+file_color = "fg"

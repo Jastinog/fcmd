@@ -1,0 +1,24 @@
+# Badwolf — Steve Losh's vim colorscheme
+# by Steve Losh
+
+bg = "#1C1B1A"
+bg_light = "#2A2926"
+fg = "#F8F6F2"
+fg_dim = "#857F78"
+
+red = "#FF2C4B"
+green = "#AEE239"
+yellow = "#FADE3E"
+blue = "#0A9DFF"
+magenta = "#FF9EB8"
+cyan = "#8CFFBA"
+orange = "#FFA724"
+
+border_active = "yellow"
+border_inactive = "#45413B"
+status_bg = "#121110"
+cursor_line = "#35322D"
+
+dir_color = "yellow"
+symlink_color = "cyan"
+file_color = "fg"

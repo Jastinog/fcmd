@@ -1,0 +1,24 @@
+# Xcode Dusk — Apple Xcode dark variant
+# by Apple
+
+bg = "#282B35"
+bg_light = "#313440"
+fg = "#FFFFFF"
+fg_dim = "#6C7986"
+
+red = "#D73A49"
+green = "#56B870"
+yellow = "#DBC08A"
+blue = "#4EB0CC"
+magenta = "#B27BB5"
+cyan = "#00AEEF"
+orange = "#D28E5D"
+
+border_active = "blue"
+border_inactive = "#3E424F"
+status_bg = "#1E2028"
+cursor_line = "#313440"
+
+dir_color = "blue"
+symlink_color = "cyan"
+file_color = "fg"

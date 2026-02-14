@@ -1,0 +1,24 @@
+# Abyss — VS Code Abyss-inspired deep blue theme
+# by Microsoft
+
+bg = "#000C18"
+bg_light = "#051326"
+fg = "#6688CC"
+fg_dim = "#384887"
+
+red = "#FF4040"
+green = "#22AA44"
+yellow = "#F2A93B"
+blue = "#225588"
+magenta = "#B084EB"
+cyan = "#4DB8CC"
+orange = "#F29718"
+
+border_active = "#2277CC"
+border_inactive = "#0A2244"
+status_bg = "#00060F"
+cursor_line = "#082050"
+
+dir_color = "cyan"
+symlink_color = "orange"
+file_color = "fg"

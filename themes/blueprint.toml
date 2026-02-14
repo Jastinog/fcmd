@@ -1,0 +1,24 @@
+# Blueprint — engineering blueprint-inspired dark theme
+# by custom
+
+bg = "#0A1628"
+bg_light = "#112240"
+fg = "#C0D0E8"
+fg_dim = "#4A6080"
+
+red = "#FF5555"
+green = "#50FA7B"
+yellow = "#F1FA8C"
+blue = "#5EB8FF"
+magenta = "#A8A0D8"
+cyan = "#68D5FF"
+orange = "#FFB86C"
+
+border_active = "blue"
+border_inactive = "#1E3A5F"
+status_bg = "#06101E"
+cursor_line = "#132E55"
+
+dir_color = "blue"
+symlink_color = "cyan"
+file_color = "fg"

@@ -1,0 +1,24 @@
+# Submarine — deep underwater dark theme
+# by custom
+
+bg = "#0B1520"
+bg_light = "#111D2B"
+fg = "#B0C8D8"
+fg_dim = "#4A6878"
+
+red = "#E06070"
+green = "#60C0A0"
+yellow = "#D0B870"
+blue = "#5098CC"
+magenta = "#A878C0"
+cyan = "#48B8C8"
+orange = "#CC9060"
+
+border_active = "cyan"
+border_inactive = "#1E3040"
+status_bg = "#060E16"
+cursor_line = "#142230"
+
+dir_color = "blue"
+symlink_color = "cyan"
+file_color = "fg"

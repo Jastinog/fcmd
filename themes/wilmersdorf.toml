@@ -1,0 +1,24 @@
+# Wilmersdorf — refined dark Berlin-inspired theme
+# by jneidel
+
+bg = "#222635"
+bg_light = "#2A2E3E"
+fg = "#C6C6D4"
+fg_dim = "#5B5E72"
+
+red = "#E06C75"
+green = "#ABD194"
+yellow = "#E5C07B"
+blue = "#7EADCA"
+magenta = "#BC95E0"
+cyan = "#71BAC2"
+orange = "#D4A460"
+
+border_active = "blue"
+border_inactive = "#373C4F"
+status_bg = "#181B26"
+cursor_line = "#2E3244"
+
+dir_color = "blue"
+symlink_color = "cyan"
+file_color = "fg"

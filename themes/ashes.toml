@@ -1,0 +1,24 @@
+# Ashes — muted ash-gray dark theme
+# by Jannik Siebert
+
+bg = "#1C2023"
+bg_light = "#272B2E"
+fg = "#C7CCD1"
+fg_dim = "#565E65"
+
+red = "#C7AE95"
+green = "#95C7AE"
+yellow = "#AEC795"
+blue = "#AE95C7"
+magenta = "#C795AE"
+cyan = "#95AEC7"
+orange = "#C7A595"
+
+border_active = "blue"
+border_inactive = "#393F44"
+status_bg = "#14171A"
+cursor_line = "#272B2E"
+
+dir_color = "blue"
+symlink_color = "cyan"
+file_color = "fg"

@@ -1,0 +1,24 @@
+# Obsidian — deep volcanic black dark theme
+# by custom
+
+bg = "#0B0B0E"
+bg_light = "#141418"
+fg = "#C0C0CC"
+fg_dim = "#505060"
+
+red = "#CC5050"
+green = "#6EAE6E"
+yellow = "#C8B850"
+blue = "#5088C0"
+magenta = "#A070B0"
+cyan = "#50A8B0"
+orange = "#C09050"
+
+border_active = "blue"
+border_inactive = "#252530"
+status_bg = "#050508"
+cursor_line = "#181820"
+
+dir_color = "blue"
+symlink_color = "cyan"
+file_color = "fg"

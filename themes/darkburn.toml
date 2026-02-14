@@ -1,0 +1,24 @@
+# Darkburn — darker zenburn variant
+# by custom
+
+bg = "#1F1F1F"
+bg_light = "#2A2A2A"
+fg = "#DCDCCC"
+fg_dim = "#6F6F6F"
+
+red = "#CC9393"
+green = "#7F9F7F"
+yellow = "#F0DFAF"
+blue = "#8CD0D3"
+magenta = "#DC8CC3"
+cyan = "#93E0E3"
+orange = "#DFAF8F"
+
+border_active = "blue"
+border_inactive = "#3A3A3A"
+status_bg = "#151515"
+cursor_line = "#2A2A2A"
+
+dir_color = "blue"
+symlink_color = "cyan"
+file_color = "fg"

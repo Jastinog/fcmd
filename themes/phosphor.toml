@@ -1,0 +1,24 @@
+# Phosphor — classic green phosphor CRT terminal
+# by classic CRT
+
+bg = "#001100"
+bg_light = "#002200"
+fg = "#33FF33"
+fg_dim = "#117711"
+
+red = "#FF3333"
+green = "#00FF00"
+yellow = "#99FF00"
+blue = "#33CC33"
+magenta = "#66CC66"
+cyan = "#33FF99"
+orange = "#BBCC00"
+
+border_active = "fg"
+border_inactive = "#003300"
+status_bg = "#000800"
+cursor_line = "#003300"
+
+dir_color = "green"
+symlink_color = "cyan"
+file_color = "fg"

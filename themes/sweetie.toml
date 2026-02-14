@@ -1,0 +1,24 @@
+# Sweetie — sweet pastel dark theme
+# by custom
+
+bg = "#1A1B26"
+bg_light = "#222337"
+fg = "#EADFF0"
+fg_dim = "#6B6090"
+
+red = "#F591B2"
+green = "#A0E8AF"
+yellow = "#FBDF90"
+blue = "#89B4FA"
+magenta = "#CBA6F7"
+cyan = "#89DCEB"
+orange = "#FAB387"
+
+border_active = "magenta"
+border_inactive = "#33345C"
+status_bg = "#111119"
+cursor_line = "#222337"
+
+dir_color = "blue"
+symlink_color = "cyan"
+file_color = "fg"

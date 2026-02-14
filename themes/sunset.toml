@@ -1,0 +1,24 @@
+# Sunset — warm sunset colors on dark background
+# by custom
+
+bg = "#1A1418"
+bg_light = "#241C22"
+fg = "#E0D0CC"
+fg_dim = "#6A5860"
+
+red = "#E84040"
+green = "#A8CC60"
+yellow = "#F0C050"
+blue = "#60A0CC"
+magenta = "#CC78A0"
+cyan = "#50B8B8"
+orange = "#E89040"
+
+border_active = "orange"
+border_inactive = "#3A2E35"
+status_bg = "#120E10"
+cursor_line = "#281E24"
+
+dir_color = "blue"
+symlink_color = "cyan"
+file_color = "fg"

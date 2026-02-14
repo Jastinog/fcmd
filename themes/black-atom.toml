@@ -1,0 +1,24 @@
+# Black Atom — pure OLED black with atomic accents
+# by custom
+
+bg = "#000000"
+bg_light = "#0A0A0A"
+fg = "#E0E0E0"
+fg_dim = "#505050"
+
+red = "#FF5252"
+green = "#69F0AE"
+yellow = "#FFD740"
+blue = "#448AFF"
+magenta = "#E040FB"
+cyan = "#18FFFF"
+orange = "#FFAB40"
+
+border_active = "blue"
+border_inactive = "#1A1A1A"
+status_bg = "#000000"
+cursor_line = "#111111"
+
+dir_color = "blue"
+symlink_color = "cyan"
+file_color = "fg"

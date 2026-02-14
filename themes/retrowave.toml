@@ -1,0 +1,24 @@
+# Retrowave — 80s retro neon aesthetic
+# by juanmnl
+
+bg = "#13111B"
+bg_light = "#1C1928"
+fg = "#F0EDE8"
+fg_dim = "#6B6280"
+
+red = "#FE4450"
+green = "#72F1B8"
+yellow = "#FEDE5D"
+blue = "#36F9F6"
+magenta = "#FF7EDB"
+cyan = "#36F9F6"
+orange = "#F97E72"
+
+border_active = "cyan"
+border_inactive = "#2C2840"
+status_bg = "#0C0A12"
+cursor_line = "#1E1A2E"
+
+dir_color = "cyan"
+symlink_color = "magenta"
+file_color = "fg"

@@ -1,0 +1,24 @@
+# Hardhacker — futuristic hacker aesthetic
+# by hardhacker
+
+bg = "#211E2A"
+bg_light = "#2A2735"
+fg = "#E0DEF4"
+fg_dim = "#6B6888"
+
+red = "#E965A5"
+green = "#B1F2A7"
+yellow = "#EBDE76"
+blue = "#B1BAF4"
+magenta = "#E192EF"
+cyan = "#9BDFEF"
+orange = "#ECBE7B"
+
+border_active = "green"
+border_inactive = "#3A3650"
+status_bg = "#18161F"
+cursor_line = "#2E2A3C"
+
+dir_color = "blue"
+symlink_color = "cyan"
+file_color = "fg"

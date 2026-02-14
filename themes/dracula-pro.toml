@@ -1,0 +1,24 @@
+# Dracula Pro — enhanced Dracula variant
+# by Zeno Rocha
+
+bg = "#22212C"
+bg_light = "#2B2A38"
+fg = "#F8F8F2"
+fg_dim = "#7970A9"
+
+red = "#FF9580"
+green = "#8AFF80"
+yellow = "#FFFF80"
+blue = "#9580FF"
+magenta = "#FF80BF"
+cyan = "#80FFEA"
+orange = "#FFCA80"
+
+border_active = "magenta"
+border_inactive = "#3B3A4D"
+status_bg = "#191820"
+cursor_line = "#2E2D3D"
+
+dir_color = "blue"
+symlink_color = "cyan"
+file_color = "fg"

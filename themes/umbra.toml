@@ -1,0 +1,24 @@
+# Umbra — deep shadow dark theme
+# by custom
+
+bg = "#111015"
+bg_light = "#1A181F"
+fg = "#C5C0D0"
+fg_dim = "#5A5570"
+
+red = "#D4687A"
+green = "#7FB584"
+yellow = "#D4B06A"
+blue = "#6B99CC"
+magenta = "#B57EC4"
+cyan = "#6BBCBC"
+orange = "#CC9158"
+
+border_active = "blue"
+border_inactive = "#2D2A38"
+status_bg = "#09080C"
+cursor_line = "#1E1C25"
+
+dir_color = "blue"
+symlink_color = "cyan"
+file_color = "fg"

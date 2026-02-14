@@ -1,0 +1,24 @@
+# Hyper — Hyper terminal default dark theme
+# by Vercel
+
+bg = "#000000"
+bg_light = "#0D0D0D"
+fg = "#FFFFFF"
+fg_dim = "#808080"
+
+red = "#FE0100"
+green = "#33FF00"
+yellow = "#FEFF00"
+blue = "#0066FF"
+magenta = "#CC00FF"
+cyan = "#00FFFF"
+orange = "#FF9900"
+
+border_active = "cyan"
+border_inactive = "#222222"
+status_bg = "#000000"
+cursor_line = "#111111"
+
+dir_color = "blue"
+symlink_color = "cyan"
+file_color = "fg"

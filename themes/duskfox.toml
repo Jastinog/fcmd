@@ -1,0 +1,24 @@
+# Duskfox — warm, muted nightfox variant
+# by EdenEast
+
+bg = "#232136"
+bg_light = "#2D2A45"
+fg = "#E0DEF4"
+fg_dim = "#6E6A86"
+
+red = "#EB6F92"
+green = "#A3BE8C"
+yellow = "#F6C177"
+blue = "#569FBA"
+magenta = "#C4A7E7"
+cyan = "#9CCFD8"
+orange = "#EA9A97"
+
+border_active = "magenta"
+border_inactive = "#393552"
+status_bg = "#191726"
+cursor_line = "#2D2A45"
+
+dir_color = "blue"
+symlink_color = "cyan"
+file_color = "fg"

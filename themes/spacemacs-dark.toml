@@ -1,0 +1,24 @@
+# Spacemacs Dark — Spacemacs editor dark theme
+# by Spacemacs
+
+bg = "#292B2E"
+bg_light = "#34373B"
+fg = "#B2B2B2"
+fg_dim = "#585858"
+
+red = "#F2241F"
+green = "#67B11D"
+yellow = "#B1951D"
+blue = "#4F97D7"
+magenta = "#A31DB1"
+cyan = "#2D9574"
+orange = "#FFA500"
+
+border_active = "magenta"
+border_inactive = "#44484A"
+status_bg = "#1E2022"
+cursor_line = "#34373B"
+
+dir_color = "blue"
+symlink_color = "cyan"
+file_color = "fg"

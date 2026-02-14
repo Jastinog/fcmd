@@ -1,0 +1,24 @@
+# Midnight Blue — deep blue midnight theme
+# by custom
+
+bg = "#0C0E1A"
+bg_light = "#131728"
+fg = "#C8D0E8"
+fg_dim = "#4A5070"
+
+red = "#FF6B6B"
+green = "#6BCB77"
+yellow = "#FFD93D"
+blue = "#6C9BFF"
+magenta = "#C78CFF"
+cyan = "#4ECDC4"
+orange = "#FF9F43"
+
+border_active = "blue"
+border_inactive = "#222845"
+status_bg = "#060810"
+cursor_line = "#171C32"
+
+dir_color = "blue"
+symlink_color = "cyan"
+file_color = "fg"

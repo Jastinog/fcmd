@@ -1,0 +1,24 @@
+# Slate — elegant slate gray dark theme
+# by custom
+
+bg = "#1B2230"
+bg_light = "#232C3D"
+fg = "#C8D0DC"
+fg_dim = "#5A6A82"
+
+red = "#E06C75"
+green = "#89CA78"
+yellow = "#D1B276"
+blue = "#5DA5E0"
+magenta = "#C27FD5"
+cyan = "#56BDB8"
+orange = "#D49663"
+
+border_active = "blue"
+border_inactive = "#344050"
+status_bg = "#131924"
+cursor_line = "#232C3D"
+
+dir_color = "blue"
+symlink_color = "cyan"
+file_color = "fg"

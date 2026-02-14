@@ -1,0 +1,24 @@
+# Base16 Default Dark — Chris Kempson's default dark palette
+# by Chris Kempson
+
+bg = "#181818"
+bg_light = "#282828"
+fg = "#D8D8D8"
+fg_dim = "#585858"
+
+red = "#AB4642"
+green = "#A1B56C"
+yellow = "#F7CA88"
+blue = "#7CAFC2"
+magenta = "#BA8BAF"
+cyan = "#86C1B9"
+orange = "#DC9656"
+
+border_active = "blue"
+border_inactive = "#383838"
+status_bg = "#101010"
+cursor_line = "#282828"
+
+dir_color = "blue"
+symlink_color = "cyan"
+file_color = "fg"

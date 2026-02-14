@@ -1,0 +1,24 @@
+# Panda — Panda Syntax dark theme
+# by siamak
+
+bg = "#292A2B"
+bg_light = "#31353A"
+fg = "#E6E6E6"
+fg_dim = "#676B79"
+
+red = "#FF2C6D"
+green = "#19F9D8"
+yellow = "#FFB86C"
+blue = "#45A9F9"
+magenta = "#FF75B5"
+cyan = "#19F9D8"
+orange = "#FFB86C"
+
+border_active = "cyan"
+border_inactive = "#3F4347"
+status_bg = "#1F2021"
+cursor_line = "#31353A"
+
+dir_color = "blue"
+symlink_color = "cyan"
+file_color = "fg"

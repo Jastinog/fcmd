@@ -1,0 +1,24 @@
+# Hacker — Matrix-inspired green-on-black
+# by classic terminal
+
+bg = "#0A0A0A"
+bg_light = "#151515"
+fg = "#15D015"
+fg_dim = "#0D8A0D"
+
+red = "#FF3333"
+green = "#00FF41"
+yellow = "#CCFF00"
+blue = "#00BFFF"
+magenta = "#FF00FF"
+cyan = "#00FF9C"
+orange = "#FF9500"
+
+border_active = "green"
+border_inactive = "#1A3A1A"
+status_bg = "#050505"
+cursor_line = "#0D1F0D"
+
+dir_color = "green"
+symlink_color = "cyan"
+file_color = "fg"

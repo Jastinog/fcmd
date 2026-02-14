@@ -1,0 +1,24 @@
+# Mellow — warm and soothing dark theme
+# by kvrohit
+
+bg = "#161617"
+bg_light = "#1F1F22"
+fg = "#C9C7CD"
+fg_dim = "#57575F"
+
+red = "#F5A191"
+green = "#90B99F"
+yellow = "#E6B99D"
+blue = "#89ACE2"
+magenta = "#ACA1CF"
+cyan = "#99D1DB"
+orange = "#E8B080"
+
+border_active = "blue"
+border_inactive = "#2B2B2F"
+status_bg = "#0E0E0F"
+cursor_line = "#1F1F22"
+
+dir_color = "blue"
+symlink_color = "cyan"
+file_color = "fg"

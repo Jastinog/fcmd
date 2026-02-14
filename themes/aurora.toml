@@ -1,0 +1,24 @@
+# Aurora — northern lights inspired dark theme
+# by custom
+
+bg = "#07090F"
+bg_light = "#0F1319"
+fg = "#D0E0F0"
+fg_dim = "#4A5A70"
+
+red = "#FF5E78"
+green = "#5AF78E"
+yellow = "#F3F99D"
+blue = "#57C7FF"
+magenta = "#FF6AC1"
+cyan = "#9AEDFE"
+orange = "#FF9F43"
+
+border_active = "cyan"
+border_inactive = "#1C2430"
+status_bg = "#030508"
+cursor_line = "#121820"
+
+dir_color = "blue"
+symlink_color = "cyan"
+file_color = "fg"

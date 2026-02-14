@@ -1,0 +1,24 @@
+# Horizon Dark — darker variant of Horizon
+# by jolaleye
+
+bg = "#16161C"
+bg_light = "#1C1C26"
+fg = "#D5D8DA"
+fg_dim = "#6C6F93"
+
+red = "#E95678"
+green = "#29D398"
+yellow = "#FAB795"
+blue = "#26BBD9"
+magenta = "#EE64AC"
+cyan = "#59E3E3"
+orange = "#F09383"
+
+border_active = "red"
+border_inactive = "#2E303E"
+status_bg = "#0E0E14"
+cursor_line = "#1F1F2A"
+
+dir_color = "blue"
+symlink_color = "cyan"
+file_color = "fg"

@@ -1,0 +1,24 @@
+# Lavender — soft lavender-tinted dark theme
+# by custom
+
+bg = "#1A1824"
+bg_light = "#222030"
+fg = "#D8D0E8"
+fg_dim = "#6A6080"
+
+red = "#E87090"
+green = "#80C8A0"
+yellow = "#D8C078"
+blue = "#8098D0"
+magenta = "#B888D0"
+cyan = "#78C0D0"
+orange = "#D0A068"
+
+border_active = "magenta"
+border_inactive = "#332E48"
+status_bg = "#12101A"
+cursor_line = "#262238"
+
+dir_color = "blue"
+symlink_color = "cyan"
+file_color = "fg"

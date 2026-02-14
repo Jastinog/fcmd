@@ -1,0 +1,24 @@
+# Neon — bright neon accents on deep black
+# by custom
+
+bg = "#000000"
+bg_light = "#0D0D0D"
+fg = "#F0F0F0"
+fg_dim = "#555555"
+
+red = "#FF0055"
+green = "#39FF14"
+yellow = "#FFE744"
+blue = "#00D4FF"
+magenta = "#FF44CC"
+cyan = "#00FFCC"
+orange = "#FF8800"
+
+border_active = "cyan"
+border_inactive = "#222222"
+status_bg = "#000000"
+cursor_line = "#111111"
+
+dir_color = "blue"
+symlink_color = "cyan"
+file_color = "fg"

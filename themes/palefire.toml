@@ -1,0 +1,24 @@
+# Palefire — warm pale fire dark theme
+# by custom
+
+bg = "#1A1510"
+bg_light = "#231E18"
+fg = "#D8D0C0"
+fg_dim = "#6A6050"
+
+red = "#D06050"
+green = "#90B868"
+yellow = "#D8B850"
+blue = "#6098B8"
+magenta = "#B880A8"
+cyan = "#60B0A8"
+orange = "#D89848"
+
+border_active = "orange"
+border_inactive = "#3A3228"
+status_bg = "#120E0A"
+cursor_line = "#2A2218"
+
+dir_color = "blue"
+symlink_color = "cyan"
+file_color = "fg"

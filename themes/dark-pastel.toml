@@ -1,0 +1,24 @@
+# Dark Pastel — soft pastel colors on dark background
+# by custom
+
+bg = "#1E1E2E"
+bg_light = "#27273A"
+fg = "#D9E0EE"
+fg_dim = "#585B70"
+
+red = "#F38BA8"
+green = "#A6E3A1"
+yellow = "#F9E2AF"
+blue = "#89B4FA"
+magenta = "#CBA6F7"
+cyan = "#94E2D5"
+orange = "#FAB387"
+
+border_active = "blue"
+border_inactive = "#363A4F"
+status_bg = "#161620"
+cursor_line = "#27273A"
+
+dir_color = "blue"
+symlink_color = "cyan"
+file_color = "fg"

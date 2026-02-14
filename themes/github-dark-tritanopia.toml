@@ -1,0 +1,24 @@
+# GitHub Dark Tritanopia — GitHub dark for tritanopia accessibility
+# by GitHub / Primer
+
+bg = "#0D1117"
+bg_light = "#161B22"
+fg = "#C9D1D9"
+fg_dim = "#484F58"
+
+red = "#FF7B72"
+green = "#3FB950"
+yellow = "#D29922"
+blue = "#58A6FF"
+magenta = "#BC8CFF"
+cyan = "#39D353"
+orange = "#DB6D28"
+
+border_active = "blue"
+border_inactive = "#30363D"
+status_bg = "#010409"
+cursor_line = "#161B22"
+
+dir_color = "blue"
+symlink_color = "cyan"
+file_color = "fg"

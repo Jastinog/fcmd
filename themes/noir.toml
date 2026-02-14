@@ -1,0 +1,24 @@
+# Noir — elegant monochrome dark theme
+# by custom
+
+bg = "#0B0B0B"
+bg_light = "#151515"
+fg = "#D4D4D4"
+fg_dim = "#606060"
+
+red = "#C45A5A"
+green = "#8DB08D"
+yellow = "#C4B078"
+blue = "#7A9EC4"
+magenta = "#A480B0"
+cyan = "#7AB4B4"
+orange = "#C49860"
+
+border_active = "fg"
+border_inactive = "#2A2A2A"
+status_bg = "#050505"
+cursor_line = "#1A1A1A"
+
+dir_color = "blue"
+symlink_color = "cyan"
+file_color = "fg"

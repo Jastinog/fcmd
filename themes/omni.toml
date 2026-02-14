@@ -1,0 +1,24 @@
+# Omni — dark theme with vibrant purples
+# by Rocketseat
+
+bg = "#191622"
+bg_light = "#21202E"
+fg = "#E1E1E6"
+fg_dim = "#615F74"
+
+red = "#FF79C6"
+green = "#67E480"
+yellow = "#E7DE79"
+blue = "#78D1E1"
+magenta = "#988BC7"
+cyan = "#78D1E1"
+orange = "#E89E64"
+
+border_active = "magenta"
+border_inactive = "#332F46"
+status_bg = "#111019"
+cursor_line = "#252233"
+
+dir_color = "blue"
+symlink_color = "cyan"
+file_color = "fg"

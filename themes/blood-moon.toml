@@ -1,0 +1,24 @@
+# Blood Moon — deep red-tinted dark theme
+# by dguo
+
+bg = "#10100E"
+bg_light = "#1C1C1A"
+fg = "#C6C6C4"
+fg_dim = "#5A5A58"
+
+red = "#C34043"
+green = "#789978"
+yellow = "#D9A548"
+blue = "#5F819D"
+magenta = "#9B6886"
+cyan = "#6BA5A1"
+orange = "#D4764E"
+
+border_active = "red"
+border_inactive = "#2E2E2C"
+status_bg = "#080808"
+cursor_line = "#1E1E1C"
+
+dir_color = "blue"
+symlink_color = "cyan"
+file_color = "fg"

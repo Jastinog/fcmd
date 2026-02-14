@@ -1,0 +1,24 @@
+# Radical — retro synthwave dark colorscheme
+# by dharmx
+
+bg = "#141322"
+bg_light = "#1C1B30"
+fg = "#A7C5C2"
+fg_dim = "#506370"
+
+red = "#FF427F"
+green = "#49E9A6"
+yellow = "#E6E354"
+blue = "#3D86F8"
+magenta = "#FF3D81"
+cyan = "#49D6E9"
+orange = "#FC8D3C"
+
+border_active = "magenta"
+border_inactive = "#2A2840"
+status_bg = "#0D0C18"
+cursor_line = "#1F1E32"
+
+dir_color = "blue"
+symlink_color = "cyan"
+file_color = "fg"

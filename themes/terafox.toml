@@ -1,0 +1,24 @@
+# Terafox — earthy nightfox variant
+# by EdenEast
+
+bg = "#152528"
+bg_light = "#1D3337"
+fg = "#E6E6C7"
+fg_dim = "#587B7B"
+
+red = "#E85C51"
+green = "#7AA4A1"
+yellow = "#FDB292"
+blue = "#5A93AA"
+magenta = "#AD5C7C"
+cyan = "#A1CDD8"
+orange = "#FF8349"
+
+border_active = "cyan"
+border_inactive = "#254147"
+status_bg = "#0D1B1E"
+cursor_line = "#1D3337"
+
+dir_color = "blue"
+symlink_color = "cyan"
+file_color = "fg"

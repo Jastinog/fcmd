@@ -1,0 +1,24 @@
+# Seti — Seti UI dark theme for code editors
+# by jesseweed
+
+bg = "#151718"
+bg_light = "#1D1F21"
+fg = "#D4D7D6"
+fg_dim = "#5C6370"
+
+red = "#CD3F45"
+green = "#9FCA56"
+yellow = "#E6CD69"
+blue = "#55B5DB"
+magenta = "#A074C4"
+cyan = "#55DBBE"
+orange = "#D4843E"
+
+border_active = "blue"
+border_inactive = "#2D3135"
+status_bg = "#0D0F10"
+cursor_line = "#1D1F21"
+
+dir_color = "blue"
+symlink_color = "cyan"
+file_color = "fg"

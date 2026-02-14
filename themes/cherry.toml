@@ -1,0 +1,24 @@
+# Cherry — deep cherry red dark theme
+# by custom
+
+bg = "#18080C"
+bg_light = "#201018"
+fg = "#E0C8CC"
+fg_dim = "#705458"
+
+red = "#E04060"
+green = "#80C088"
+yellow = "#D0B868"
+blue = "#6098C0"
+magenta = "#C070A0"
+cyan = "#58B8B0"
+orange = "#D09050"
+
+border_active = "red"
+border_inactive = "#382028"
+status_bg = "#100508"
+cursor_line = "#280E18"
+
+dir_color = "blue"
+symlink_color = "cyan"
+file_color = "fg"
