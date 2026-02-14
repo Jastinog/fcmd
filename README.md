@@ -70,7 +70,9 @@ Yank (`yy`), delete (`dd`), paste (`p`/`P`), rename (`r`), create (`a`). All des
 
 ### 28 Built-In Themes
 
-Cycle themes with `T` or set directly with `:theme <name>`. Includes popular schemes like **catppuccin-mocha**, **tokyo-night**, **gruvbox-dark**, **rose-pine**, **dracula**, **nord**, **kanagawa**, and more. Add custom themes as TOML files.
+![Theme picker](assets/theme-picker.png)
+
+Browse themes with `T` or set directly with `:theme <name>`. Includes popular schemes like **catppuccin-mocha**, **tokyo-night**, **gruvbox-dark**, **rose-pine**, **dracula**, **nord**, **kanagawa**, and more. Add custom themes as TOML files.
 
 ### Git Integration
 
