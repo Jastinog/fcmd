@@ -84,7 +84,9 @@ Auto-detected per-file git status indicators directly in the file list — modif
 
 ### Bookmarks & Marks
 
-`m` sets a colored visual mark (3 severity levels) on the current file. `'a`–`'z` sets named jump marks for quick navigation. All marks persist across sessions.
+![Bookmarks popup](assets/bookmarks.png)
+
+`b` bookmarks the selected directory, `B` opens the bookmarks popup — navigate, add (`a`), delete (`d`), rename (`e`). `m` sets a colored visual mark (3 severity levels) on the current file. `'a`–`'z` sets named jump marks for quick navigation. All marks and bookmarks persist across sessions.
 
 ### Session Persistence
 
@@ -195,6 +197,7 @@ Press `Space` to open a which-key style popup with all available commands:
 | `Space p` | Toggle side preview |
 | `Space d` | Calculate directory sizes |
 | `Space s` | Sort popup |
+| `Space b` | Open bookmarks |
 | `Space ?` | Show help |
 | `Space a` | Select all |
 | `Space n` | Unselect all |
@@ -211,6 +214,9 @@ Press `Space` to open a which-key style popup with all available commands:
 | `:sort <mode>` | Set sort (name/size/modified/created/ext) |
 | `:select <glob>` | Select files matching pattern |
 | `:unselect <glob>` | Unselect files matching pattern |
+| `:bookmark <name>` | Bookmark selected directory |
+| `:brename <old> <new>` | Rename a bookmark |
+| `:bdel <name>` | Delete a bookmark |
 | `:du` | Calculate directory sizes |
 | `:tabnew` / `Ctrl+T` | Open new tab |
 | `:tabclose` / `Ctrl+W` | Close current tab |
