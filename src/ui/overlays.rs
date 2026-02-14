@@ -321,8 +321,8 @@ pub(super) fn render_help(f: &mut Frame, t: &Theme, area: Rect) {
             " Tabs",
             &[
                 ("gt / gT", "Next / Prev tab"),
-                (":tabnew", "New tab"),
-                (":tabclose", "Close tab"),
+                ("Ctrl+t", "New tab"),
+                ("Ctrl+w", "Close tab"),
             ],
         ),
         (

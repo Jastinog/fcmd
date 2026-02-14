@@ -7,6 +7,8 @@ pub struct SavedTab {
     pub left_path: PathBuf,
     pub right_path: PathBuf,
     pub active_side: String, // "left" or "right"
+    pub left_cursor: usize,
+    pub right_cursor: usize,
 }
 
 pub struct Db {
@@ -49,6 +51,17 @@ impl Db {
         if !has_level {
             conn.execute_batch(
                 "ALTER TABLE visual_marks ADD COLUMN level INTEGER NOT NULL DEFAULT 1;",
+            )
+            .ok();
+        }
+        // Migrate: add cursor columns to session_tabs
+        let has_cursor: bool = conn
+            .prepare("SELECT left_cursor FROM session_tabs LIMIT 0")
+            .is_ok();
+        if !has_cursor {
+            conn.execute_batch(
+                "ALTER TABLE session_tabs ADD COLUMN left_cursor INTEGER NOT NULL DEFAULT 0;
+                 ALTER TABLE session_tabs ADD COLUMN right_cursor INTEGER NOT NULL DEFAULT 0;",
             )
             .ok();
         }
@@ -99,12 +112,14 @@ impl Db {
 
         for (i, tab) in tabs.iter().enumerate() {
             tx.execute(
-                "INSERT INTO session_tabs (idx, left_path, right_path, active_side) VALUES (?1, ?2, ?3, ?4)",
+                "INSERT INTO session_tabs (idx, left_path, right_path, active_side, left_cursor, right_cursor) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
                 params![
                     i as i64,
                     tab.left_path.to_string_lossy().as_ref(),
                     tab.right_path.to_string_lossy().as_ref(),
                     tab.active_side,
+                    tab.left_cursor as i64,
+                    tab.right_cursor as i64,
                 ],
             )?;
         }
@@ -214,7 +229,7 @@ impl Db {
 
     pub fn load_session(&self) -> rusqlite::Result<(Vec<SavedTab>, usize)> {
         let mut stmt = self.conn.prepare(
-            "SELECT left_path, right_path, active_side FROM session_tabs ORDER BY idx",
+            "SELECT left_path, right_path, active_side, left_cursor, right_cursor FROM session_tabs ORDER BY idx",
         )?;
         let tabs: Vec<SavedTab> = stmt
             .query_map([], |row| {
@@ -222,6 +237,8 @@ impl Db {
                     left_path: PathBuf::from(row.get::<_, String>(0)?),
                     right_path: PathBuf::from(row.get::<_, String>(1)?),
                     active_side: row.get(2)?,
+                    left_cursor: row.get::<_, i64>(3).unwrap_or(0) as usize,
+                    right_cursor: row.get::<_, i64>(4).unwrap_or(0) as usize,
                 })
             })?
             .filter_map(|r| r.ok())

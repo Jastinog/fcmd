@@ -226,6 +226,8 @@ impl App {
                         };
                         let _ = tab.left.load_dir();
                         let _ = tab.right.load_dir();
+                        tab.left.selected = st.left_cursor.min(tab.left.entries.len().saturating_sub(1));
+                        tab.right.selected = st.right_cursor.min(tab.right.entries.len().saturating_sub(1));
                         tabs.push(tab);
                     }
                     let at = at.min(tabs.len().saturating_sub(1));
@@ -327,6 +329,8 @@ impl App {
                     PanelSide::Left => "left".into(),
                     PanelSide::Right => "right".into(),
                 },
+                left_cursor: t.left.selected,
+                right_cursor: t.right.selected,
             })
             .collect();
         if let Err(e) = db.save_session(&tabs, self.active_tab) {

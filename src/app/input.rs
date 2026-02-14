@@ -72,6 +72,8 @@ impl App {
                 }
             }
             KeyCode::Tab => self.tab_mut().switch_panel(),
+            KeyCode::Char('t') if ctrl => self.new_tab(),
+            KeyCode::Char('w') if ctrl => self.close_tab(),
 
             // Pending key sequences
             KeyCode::Char('g') => { self.pending_key = Some('g'); self.pending_key_time = Some(Instant::now()); },
