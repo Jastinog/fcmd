@@ -74,6 +74,8 @@ Cycle themes with `T` or set directly with `:theme <name>`. Includes popular sch
 
 ### Git Integration
 
+![Git status indicators](assets/git-status.png)
+
 Auto-detected per-file git status indicators directly in the file list — modified, staged, untracked, and more.
 
 ### Bookmarks & Marks
