@@ -21,11 +21,7 @@ pub(super) fn render_status(f: &mut Frame, app: &App, area: Rect) {
         area,
     );
 
-    // Input modes (Search / Command) get special treatment
-    if app.mode == Mode::Search {
-        render_status_input(f, area, "/", &app.search_query, t.blue, t);
-        return;
-    }
+    // Input modes — Command stays in status bar, Search moved to popup overlay
     if app.mode == Mode::Command {
         render_status_input(f, area, ":", &app.command_input, t.green, t);
         return;
