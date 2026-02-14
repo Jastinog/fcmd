@@ -132,6 +132,8 @@ impl App {
                     panel.marked.clear();
                     if let Err(e) = panel.load_dir() {
                         self.status_message = format!("cd: {e}");
+                    } else {
+                        self.apply_dir_sort();
                     }
                 } else {
                     self.status_message = format!("Not a directory: {path_str}");

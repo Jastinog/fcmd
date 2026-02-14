@@ -89,6 +89,8 @@ impl App {
                 panel.marked.clear();
                 if let Err(e) = panel.load_dir() {
                     self.status_message = format!("Mark error: {e}");
+                } else {
+                    self.apply_dir_sort();
                 }
             } else {
                 self.status_message = format!("Mark '{c}' directory no longer exists");
@@ -111,6 +113,7 @@ impl App {
                 let mode = SortMode::ALL[self.sort_cursor];
                 self.active_panel_mut().sort_mode = mode;
                 self.reload_active_panel();
+                self.save_current_sort();
                 let arrow = if self.active_panel().sort_reverse { "\u{2191}" } else { "\u{2193}" };
                 self.status_message = format!("Sort: {}{arrow}", mode.label());
                 self.mode = Mode::Normal;
@@ -119,6 +122,7 @@ impl App {
                 let rev = !self.active_panel().sort_reverse;
                 self.active_panel_mut().sort_reverse = rev;
                 self.reload_active_panel();
+                self.save_current_sort();
             }
             KeyCode::Esc | KeyCode::Char('q') => {
                 self.mode = Mode::Normal;

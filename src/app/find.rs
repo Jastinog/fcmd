@@ -93,6 +93,7 @@ impl App {
             panel.offset = 0;
             panel.marked.clear();
             let _ = panel.load_dir();
+            self.apply_dir_sort();
         } else if let Some(parent) = path.parent() {
             let name = path
                 .file_name()
@@ -103,8 +104,9 @@ impl App {
             panel.offset = 0;
             panel.marked.clear();
             let _ = panel.load_dir();
+            self.apply_dir_sort();
             if let Some(name) = name {
-                panel.select_by_name(&name);
+                self.active_panel_mut().select_by_name(&name);
             }
         }
     }

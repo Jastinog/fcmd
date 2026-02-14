@@ -35,6 +35,11 @@ impl Db {
              CREATE TABLE IF NOT EXISTS dir_sizes (
                  path TEXT PRIMARY KEY,
                  size_bytes INTEGER NOT NULL
+             );
+             CREATE TABLE IF NOT EXISTS dir_sort (
+                 path TEXT PRIMARY KEY,
+                 sort_mode TEXT NOT NULL,
+                 sort_reverse INTEGER NOT NULL DEFAULT 0
              );",
         )?;
         // Migrate: add level column if missing
@@ -159,6 +164,49 @@ impl Db {
         for row in rows {
             if let Ok((p, s)) = row {
                 map.insert(p, s);
+            }
+        }
+        Ok(map)
+    }
+
+    // --- Per-directory sort persistence ---
+
+    pub fn save_dir_sort(&self, path: &Path, mode_label: &str, reverse: bool) -> rusqlite::Result<()> {
+        if mode_label == "name" && !reverse {
+            // Default sort — remove row to keep table clean
+            self.conn.execute(
+                "DELETE FROM dir_sort WHERE path = ?1",
+                params![path.to_string_lossy().as_ref()],
+            )?;
+        } else {
+            self.conn.execute(
+                "INSERT OR REPLACE INTO dir_sort (path, sort_mode, sort_reverse) VALUES (?1, ?2, ?3)",
+                params![path.to_string_lossy().as_ref(), mode_label, reverse as i32],
+            )?;
+        }
+        Ok(())
+    }
+
+    pub fn remove_dir_sort(&self, path: &Path) -> rusqlite::Result<()> {
+        self.conn.execute(
+            "DELETE FROM dir_sort WHERE path = ?1",
+            params![path.to_string_lossy().as_ref()],
+        )?;
+        Ok(())
+    }
+
+    pub fn load_dir_sorts(&self) -> rusqlite::Result<HashMap<PathBuf, (String, bool)>> {
+        let mut stmt = self.conn.prepare("SELECT path, sort_mode, sort_reverse FROM dir_sort")?;
+        let rows = stmt.query_map([], |row| {
+            let p: String = row.get(0)?;
+            let m: String = row.get(1)?;
+            let r: i32 = row.get(2)?;
+            Ok((PathBuf::from(p), (m, r != 0)))
+        })?;
+        let mut map = HashMap::new();
+        for row in rows {
+            if let Ok((p, mr)) = row {
+                map.insert(p, mr);
             }
         }
         Ok(map)

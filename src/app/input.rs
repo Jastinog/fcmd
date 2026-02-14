@@ -53,16 +53,22 @@ impl App {
                     self.mode = Mode::Preview;
                 } else if let Err(e) = self.active_panel_mut().enter_selected() {
                     self.status_message = format!("Error: {e}");
+                } else {
+                    self.apply_dir_sort();
                 }
             }
             KeyCode::Char('h') | KeyCode::Left | KeyCode::Backspace | KeyCode::Char('-') => {
                 if let Err(e) = self.active_panel_mut().go_parent() {
                     self.status_message = format!("Error: {e}");
+                } else {
+                    self.apply_dir_sort();
                 }
             }
             KeyCode::Char('~') => {
                 if let Err(e) = self.active_panel_mut().go_home() {
                     self.status_message = format!("Error: {e}");
+                } else {
+                    self.apply_dir_sort();
                 }
             }
             KeyCode::Tab => self.tab_mut().switch_panel(),

@@ -86,6 +86,7 @@ impl App {
                 panel.offset = 0;
                 panel.marked.clear();
                 let _ = panel.load_dir();
+                self.apply_dir_sort();
                 self.rebuild_tree();
                 if let Some(idx) = self.tree_data.iter().position(|l| l.is_current) {
                     self.tree_selected = idx;
@@ -101,8 +102,9 @@ impl App {
                 panel.offset = 0;
                 panel.marked.clear();
                 let _ = panel.load_dir();
+                self.apply_dir_sort();
                 if let Some(name) = file_name {
-                    panel.select_by_name(&name);
+                    self.active_panel_mut().select_by_name(&name);
                 }
                 self.rebuild_tree();
                 if let Some(idx) = self.tree_data.iter().position(|l| l.is_current) {

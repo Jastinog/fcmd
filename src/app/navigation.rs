@@ -149,6 +149,7 @@ impl App {
         let rev = !self.active_panel().sort_reverse;
         self.active_panel_mut().sort_reverse = rev;
         self.reload_active_panel();
+        self.save_current_sort();
         let arrow = if rev { "\u{2191}" } else { "\u{2193}" };
         let label = self.active_panel().sort_mode.label();
         self.status_message = format!("Sort: {label}{arrow}");
@@ -157,7 +158,40 @@ impl App {
     pub(super) fn set_sort(&mut self, mode: SortMode) {
         self.active_panel_mut().sort_mode = mode;
         self.reload_active_panel();
+        self.save_current_sort();
         self.status_message = format!("Sort: {}", mode.label());
+    }
+
+    pub(super) fn save_current_sort(&mut self) {
+        let path = self.active_panel().path.clone();
+        let mode = self.active_panel().sort_mode;
+        let rev = self.active_panel().sort_reverse;
+        if mode == SortMode::Name && !rev {
+            self.dir_sorts.remove(&path);
+        } else {
+            self.dir_sorts.insert(path.clone(), (mode, rev));
+        }
+        if let Some(ref db) = self.db {
+            let _ = db.save_dir_sort(&path, mode.label(), rev);
+        }
+    }
+
+    pub(super) fn apply_dir_sort(&mut self) {
+        let tab = &mut self.tabs[self.active_tab];
+        let panel = match tab.active {
+            PanelSide::Left => &mut tab.left,
+            PanelSide::Right => &mut tab.right,
+        };
+        let (new_mode, new_rev) = self
+            .dir_sorts
+            .get(&panel.path)
+            .copied()
+            .unwrap_or((SortMode::Name, false));
+        if panel.sort_mode != new_mode || panel.sort_reverse != new_rev {
+            panel.sort_mode = new_mode;
+            panel.sort_reverse = new_rev;
+            let _ = panel.load_dir_with_sizes(&self.dir_sizes);
+        }
     }
 
     pub(super) fn refresh_current_panel(&mut self) {

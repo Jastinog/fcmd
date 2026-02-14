@@ -163,6 +163,8 @@ pub struct App {
     pub theme: Theme,
     pub theme_list: Vec<String>,
     pub theme_index: Option<usize>,
+    // Per-directory sort preferences
+    pub dir_sorts: HashMap<PathBuf, (SortMode, bool)>,
     // Sort popup
     pub sort_cursor: usize,
     // Git status
@@ -175,14 +177,21 @@ impl App {
     pub fn new() -> std::io::Result<Self> {
         let cwd = std::env::current_dir()?;
 
-        let (db, visual_marks) = match crate::db::Db::init() {
+        let (db, visual_marks, dir_sorts) = match crate::db::Db::init() {
             Ok(db) => {
                 let marks = db.load_visual_marks().unwrap_or_default();
-                (Some(db), marks)
+                let raw_sorts = db.load_dir_sorts().unwrap_or_default();
+                let dir_sorts: HashMap<PathBuf, (SortMode, bool)> = raw_sorts
+                    .into_iter()
+                    .filter_map(|(p, (label, rev))| {
+                        SortMode::from_label(&label).map(|m| (p, (m, rev)))
+                    })
+                    .collect();
+                (Some(db), marks, dir_sorts)
             }
             Err(e) => {
                 eprintln!("Warning: DB init failed: {e}");
-                (None, HashMap::new())
+                (None, HashMap::new(), HashMap::new())
             }
         };
 
@@ -266,6 +275,7 @@ impl App {
             start_dir: cwd,
             tree_data: Vec::new(),
             visual_marks,
+            dir_sorts,
             db,
             paste_progress: None,
             dir_sizes: HashMap::new(),
@@ -283,6 +293,18 @@ impl App {
             git_status_dir: None,
         };
         app.refresh_git_status();
+        // Apply saved sort preferences to restored panels
+        for tab in &mut app.tabs {
+            for panel in [&mut tab.left, &mut tab.right] {
+                if let Some(&(mode, rev)) = app.dir_sorts.get(&panel.path) {
+                    if panel.sort_mode != mode || panel.sort_reverse != rev {
+                        panel.sort_mode = mode;
+                        panel.sort_reverse = rev;
+                        let _ = panel.load_dir();
+                    }
+                }
+            }
+        }
         Ok(app)
     }
 

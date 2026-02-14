@@ -40,6 +40,17 @@ impl SortMode {
             SortMode::Extension => "ext",
         }
     }
+
+    pub fn from_label(s: &str) -> Option<SortMode> {
+        match s {
+            "name" => Some(SortMode::Name),
+            "size" => Some(SortMode::Size),
+            "mod" => Some(SortMode::Modified),
+            "cre" => Some(SortMode::Created),
+            "ext" => Some(SortMode::Extension),
+            _ => None,
+        }
+    }
 }
 
 pub struct Panel {
