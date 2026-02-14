@@ -20,9 +20,9 @@ impl App {
         match key.code {
             KeyCode::Char('q') => self.should_quit = true,
 
-            // Selection with Shift+arrows
-            KeyCode::Down if shift => self.active_panel_mut().toggle_mark(),
-            KeyCode::Up if shift => self.active_panel_mut().toggle_mark_up(),
+            // Selection with Shift+arrows → enters Select mode
+            KeyCode::Down if shift => self.enter_select_and_mark(),
+            KeyCode::Up if shift => self.enter_select_and_mark_up(),
 
             // Focus & navigation
             KeyCode::Char('l') if ctrl => self.focus_next(),

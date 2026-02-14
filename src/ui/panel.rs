@@ -129,6 +129,9 @@ pub(super) fn render_panel(
             } else if in_visual && is_active {
                 let base = Style::default().bg(t.magenta).fg(t.bg);
                 (base, base, base)
+            } else if is_marked && ctx.is_select_mode && is_active {
+                let base = Style::default().bg(t.orange).fg(t.bg);
+                (base, base, base)
             } else if is_marked {
                 let base = Style::default().fg(t.green);
                 (base, base, base)
@@ -163,6 +166,8 @@ pub(super) fn render_panel(
                 Some(t.blue)
             } else if in_visual && is_active {
                 Some(t.magenta)
+            } else if is_marked && ctx.is_select_mode && is_active {
+                Some(t.orange)
             } else if is_cursor {
                 Some(t.cursor_line)
             } else {

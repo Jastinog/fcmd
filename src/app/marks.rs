@@ -128,12 +128,20 @@ impl App {
 
     pub(super) fn handle_confirm(&mut self, key: KeyEvent) {
         match key.code {
-            KeyCode::Char('y') | KeyCode::Char('Y') => {
+            KeyCode::Char('y') | KeyCode::Char('Y') | KeyCode::Enter => {
                 self.execute_delete();
                 self.mode = Mode::Normal;
             }
+            KeyCode::Char('j') | KeyCode::Down => {
+                let max = self.confirm_paths.len().saturating_sub(1);
+                self.confirm_scroll = (self.confirm_scroll + 1).min(max);
+            }
+            KeyCode::Char('k') | KeyCode::Up => {
+                self.confirm_scroll = self.confirm_scroll.saturating_sub(1);
+            }
             _ => {
                 self.confirm_paths.clear();
+                self.confirm_scroll = 0;
                 self.mode = Mode::Normal;
                 self.status_message = "Cancelled".into();
             }

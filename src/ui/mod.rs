@@ -31,6 +31,7 @@ pub struct RenderContext<'a> {
     pub register: Option<&'a Register>,
     pub git_statuses: &'a HashMap<PathBuf, char>,
     pub theme: &'a Theme,
+    pub is_select_mode: bool,
 }
 
 // ── Main render ─────────────────────────────────────────────────────
@@ -144,6 +145,7 @@ pub fn render(f: &mut Frame, app: &mut App) {
         register: app.register.as_ref(),
         git_statuses: &app.git_statuses,
         theme: &app.theme,
+        is_select_mode: app.mode == Mode::Select,
     };
 
     let panels_active = !app.tree_focused;
@@ -196,6 +198,10 @@ pub fn render(f: &mut Frame, app: &mut App) {
 
     if app.mode == Mode::Search {
         overlays::render_search_popup(f, app, full_area);
+    }
+
+    if app.mode == Mode::Confirm {
+        overlays::render_confirm_popup(f, app, full_area);
     }
 
     if let Some(ref fs) = app.find_state {

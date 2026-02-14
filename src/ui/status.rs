@@ -27,19 +27,8 @@ pub(super) fn render_status(f: &mut Frame, app: &App, area: Rect) {
         return;
     }
 
-    // Confirm mode
+    // Confirm mode — overlay handles the popup, status bar shows mode
     if app.mode == Mode::Confirm {
-        let n = app.confirm_paths.len();
-        let msg = if n == 1 {
-            let name = app.confirm_paths[0]
-                .file_name()
-                .map(|n| n.to_string_lossy().into_owned())
-                .unwrap_or_default();
-            format!(" 󰗨 Delete \"{name}\"? [y/N] ")
-        } else {
-            format!(" 󰗨 Delete {n} items? [y/N] ")
-        };
-
         let mut spans = vec![
             Span::styled(
                 " 󰗨 CONFIRM ",
@@ -47,11 +36,9 @@ pub(super) fn render_status(f: &mut Frame, app: &App, area: Rect) {
                     .fg(t.bg)
                     .bg(t.red),
             ),
-            Span::styled(SEP_RIGHT, Style::default().fg(t.red).bg(t.bg_light)),
-            Span::styled(msg, Style::default().fg(t.red).bg(t.bg_light)),
+            Span::styled(SEP_RIGHT, Style::default().fg(t.red).bg(t.status_bg)),
         ];
 
-        // Fill remaining
         let used: usize = spans.iter().map(|s| s.content.chars().count()).sum();
         let remaining = (area.width as usize).saturating_sub(used);
         if remaining > 0 {
@@ -73,8 +60,9 @@ pub(super) fn render_status(f: &mut Frame, app: &App, area: Rect) {
         (" TREE", t.cyan)
     } else {
         match app.mode {
-            Mode::Normal => (" NORMAL", t.green),
+            Mode::Normal => ("󰆍 NORMAL", t.green),
             Mode::Visual => ("󰒉 VISUAL", t.magenta),
+            Mode::Select => ("󰄵 SELECT", t.orange),
             Mode::Find => (" FIND", t.cyan),
             Mode::Help => ("󰋖 HELP", t.cyan),
             _ => ("", t.fg_dim),
@@ -171,6 +159,9 @@ pub(super) fn render_status(f: &mut Frame, app: &App, area: Rect) {
         format!(" {} ", app.status_message)
     } else if app.mode == Mode::Visual {
         let count = panel.targeted_count();
+        format!("  {count} selected ")
+    } else if app.mode == Mode::Select {
+        let count = panel.marked.len();
         format!("  {count} selected ")
     } else if !panel.marked.is_empty() {
         let count = panel.marked.len();

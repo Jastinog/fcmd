@@ -267,50 +267,45 @@ impl Panel {
         })
     }
 
-    /// Paths of currently "targeted" entries: marked > visual range > single selected.
-    /// Filters out "..".
+    /// Paths of currently "targeted" entries.
+    /// Priority: marks > visual range > single selected. Filters out "..".
     pub fn targeted_paths(&self) -> Vec<PathBuf> {
         if !self.marked.is_empty() {
-            return self.entries
+            self.entries
                 .iter()
                 .filter(|e| e.name != ".." && self.marked.contains(&e.path))
                 .map(|e| e.path.clone())
-                .collect();
-        }
-        match self.visual_range() {
-            Some((lo, hi)) => self.entries[lo..=hi]
+                .collect()
+        } else if let Some((lo, hi)) = self.visual_range() {
+            self.entries[lo..=hi]
                 .iter()
                 .filter(|e| e.name != "..")
                 .map(|e| e.path.clone())
-                .collect(),
-            None => self
-                .selected_entry()
+                .collect()
+        } else {
+            self.selected_entry()
                 .filter(|e| e.name != "..")
                 .map(|e| vec![e.path.clone()])
-                .unwrap_or_default(),
+                .unwrap_or_default()
         }
     }
 
     /// Number of targeted entries (for status display).
     pub fn targeted_count(&self) -> usize {
         if !self.marked.is_empty() {
-            return self.entries
+            self.entries
                 .iter()
                 .filter(|e| e.name != ".." && self.marked.contains(&e.path))
-                .count();
-        }
-        match self.visual_range() {
-            Some((lo, hi)) => self.entries[lo..=hi]
+                .count()
+        } else if let Some((lo, hi)) = self.visual_range() {
+            self.entries[lo..=hi]
                 .iter()
                 .filter(|e| e.name != "..")
-                .count(),
-            None => {
-                if self.selected_entry().is_some_and(|e| e.name != "..") {
-                    1
-                } else {
-                    0
-                }
-            }
+                .count()
+        } else if self.selected_entry().is_some_and(|e| e.name != "..") {
+            1
+        } else {
+            0
         }
     }
 

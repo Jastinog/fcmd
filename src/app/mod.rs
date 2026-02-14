@@ -46,6 +46,7 @@ pub struct DuProgress {
 pub enum Mode {
     Normal,
     Visual,
+    Select,
     Command,
     Confirm,
     Search,
@@ -120,6 +121,7 @@ pub struct App {
     pub register: Option<Register>,
     pub undo_stack: UndoStack,
     pub confirm_paths: Vec<PathBuf>,
+    pub confirm_scroll: usize,
     // Search
     pub search_query: String,
     pub search_saved_cursor: usize,
@@ -241,6 +243,7 @@ impl App {
             register: None,
             undo_stack: UndoStack::new(),
             confirm_paths: Vec::new(),
+            confirm_scroll: 0,
             search_query: String::new(),
             search_saved_cursor: 0,
             marks: HashMap::new(),
@@ -327,6 +330,7 @@ impl App {
         match self.mode {
             Mode::Normal => self.handle_normal(key),
             Mode::Visual => self.handle_visual(key),
+            Mode::Select => self.handle_select(key),
             Mode::Command => self.handle_command(key),
             Mode::Confirm => self.handle_confirm(key),
             Mode::Search => self.handle_search(key),

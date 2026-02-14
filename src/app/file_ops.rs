@@ -17,11 +17,16 @@ impl App {
 
     pub(super) fn request_delete(&mut self) {
         let paths = self.active_panel().targeted_paths();
+        self.request_delete_paths(paths);
+    }
+
+    pub(super) fn request_delete_paths(&mut self, paths: Vec<std::path::PathBuf>) {
         if paths.is_empty() {
             self.status_message = "Nothing to delete".into();
             return;
         }
         self.confirm_paths = paths;
+        self.confirm_scroll = 0;
         self.mode = Mode::Confirm;
     }
 
