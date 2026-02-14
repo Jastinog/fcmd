@@ -173,16 +173,8 @@ pub(super) fn render_panel(
             } else {
                 None
             };
-            let sign_text = if in_reg {
-                "\u{258e}"
-            } else {
-                " "
-            };
-            let mut sign_style = if let Some(c) = reg_color {
-                Style::default().fg(c)
-            } else {
-                Style::default()
-            };
+            let sign_text = " ";
+            let mut sign_style = Style::default();
             if let Some(bg) = row_bg {
                 sign_style = sign_style.bg(bg);
             }

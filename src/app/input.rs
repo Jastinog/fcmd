@@ -19,6 +19,10 @@ impl App {
 
         match key.code {
             KeyCode::Char('q') => self.should_quit = true,
+            KeyCode::Esc => {
+                self.register = None;
+                self.active_panel_mut().marked.clear();
+            }
 
             // Selection with Shift+arrows → enters Select mode
             KeyCode::Down if shift => self.enter_select_and_mark(),

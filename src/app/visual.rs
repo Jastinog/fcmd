@@ -123,6 +123,7 @@ impl App {
 
             KeyCode::Char('y') => {
                 let paths = self.active_panel().targeted_paths();
+                self.active_panel_mut().marked.clear();
                 self.exit_select();
                 if paths.is_empty() {
                     self.status_message = "Nothing to yank".into();
@@ -137,7 +138,6 @@ impl App {
             }
             KeyCode::Char('d') | KeyCode::Char('D') => {
                 let paths = self.active_panel().targeted_paths();
-                self.exit_select();
                 self.request_delete_paths(paths);
             }
 

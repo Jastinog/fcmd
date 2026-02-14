@@ -131,6 +131,7 @@ impl App {
         match key.code {
             KeyCode::Char('y') | KeyCode::Char('Y') | KeyCode::Enter => {
                 self.execute_delete();
+                self.active_panel_mut().marked.clear();
                 self.mode = Mode::Normal;
             }
             KeyCode::Char('j') | KeyCode::Down => {
@@ -143,7 +144,12 @@ impl App {
             _ => {
                 self.confirm_paths.clear();
                 self.confirm_scroll = 0;
-                self.mode = Mode::Normal;
+                // Return to Select mode if marks exist, otherwise Normal
+                if self.active_panel().marked.is_empty() {
+                    self.mode = Mode::Normal;
+                } else {
+                    self.mode = Mode::Select;
+                }
                 self.status_message = "Cancelled".into();
             }
         }

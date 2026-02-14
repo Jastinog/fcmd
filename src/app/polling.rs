@@ -106,9 +106,7 @@ impl App {
                     format!("{verb} {n} item(s), {size} in {dur}");
             }
 
-            if op == RegisterOp::Cut {
-                self.register = None;
-            }
+            self.register = None;
 
             self.paste_progress = None;
             self.refresh_panels();
