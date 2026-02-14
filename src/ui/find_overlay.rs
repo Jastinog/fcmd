@@ -17,8 +17,8 @@ pub(super) fn render_find(f: &mut Frame, fs: &FindState, t: &Theme, area: Rect) 
     f.render_widget(Clear, popup);
 
     let scope_label = match fs.scope {
-        FindScope::Local => "Local",
-        FindScope::Global => "Global",
+        FindScope::Local => "󰉋 Local",
+        FindScope::Global => "󰖟 Global",
     };
     let scope_color = match fs.scope {
         FindScope::Local => t.cyan,
@@ -60,14 +60,31 @@ pub(super) fn render_find(f: &mut Frame, fs: &FindState, t: &Theme, area: Rect) 
 
     // === LEFT SIDE: input + separator + results + hint ===
 
-    // Input line
+    // Input line (unified cursor-block style)
     let input_area = Rect::new(left_x, inner.y, left_w, 1);
-    let input_text = format!("> {}", fs.query);
-    let input = Paragraph::new(Line::from(Span::styled(
-        input_text,
-        Style::default().fg(t.green),
-    )));
-    f.render_widget(input, input_area);
+    let lw = left_w as usize;
+    let prefix = " \u{276f} ";
+    let prefix_len = prefix.chars().count();
+    let field_w = lw.saturating_sub(prefix_len);
+    let input = &fs.query;
+    let (visible_input, cursor_pos) = if input.len() < field_w {
+        (input.as_str(), input.len())
+    } else {
+        let start = input.len() + 1 - field_w;
+        (&input[start..], field_w - 1)
+    };
+    let before: String = visible_input.chars().take(cursor_pos).collect();
+    let after: String = visible_input.chars().skip(cursor_pos).collect();
+    let used_input = prefix_len + before.chars().count() + 1 + after.chars().count();
+    let pad_input = lw.saturating_sub(used_input);
+    let input_line = Line::from(vec![
+        Span::styled(prefix, Style::default().fg(scope_color)),
+        Span::styled(before, Style::default().fg(t.fg).bg(t.bg_light)),
+        Span::styled("\u{2588}", Style::default().fg(scope_color).bg(t.bg_light)),
+        Span::styled(after, Style::default().fg(t.fg).bg(t.bg_light)),
+        Span::styled(" ".repeat(pad_input), Style::default().bg(t.bg_light)),
+    ]);
+    f.render_widget(Paragraph::new(input_line), input_area);
 
     // Separator
     let sep_area = Rect::new(left_x, inner.y + 1, left_w, 1);
@@ -86,7 +103,7 @@ pub(super) fn render_find(f: &mut Frame, fs: &FindState, t: &Theme, area: Rect) 
     // Placeholders for global search
     if fs.scope == FindScope::Global && fs.query.is_empty() {
         let placeholder = Paragraph::new(Line::from(Span::styled(
-            "  Type to search...",
+            "  󰍉 Type to search...",
             Style::default().fg(t.fg_dim),
         )));
         f.render_widget(placeholder, results_area);
@@ -162,10 +179,12 @@ pub(super) fn render_find(f: &mut Frame, fs: &FindState, t: &Theme, area: Rect) 
     let hint_y = inner.y + inner.height.saturating_sub(1);
     let hint_area = Rect::new(left_x, hint_y, left_w, 1);
     let mut hint_spans = vec![
-        Span::styled(" Tab", Style::default().fg(scope_color)),
-        Span::styled(": scope \u{2502} ", Style::default().fg(t.fg_dim)),
-        Span::styled("Esc", Style::default().fg(scope_color)),
-        Span::styled(": close", Style::default().fg(t.fg_dim)),
+        Span::styled(" \u{23ce}", Style::default().fg(scope_color)),
+        Span::styled(" open  ", Style::default().fg(t.fg_dim)),
+        Span::styled("tab", Style::default().fg(scope_color)),
+        Span::styled(" scope  ", Style::default().fg(t.fg_dim)),
+        Span::styled("esc", Style::default().fg(scope_color)),
+        Span::styled(" close", Style::default().fg(t.fg_dim)),
     ];
     // Show search progress on the right side of the hint bar
     if fs.scope == FindScope::Global && !fs.query.is_empty() {
@@ -201,7 +220,7 @@ pub(super) fn render_find(f: &mut Frame, fs: &FindState, t: &Theme, area: Rect) 
     match &fs.find_preview {
         Some(p) => {
             // Preview title
-            let preview_title = format!(" {} [{}] ", p.title, p.info);
+            let preview_title = format!(" 󰈈 {} [{}] ", p.title, p.info);
             let title_chars: Vec<char> = preview_title.chars().collect();
             let title_display = if title_chars.len() > right_w as usize {
                 let truncated: String = title_chars[..right_w.saturating_sub(2) as usize].iter().collect();
@@ -255,7 +274,7 @@ pub(super) fn render_find(f: &mut Frame, fs: &FindState, t: &Theme, area: Rect) 
             // No preview placeholder
             let center_y = inner.y + inner.height / 2;
             let placeholder_area = Rect::new(right_x, center_y, right_w, 1);
-            let text = "No preview";
+            let text = "󰈈 No preview";
             let pad = (right_w as usize).saturating_sub(text.len()) / 2;
             f.render_widget(
                 Paragraph::new(Line::from(Span::styled(

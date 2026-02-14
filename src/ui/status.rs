@@ -42,7 +42,7 @@ pub(super) fn render_status(f: &mut Frame, app: &App, area: Rect) {
 
         let mut spans = vec![
             Span::styled(
-                " CONFIRM ",
+                " 󰗨 CONFIRM ",
                 Style::default()
                     .fg(t.bg)
                     .bg(t.red),
@@ -70,13 +70,13 @@ pub(super) fn render_status(f: &mut Frame, app: &App, area: Rect) {
 
     // ── Mode segment ────────────────
     let (mode_str, mode_bg) = if app.tree_focused && app.mode == Mode::Normal {
-        ("TREE", t.cyan)
+        (" TREE", t.cyan)
     } else {
         match app.mode {
-            Mode::Normal => ("NORMAL", t.green),
-            Mode::Visual => ("VISUAL", t.magenta),
-            Mode::Find => ("FIND", t.cyan),
-            Mode::Help => ("HELP", t.cyan),
+            Mode::Normal => (" NORMAL", t.green),
+            Mode::Visual => ("󰒉 VISUAL", t.magenta),
+            Mode::Find => (" FIND", t.cyan),
+            Mode::Help => ("󰋖 HELP", t.cyan),
             _ => ("", t.fg_dim),
         }
     };
@@ -230,7 +230,7 @@ pub(super) fn render_status(f: &mut Frame, app: &App, area: Rect) {
 }
 
 fn render_status_input(f: &mut Frame, area: Rect, prefix: &str, input: &str, accent: Color, t: &Theme) {
-    let label = if prefix == "/" { " SEARCH " } else { " CMD " };
+    let label = if prefix == "/" { " 󰍉 SEARCH " } else { "  CMD " };
 
     let mut spans = vec![
         Span::styled(

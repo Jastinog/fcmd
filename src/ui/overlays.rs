@@ -253,7 +253,7 @@ pub(super) fn render_help(f: &mut Frame, t: &Theme, area: Rect) {
     let block = Block::default()
         .borders(Borders::ALL)
         .border_style(Style::default().fg(t.cyan))
-        .title(" 󰋖 Help \u{2014} press any key to close ")
+        .title(" 󰋖 Help ")
         .title_style(Style::default().fg(t.cyan));
 
     let inner = block.inner(popup);
@@ -334,6 +334,7 @@ pub(super) fn render_help(f: &mut Frame, t: &Theme, area: Rect) {
         ),
     ];
 
+    let iw = inner.width as usize;
     let mut lines: Vec<ListItem> = Vec::new();
     for (section, keys) in help {
         if !lines.is_empty() {
@@ -356,9 +357,30 @@ pub(super) fn render_help(f: &mut Frame, t: &Theme, area: Rect) {
         }
     }
 
-    let visible = inner.height as usize;
-    let items: Vec<ListItem> = lines.into_iter().take(visible).collect();
-    f.render_widget(List::new(items), inner);
+    let list_height = inner.height.saturating_sub(2) as usize;
+    let items: Vec<ListItem> = lines.into_iter().take(list_height).collect();
+    let list_area = Rect::new(inner.x, inner.y, inner.width, list_height as u16);
+    f.render_widget(List::new(items), list_area);
+
+    // Separator
+    let sep_y = inner.y + list_height as u16;
+    let sep_area = Rect::new(inner.x, sep_y, inner.width, 1);
+    f.render_widget(
+        Paragraph::new(Line::from(Span::styled(
+            "\u{2500}".repeat(iw),
+            Style::default().fg(t.border_inactive),
+        ))),
+        sep_area,
+    );
+
+    // Hint line
+    let hint_line = Line::from(vec![
+        Span::styled(" esc", Style::default().fg(t.cyan)),
+        Span::styled(" close", Style::default().fg(t.fg_dim)),
+    ]);
+    let hint_y = inner.y + inner.height.saturating_sub(1);
+    let hint_area = Rect::new(inner.x, hint_y, inner.width, 1);
+    f.render_widget(Paragraph::new(hint_line), hint_area);
 }
 
 pub(super) fn render_input_popup(f: &mut Frame, app: &App, area: Rect) {
