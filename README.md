@@ -70,11 +70,11 @@ Yank (`yy`), delete (`dd`), paste (`p`/`P`), rename (`r`), create (`a`). All des
 
 `Ctrl+T` creates a new tab, `Ctrl+W` closes it, `gt`/`gT` switches between them. Each tab has its own pair of panels and state. Session restores all tabs on next launch.
 
-### 28 Built-In Themes
+### 166 Built-In Dark Themes
 
 ![Theme picker](assets/theme-picker.png)
 
-Browse themes with `T` or set directly with `:theme <name>`. Includes popular schemes like **catppuccin-mocha**, **tokyo-night**, **gruvbox-dark**, **rose-pine**, **dracula**, **nord**, **kanagawa**, and more. Add custom themes as TOML files.
+Browse themes with `T` or set directly with `:theme <name>`. Includes popular schemes like **catppuccin-mocha**, **tokyo-night**, **gruvbox-dark**, **rose-pine**, **dracula**, **nord**, **kanagawa**, and many more. Add custom themes as TOML files.
 
 ### Git Integration
 
@@ -91,6 +91,8 @@ Auto-detected per-file git status indicators directly in the file list — modif
 ### Session Persistence
 
 Tabs, paths, cursor positions, theme, sort modes, and visual marks are saved automatically in a local SQLite database and restored on next launch.
+
+---
 
 ## Installation
 
@@ -119,6 +121,8 @@ cargo install --path .
 - **Rust** (2024 edition) for building
 - A [**Nerd Font**](https://www.nerdfonts.com/) for icons to render correctly
 - macOS for global find (`mdfind`); local find works on all platforms
+
+---
 
 ## Keybindings
 
@@ -184,7 +188,17 @@ cargo install --path .
 | `Space ,` | Find local (alternative) |
 | `Space .` | Find global (alternative) |
 
-### Space Leader
+### Sort Shortcuts
+
+| Key | Mode |
+|-----|------|
+| `sn` | Sort by name |
+| `ss` | Sort by size |
+| `sd` | Sort by date modified |
+| `sc` | Sort by date created |
+| `se` | Sort by extension |
+
+### Space Leader Menu
 
 Press `Space` to open a which-key style popup with all available commands:
 
@@ -222,33 +236,67 @@ Press `Space` to open a which-key style popup with all available commands:
 | `:tabclose` / `Ctrl+W` | Close current tab |
 | `:q` | Quit |
 
-### Sort Shortcuts
-
-| Key | Mode |
-|-----|------|
-| `sn` | Sort by name |
-| `ss` | Sort by size |
-| `sd` | Sort by date modified |
-| `sc` | Sort by date created |
-| `se` | Sort by extension |
+---
 
 ## Themes
 
-28 built-in themes:
+166 built-in dark themes. Browse with `T` or set with `:theme <name>`.
+
+<details>
+<summary><strong>Full theme list</strong></summary>
 
 | | | | |
 |---|---|---|---|
-| ayu-dark | catppuccin-latte | catppuccin-mocha | dracula |
-| everforest-dark | github-dark | gruvbox-dark | gruvbox-light |
-| horizon | kanagawa | modus-vivendi | monokai-pro |
-| moonfly | moonlight | nightfox | nord |
-| one-dark | oxocarbon | palenight | poimandres |
-| rose-pine | solarized-dark | sonokai | spaceduck |
-| synthwave84 | tokyo-night | vesper | zenburn |
+| abyss | afterglow | amber | andromeda |
+| apprentice | arctic | ashes | atom-one-dark |
+| aura-dark | aurora | ayu-dark | ayu-mirage |
+| badwolf | bamboo | base16-default-dark | base16-ocean |
+| black-atom | blood-moon | blueprint | bluloco-dark |
+| boo-berry | brogrammer | carbonfox | catppuccin-frappe |
+| catppuccin-macchiato | catppuccin-mocha | challenger-deep | cherry |
+| citruszest | cobalt2 | codedark | cosmos |
+| cyberdream | darcula | dark-fox | dark-meadow |
+| dark-pastel | dark-plus | dark-violet | darkburn |
+| decay | deep-ocean | deep-space | doom-one |
+| doom-vibrant | dracula | dracula-pro | duskfox |
+| earthsong | edge-dark | eldritch | embark |
+| espresso | everblush | everforest-dark | fairy-floss |
+| falcon | fleet-dark | forest | frozen |
+| github-dark | github-dark-default | github-dark-high-contrast | github-dark-tritanopia |
+| github-dimmed | gotham | gruvbox-dark | gruvbox-hard |
+| gruvbox-material | hacker | halcyon | hardhacker |
+| horizon | horizon-dark | hybrid | hyper |
+| iceberg | inferno | jellybeans | kanagawa |
+| kanagawa-dragon | kanagawa-wave | lackluster | lavender |
+| materia | material-darker | material-ocean | material-palenight |
+| melange | mellow | miasma | midnight |
+| midnight-blue | min-dark | modus-vivendi | molokai |
+| monochrome | monokai | monokai-pro | moonbow |
+| moonfly | moonlight | nebula | neon |
+| night-city | night-owl | nightfly | nightfox |
+| noctis | noir | nord | nordic |
+| nova | obsidian | oceanic-next | omni |
+| one-dark | one-monokai | onedark-vivid | oxocarbon |
+| palefire | palenight | panda | papercolor-dark |
+| paradise | penumbra-dark | phosphor | pine |
+| poimandres | radical | retrowave | rose-pine |
+| rose-pine-moon | seti | shades-of-purple | slate |
+| snazzy | solarized-dark | solarized-osaka | sonokai |
+| spaceduck | spacemacs-dark | srcery | submarine |
+| sunset | sweetie | synthwave84 | tender |
+| terafox | thunderstorm | tokyo-night | tokyonight-moon |
+| tokyonight-storm | tomorrow-night | tomorrow-night-bright | umbra |
+| vesper | vitesse-dark | vividchalk | vscode-dark |
+| wilmersdorf | witch-hazel | wombat | xcode-dusk |
+| zenbones | zenburn | | |
+
+</details>
 
 ### Custom Themes
 
 Drop a TOML file into `~/.config/fcmd/themes/` and it will be auto-discovered. Use any built-in theme as a template.
+
+---
 
 ## Configuration
 
@@ -260,6 +308,8 @@ fcmd stores its data in `~/.config/fcmd/`:
 | `~/.config/fcmd/themes/` | Custom theme files (TOML) |
 
 The editor for `o` is determined by `$VISUAL`, then `$EDITOR`, defaulting to `vim`.
+
+---
 
 ## License
 
