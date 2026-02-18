@@ -175,6 +175,7 @@ impl App {
             ('g', KeyCode::Char('t')) => self.next_tab(),
             ('g', KeyCode::Char('T')) => self.prev_tab(),
             ('d', KeyCode::Char('d')) => self.request_delete(),
+            ('d', KeyCode::Char('D')) => self.request_permanent_delete(),
             ('y', KeyCode::Char('y')) => self.yank_targeted(),
             ('y', KeyCode::Char('p')) => self.yank_path(),
             ('y', KeyCode::Char('n')) => self.yank_name(),

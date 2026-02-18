@@ -42,10 +42,16 @@ impl App {
                     self.status_message = format!("Yanked {n} item(s)");
                 }
             }
-            KeyCode::Char('d') | KeyCode::Char('D') => {
+            KeyCode::Char('d') => {
                 let paths = self.active_panel().targeted_paths();
                 self.exit_visual();
+                self.confirm_permanent = false;
                 self.request_delete_paths(paths);
+            }
+            KeyCode::Char('D') => {
+                let paths = self.active_panel().targeted_paths();
+                self.exit_visual();
+                self.request_permanent_delete_paths(paths);
             }
 
             KeyCode::Char('p') => {
@@ -146,9 +152,14 @@ impl App {
                     self.status_message = format!("Yanked {n} item(s)");
                 }
             }
-            KeyCode::Char('d') | KeyCode::Char('D') => {
+            KeyCode::Char('d') => {
                 let paths = self.active_panel().targeted_paths();
+                self.confirm_permanent = false;
                 self.request_delete_paths(paths);
+            }
+            KeyCode::Char('D') => {
+                let paths = self.active_panel().targeted_paths();
+                self.request_permanent_delete_paths(paths);
             }
 
             KeyCode::Char('p') => {

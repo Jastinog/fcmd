@@ -356,7 +356,8 @@ pub(super) fn render_help(f: &mut Frame, t: &Theme, area: Rect) {
             " Files",
             &[
                 ("yy", "Yank (copy)"),
-                ("dd", "Delete (trash)"),
+                ("dd", "Move to trash"),
+                ("dD", "Permanent delete"),
                 ("p / P", "Paste / Paste to other"),
                 ("yp", "Copy path to clipboard"),
                 ("r", "Rename"),
@@ -600,7 +601,8 @@ pub(super) fn render_input_popup(f: &mut Frame, app: &App, area: Rect) {
 
 pub(super) fn render_confirm_popup(f: &mut Frame, app: &App, area: Rect) {
     let t = &app.theme;
-    let accent = t.red;
+    let permanent = app.confirm_permanent;
+    let accent = if permanent { t.red } else { t.yellow };
     let paths = &app.confirm_paths;
     let n = paths.len();
 
@@ -615,7 +617,11 @@ pub(super) fn render_confirm_popup(f: &mut Frame, app: &App, area: Rect) {
 
     f.render_widget(Clear, popup);
 
-    let title = format!(" 󰗨 Delete ({n}) ");
+    let title = if permanent {
+        format!(" 󰗨 Permanently Delete ({n}) ")
+    } else {
+        format!("  Move to Trash ({n}) ")
+    };
     let block = Block::default()
         .borders(Borders::ALL)
         .border_style(Style::default().fg(accent))

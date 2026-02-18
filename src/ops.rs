@@ -17,7 +17,6 @@ pub struct Register {
 pub enum OpRecord {
     Copied { _src: PathBuf, dst: PathBuf },
     Moved { src: PathBuf, dst: PathBuf },
-    Deleted { original: PathBuf, trash: PathBuf },
     Created { path: PathBuf },
     Renamed { from: PathBuf, to: PathBuf },
 }
@@ -263,30 +262,6 @@ pub fn du_in_background(dirs: Vec<PathBuf>, tx: mpsc::Sender<DuMsg>) {
 
 // --- Operations ---
 
-pub fn delete_path(path: &Path) -> std::io::Result<OpRecord> {
-    let trash = trash_dir()?;
-    let name = filename(path)?;
-    let trash_path = unique_trash_name(&trash, &name);
-    match fs::rename(path, &trash_path) {
-        Ok(()) => {}
-        Err(e) if is_cross_device(&e) => {
-            // Cross-device: copy to trash then remove original
-            if path.is_dir() {
-                copy_dir(path, &trash_path)?;
-                fs::remove_dir_all(path)?;
-            } else {
-                fs::copy(path, &trash_path)?;
-                fs::remove_file(path)?;
-            }
-        }
-        Err(e) => return Err(e),
-    }
-    Ok(OpRecord::Deleted {
-        original: path.into(),
-        trash: trash_path,
-    })
-}
-
 pub fn mkdir(dir: &Path, name: &str) -> std::io::Result<OpRecord> {
     let path = dir.join(name);
     fs::create_dir_all(&path)?;
@@ -333,15 +308,6 @@ pub fn undo(records: &[OpRecord]) -> std::io::Result<String> {
             OpRecord::Moved { src, dst } => {
                 fs::rename(dst, src)?;
             }
-            OpRecord::Deleted { original, trash } => {
-                if original.exists() {
-                    return Err(std::io::Error::new(
-                        std::io::ErrorKind::AlreadyExists,
-                        format!("Cannot restore: {} already exists", original.display()),
-                    ));
-                }
-                fs::rename(trash, original)?;
-            }
             OpRecord::Created { path } => remove_path(path)?,
             OpRecord::Renamed { from, to } => {
                 fs::rename(to, from)?;
@@ -384,6 +350,7 @@ fn resolve_conflict(dir: &Path, name: &str) -> PathBuf {
     unreachable!()
 }
 
+#[cfg(test)]
 fn copy_dir(src: &Path, dst: &Path) -> std::io::Result<()> {
     fs::create_dir_all(dst)?;
     for entry in fs::read_dir(src)? {
@@ -398,32 +365,12 @@ fn copy_dir(src: &Path, dst: &Path) -> std::io::Result<()> {
     Ok(())
 }
 
-fn remove_path(path: &Path) -> std::io::Result<()> {
+pub fn remove_path(path: &Path) -> std::io::Result<()> {
     if path.is_dir() {
         fs::remove_dir_all(path)
     } else {
         fs::remove_file(path)
     }
-}
-
-fn trash_dir() -> std::io::Result<PathBuf> {
-    let base = dirs::data_local_dir().ok_or_else(|| {
-        std::io::Error::new(
-            std::io::ErrorKind::NotFound,
-            "cannot determine data directory",
-        )
-    })?;
-    let dir = base.join("fc").join("trash");
-    fs::create_dir_all(&dir)?;
-    Ok(dir)
-}
-
-fn unique_trash_name(trash: &Path, name: &str) -> PathBuf {
-    let ts = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .unwrap_or_default()
-        .as_nanos();
-    trash.join(format!("{ts}_{name}"))
 }
 
 fn is_cross_device(e: &std::io::Error) -> bool {

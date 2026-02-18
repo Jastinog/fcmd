@@ -17,6 +17,13 @@ impl App {
 
     pub(super) fn request_delete(&mut self) {
         let paths = self.active_panel().targeted_paths();
+        self.confirm_permanent = false;
+        self.request_delete_paths(paths);
+    }
+
+    pub(super) fn request_permanent_delete(&mut self) {
+        let paths = self.active_panel().targeted_paths();
+        self.confirm_permanent = true;
         self.request_delete_paths(paths);
     }
 
@@ -30,23 +37,36 @@ impl App {
         self.mode = Mode::Confirm;
     }
 
+    pub(super) fn request_permanent_delete_paths(&mut self, paths: Vec<std::path::PathBuf>) {
+        self.confirm_permanent = true;
+        self.request_delete_paths(paths);
+    }
+
     pub(super) fn execute_delete(&mut self) {
         let paths = std::mem::take(&mut self.confirm_paths);
-        let mut records = Vec::new();
+        let permanent = self.confirm_permanent;
+        let mut count = 0usize;
         for path in &paths {
-            match ops::delete_path(path) {
-                Ok(rec) => records.push(rec),
+            let result = if permanent {
+                ops::remove_path(path)
+            } else {
+                trash::delete(path).map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))
+            };
+            match result {
+                Ok(()) => count += 1,
                 Err(e) => {
-                    self.status_message = format!("Delete error: {e}");
-                    self.undo_stack.push(records);
+                    let verb = if permanent { "Delete" } else { "Trash" };
+                    self.status_message = format!("{verb} error: {e}");
                     self.refresh_panels();
                     return;
                 }
             }
         }
-        let n = records.len();
-        self.undo_stack.push(records);
-        self.status_message = format!("Deleted {n} item(s) \u{2014} undo with u");
+        self.status_message = if permanent {
+            format!("Permanently deleted {count} item(s)")
+        } else {
+            format!("Moved {count} item(s) to Trash")
+        };
         self.refresh_panels();
     }
 

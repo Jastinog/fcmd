@@ -129,6 +129,7 @@ pub struct App {
     pub undo_stack: UndoStack,
     pub confirm_paths: Vec<PathBuf>,
     pub confirm_scroll: usize,
+    pub confirm_permanent: bool,
     // Search
     pub search_query: String,
     pub search_saved_cursor: usize,
@@ -280,6 +281,7 @@ impl App {
             undo_stack: UndoStack::new(),
             confirm_paths: Vec::new(),
             confirm_scroll: 0,
+            confirm_permanent: false,
             search_query: String::new(),
             search_saved_cursor: 0,
             marks: HashMap::new(),
