@@ -2,21 +2,38 @@ use super::*;
 
 impl App {
     pub(super) fn handle_visual(&mut self, key: KeyEvent) {
-        if let Some('g') = {
+        if let Some(pending) = {
             self.pending_key_time = None;
             self.pending_key.take()
-        } && key.code == KeyCode::Char('g')
-        {
-            self.active_panel_mut().go_top();
-            return;
+        } {
+            match (pending, key.code) {
+                ('g', KeyCode::Char('g')) => {
+                    self.active_panel_mut().go_top();
+                    return;
+                }
+                ('c', KeyCode::Char('p')) => {
+                    self.exit_visual();
+                    self.enter_chmod();
+                    return;
+                }
+                ('c', KeyCode::Char('o')) => {
+                    self.exit_visual();
+                    self.enter_chown();
+                    return;
+                }
+                _ => {}
+            }
         }
 
         match key.code {
             KeyCode::Char('j') | KeyCode::Down => self.active_panel_mut().move_down(),
             KeyCode::Char('k') | KeyCode::Up => self.active_panel_mut().move_up(),
             KeyCode::Char('G') => self.active_panel_mut().go_bottom(),
-            KeyCode::Char('g') => {
-                self.pending_key = Some('g');
+            KeyCode::Char('g') | KeyCode::Char('c') => {
+                self.pending_key = Some(match key.code {
+                    KeyCode::Char(c) => c,
+                    _ => unreachable!(),
+                });
                 self.pending_key_time = Some(Instant::now());
             }
             KeyCode::Char('d') if key.modifiers.contains(KeyModifiers::CONTROL) => {
@@ -106,13 +123,27 @@ impl App {
     }
 
     pub(super) fn handle_select(&mut self, key: KeyEvent) {
-        if let Some('g') = {
+        if let Some(pending) = {
             self.pending_key_time = None;
             self.pending_key.take()
-        } && key.code == KeyCode::Char('g')
-        {
-            self.active_panel_mut().go_top();
-            return;
+        } {
+            match (pending, key.code) {
+                ('g', KeyCode::Char('g')) => {
+                    self.active_panel_mut().go_top();
+                    return;
+                }
+                ('c', KeyCode::Char('p')) => {
+                    self.exit_select();
+                    self.enter_chmod();
+                    return;
+                }
+                ('c', KeyCode::Char('o')) => {
+                    self.exit_select();
+                    self.enter_chown();
+                    return;
+                }
+                _ => {}
+            }
         }
 
         let shift = key.modifiers.contains(KeyModifiers::SHIFT);
@@ -124,8 +155,11 @@ impl App {
             KeyCode::Char('j') | KeyCode::Down => self.active_panel_mut().move_down(),
             KeyCode::Char('k') | KeyCode::Up => self.active_panel_mut().move_up(),
             KeyCode::Char('G') => self.active_panel_mut().go_bottom(),
-            KeyCode::Char('g') => {
-                self.pending_key = Some('g');
+            KeyCode::Char('g') | KeyCode::Char('c') => {
+                self.pending_key = Some(match key.code {
+                    KeyCode::Char(c) => c,
+                    _ => unreachable!(),
+                });
                 self.pending_key_time = Some(Instant::now());
             }
             KeyCode::Char('d') if key.modifiers.contains(KeyModifiers::CONTROL) => {

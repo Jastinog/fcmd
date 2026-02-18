@@ -98,6 +98,10 @@ impl App {
                 self.pending_key = Some('s');
                 self.pending_key_time = Some(Instant::now());
             }
+            KeyCode::Char('c') => {
+                self.pending_key = Some('c');
+                self.pending_key_time = Some(Instant::now());
+            }
             KeyCode::Char('\'') => {
                 self.pending_key = Some('\'');
                 self.pending_key_time = Some(Instant::now());
@@ -188,6 +192,8 @@ impl App {
             ('s', KeyCode::Char('c')) => self.set_sort(SortMode::Created),
             ('s', KeyCode::Char('e')) => self.set_sort(SortMode::Extension),
             ('s', KeyCode::Char('r')) => self.toggle_sort_reverse(),
+            ('c', KeyCode::Char('p')) => self.enter_chmod(),
+            ('c', KeyCode::Char('o')) => self.enter_chown(),
             // Space as leader key
             (' ', KeyCode::Char('t')) => self.toggle_tree(),
             (' ', KeyCode::Char('h')) => self.toggle_hidden(),

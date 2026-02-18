@@ -317,6 +317,29 @@ pub fn undo(records: &[OpRecord]) -> std::io::Result<String> {
     Ok(format!("Undone {count} operation(s)"))
 }
 
+// --- chmod / chown ---
+
+#[cfg(unix)]
+pub fn chmod(path: &Path, mode: u32) -> std::io::Result<()> {
+    use std::os::unix::fs::PermissionsExt;
+    fs::set_permissions(path, fs::Permissions::from_mode(mode))
+}
+
+#[cfg(unix)]
+pub fn chown(path: &Path, uid: Option<u32>, gid: Option<u32>) -> std::io::Result<()> {
+    use std::ffi::CString;
+    let c_path = CString::new(path.to_string_lossy().as_bytes())
+        .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidInput, e))?;
+    let uid = uid.map(|u| u as libc::uid_t).unwrap_or(u32::MAX);
+    let gid = gid.map(|g| g as libc::gid_t).unwrap_or(u32::MAX);
+    let ret = unsafe { libc::chown(c_path.as_ptr(), uid, gid) };
+    if ret == 0 {
+        Ok(())
+    } else {
+        Err(std::io::Error::last_os_error())
+    }
+}
+
 // --- Helpers ---
 
 fn filename(p: &Path) -> std::io::Result<String> {

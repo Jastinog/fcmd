@@ -23,6 +23,7 @@ mod rename;
 mod search;
 mod tree;
 mod bookmarks;
+pub(crate) mod chmod;
 mod visual;
 
 pub struct PhantomEntry {
@@ -61,6 +62,8 @@ pub enum Mode {
     Bookmarks,
     BookmarkAdd,
     BookmarkRename,
+    Chmod,
+    Chown,
 }
 
 #[derive(PartialEq, Eq, Clone, Copy)]
@@ -182,6 +185,9 @@ pub struct App {
     pub bookmark_scroll: usize,
     pub bookmark_rename_old: Option<String>,
     pub bookmark_add_path: Option<PathBuf>,
+    // Chmod/Chown
+    pub chmod_paths: Vec<PathBuf>,
+    pub chown_picker: Option<chmod::ChownPicker>,
     // Git status (tracked for both panels)
     pub git_statuses: HashMap<PathBuf, char>,
     pub(super) git_roots: [Option<PathBuf>; 2],
@@ -319,6 +325,8 @@ impl App {
             bookmark_scroll: 0,
             bookmark_rename_old: None,
             bookmark_add_path: None,
+            chmod_paths: Vec::new(),
+            chown_picker: None,
             git_statuses: HashMap::new(),
             git_roots: [None, None],
             git_checked_dirs: [None, None],
@@ -407,6 +415,8 @@ impl App {
             Mode::Bookmarks => self.handle_bookmarks(key),
             Mode::BookmarkAdd => self.handle_bookmark_add(key),
             Mode::BookmarkRename => self.handle_bookmark_rename(key),
+            Mode::Chmod => self.handle_chmod(key),
+            Mode::Chown => self.handle_chown(key),
         }
 
         self.update_preview();

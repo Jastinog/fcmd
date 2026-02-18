@@ -25,6 +25,7 @@ pub(super) fn render_which_key(
         'g' => (" ", "Go"),
         'y' => ("󰆏 ", "Yank"),
         'd' => ("󰗨 ", "Delete"),
+        'c' => ("󰌑 ", "Change"),
         '\'' => (" ", "Mark"),
         _ => return,
     };
@@ -362,6 +363,8 @@ pub(super) fn render_help(f: &mut Frame, t: &Theme, area: Rect) {
                 ("yp", "Copy path to clipboard"),
                 ("r", "Rename"),
                 ("a", "Create file/dir (/ suffix)"),
+                ("cp", "Permissions (chmod)"),
+                ("co", "Owner (chown)"),
                 ("u", "Undo"),
             ],
         ),
@@ -577,23 +580,21 @@ pub(super) fn render_input_popup(f: &mut Frame, app: &App, area: Rect) {
     row += 1;
 
     // Hint line
-    let is_create = app.mode == Mode::Create;
-    let hint_line = if is_create {
-        Line::from(vec![
+    let hint_line = match app.mode {
+        Mode::Create => Line::from(vec![
             Span::styled(" \u{23ce}", Style::default().fg(accent)),
             Span::styled(" confirm  ", Style::default().fg(t.fg_dim)),
             Span::styled("esc", Style::default().fg(accent)),
             Span::styled(" cancel  ", Style::default().fg(t.fg_dim)),
             Span::styled("name/", Style::default().fg(accent)),
             Span::styled(" = dir", Style::default().fg(t.fg_dim)),
-        ])
-    } else {
-        Line::from(vec![
+        ]),
+        _ => Line::from(vec![
             Span::styled(" \u{23ce}", Style::default().fg(accent)),
             Span::styled(" confirm  ", Style::default().fg(t.fg_dim)),
             Span::styled("esc", Style::default().fg(accent)),
             Span::styled(" cancel", Style::default().fg(t.fg_dim)),
-        ])
+        ]),
     };
     let hint_area = Rect::new(inner.x, inner.y + row, inner.width, 1);
     f.render_widget(Paragraph::new(hint_line), hint_area);
@@ -1242,3 +1243,485 @@ pub(super) fn render_search_popup(f: &mut Frame, app: &App, area: Rect) {
     let hint_area = Rect::new(inner.x, inner.y + row, inner.width, 1);
     f.render_widget(Paragraph::new(hint_line), hint_area);
 }
+
+pub(super) fn render_chmod_popup(f: &mut Frame, app: &App, area: Rect) {
+    let t = &app.theme;
+    let accent = t.cyan;
+    let input = &app.rename_input;
+
+    // Parse current input as octal for live preview
+    let parsed_mode = if !input.is_empty() && input.chars().all(|c| c.is_ascii_digit() && c <= '7')
+    {
+        u32::from_str_radix(input, 8).ok()
+    } else {
+        None
+    };
+
+    // Context: file name or item count
+    let n_paths = app.chmod_paths.len();
+    let file_ctx = if n_paths > 1 {
+        format!("{n_paths} items")
+    } else {
+        app.chmod_paths
+            .first()
+            .and_then(|p| p.file_name())
+            .map(|n| n.to_string_lossy().into_owned())
+            .unwrap_or_default()
+    };
+
+    // border(2) + file(1) + input(1) + thin_sep(1) + 3 perm rows(3) + sep(1) + hint(1) = 10
+    let h = 10u16.min(area.height);
+    let w = 46u16.min(area.width.saturating_sub(4)).max(30);
+    let x = (area.width.saturating_sub(w)) / 2;
+    let y = (area.height.saturating_sub(h)) / 2;
+    let popup = Rect::new(area.x + x, area.y + y, w, h);
+
+    f.render_widget(Clear, popup);
+
+    let block = Block::default()
+        .borders(Borders::ALL)
+        .border_style(Style::default().fg(accent))
+        .title(" 󰌑 Permissions ")
+        .title_style(Style::default().fg(accent));
+
+    let inner = block.inner(popup);
+    f.render_widget(block, popup);
+
+    let iw = inner.width as usize;
+    let mut row = 0u16;
+
+    // ── File context line ───────────────────────────────────────
+    {
+        let icon = " 󰈔 ";
+        let icon_w = icon.chars().count();
+        let max_name = iw.saturating_sub(icon_w);
+        let name_display = if file_ctx.chars().count() > max_name {
+            let start = file_ctx.chars().count() - max_name.saturating_sub(1);
+            let tail: String = file_ctx.chars().skip(start).collect();
+            format!("\u{2026}{tail}")
+        } else {
+            file_ctx
+        };
+        let pad = iw.saturating_sub(icon_w + name_display.chars().count());
+        let line = Line::from(vec![
+            Span::styled(icon, Style::default().fg(t.fg_dim)),
+            Span::styled(name_display, Style::default().fg(t.fg)),
+            Span::styled(" ".repeat(pad), Style::default()),
+        ]);
+        f.render_widget(
+            Paragraph::new(line),
+            Rect::new(inner.x, inner.y + row, inner.width, 1),
+        );
+        row += 1;
+    }
+
+    // ── Input field ─────────────────────────────────────────────
+    {
+        let prefix = " \u{276f} ";
+        let prefix_w = prefix.chars().count();
+        let input_w = input.chars().count();
+
+        // Build rwx colored spans for suffix
+        let mut suffix_spans: Vec<Span> = Vec::new();
+        if let Some(mode) = parsed_mode {
+            suffix_spans.push(Span::raw("  "));
+            // Render each rwx char with color: r=green, w=yellow, x=red, -=dim
+            let rwx_str = crate::app::chmod::format_rwx(mode);
+            for ch in rwx_str.chars() {
+                let color = match ch {
+                    'r' => t.green,
+                    'w' => t.yellow,
+                    'x' => t.red,
+                    _ => t.fg_dim,
+                };
+                suffix_spans.push(Span::styled(
+                    ch.to_string(),
+                    Style::default().fg(color),
+                ));
+            }
+        }
+        let suffix_len: usize = suffix_spans.iter().map(|s| s.content.chars().count()).sum();
+
+        let used = prefix_w + input_w + 1 + suffix_len;
+        let pad = iw.saturating_sub(used);
+
+        let mut spans = vec![
+            Span::styled(prefix, Style::default().fg(accent)),
+            Span::styled(input.clone(), Style::default().fg(t.fg).bg(t.bg_light)),
+            Span::styled("\u{2588}", Style::default().fg(accent).bg(t.bg_light)),
+            Span::styled(" ".repeat(pad), Style::default().bg(t.bg_light)),
+        ];
+        spans.extend(suffix_spans);
+
+        f.render_widget(
+            Paragraph::new(Line::from(spans)),
+            Rect::new(inner.x, inner.y + row, inner.width, 1),
+        );
+        row += 1;
+    }
+
+    // ── Thin separator ──────────────────────────────────────────
+    {
+        let line = Line::from(Span::styled(
+            "\u{254c}".repeat(iw),
+            Style::default().fg(t.border_inactive),
+        ));
+        f.render_widget(
+            Paragraph::new(line),
+            Rect::new(inner.x, inner.y + row, inner.width, 1),
+        );
+        row += 1;
+    }
+
+    // ── Permission breakdown: owner / group / other ─────────────
+    {
+        // Extract the 3 octal digits (owner, group, other)
+        let digits: [Option<u32>; 3] = if let Some(mode) = parsed_mode {
+            match input.len() {
+                4 | 3 => [
+                    Some((mode >> 6) & 7),
+                    Some((mode >> 3) & 7),
+                    Some(mode & 7),
+                ],
+                2 => [None, Some((mode >> 3) & 7), Some(mode & 7)],
+                1 => [None, None, Some(mode & 7)],
+                _ => [None, None, None],
+            }
+        } else {
+            [None, None, None]
+        };
+
+        let labels = [" 󰀄 owner ", " 󰡉 group ", " 󰀈 other "];
+        let label_w = 9; // all labels are 9 display chars
+
+        for i in 0..3 {
+            let label = labels[i];
+            let digit = digits[i];
+            let active = digit.is_some();
+
+            let d = digit.unwrap_or(0);
+            let r = d & 4 != 0;
+            let w = d & 2 != 0;
+            let x = d & 1 != 0;
+
+            // rwx column: 5 chars " rwx "
+            let rwx_col = format!(
+                " {}{}{}",
+                if r { 'r' } else { '-' },
+                if w { 'w' } else { '-' },
+                if x { 'x' } else { '-' },
+            );
+
+            // Description
+            let desc = if !active {
+                String::new()
+            } else {
+                let mut parts = Vec::new();
+                if r { parts.push("read"); }
+                if w { parts.push("write"); }
+                if x { parts.push("execute"); }
+                if parts.is_empty() {
+                    "  no access".to_string()
+                } else {
+                    format!("  {}", parts.join(", "))
+                }
+            };
+
+            let used = label_w + rwx_col.chars().count() + desc.chars().count();
+            let pad = iw.saturating_sub(used);
+
+            let dim = Style::default().fg(t.fg_dim);
+
+            let label_style = if active {
+                Style::default().fg(accent)
+            } else {
+                dim
+            };
+
+            let mut spans = vec![Span::styled(label, label_style)];
+
+            // Colored rwx chars
+            if active {
+                spans.push(Span::styled(" ", Style::default()));
+                for ch in [if r { 'r' } else { '-' }, if w { 'w' } else { '-' }, if x { 'x' } else { '-' }] {
+                    let color = match ch {
+                        'r' => t.green,
+                        'w' => t.yellow,
+                        'x' => t.red,
+                        _ => t.fg_dim,
+                    };
+                    spans.push(Span::styled(ch.to_string(), Style::default().fg(color)));
+                }
+            } else {
+                spans.push(Span::styled(rwx_col, dim));
+            }
+
+            let desc_style = if active {
+                Style::default().fg(t.fg_dim)
+            } else {
+                dim
+            };
+            spans.push(Span::styled(desc, desc_style));
+            spans.push(Span::styled(" ".repeat(pad), Style::default()));
+
+            f.render_widget(
+                Paragraph::new(Line::from(spans)),
+                Rect::new(inner.x, inner.y + row, inner.width, 1),
+            );
+            row += 1;
+        }
+    }
+
+    // ── Separator ───────────────────────────────────────────────
+    {
+        let line = Line::from(Span::styled(
+            "\u{2500}".repeat(iw),
+            Style::default().fg(t.border_inactive),
+        ));
+        f.render_widget(
+            Paragraph::new(line),
+            Rect::new(inner.x, inner.y + row, inner.width, 1),
+        );
+        row += 1;
+    }
+
+    // ── Hint line ───────────────────────────────────────────────
+    {
+        let valid = input.len() >= 3 && parsed_mode.is_some();
+        let enter_style = if valid {
+            Style::default().fg(accent)
+        } else {
+            Style::default().fg(t.fg_dim)
+        };
+        let hint_line = Line::from(vec![
+            Span::styled(" \u{23ce}", enter_style),
+            Span::styled(" apply  ", Style::default().fg(t.fg_dim)),
+            Span::styled("esc", Style::default().fg(accent)),
+            Span::styled(" cancel  ", Style::default().fg(t.fg_dim)),
+            Span::styled("0-7", Style::default().fg(accent)),
+            Span::styled(" octal", Style::default().fg(t.fg_dim)),
+        ]);
+        f.render_widget(
+            Paragraph::new(hint_line),
+            Rect::new(inner.x, inner.y + row, inner.width, 1),
+        );
+    }
+}
+
+pub(super) fn render_chown_picker(f: &mut Frame, app: &App, area: Rect) {
+    let t = &app.theme;
+    let Some(ref picker) = app.chown_picker else {
+        return;
+    };
+
+    let accent = t.cyan;
+
+    // Popup size
+    let w = 60u16.min(area.width.saturating_sub(4)).max(36);
+    let h = 20u16.min(area.height.saturating_sub(2)).max(10);
+    let x = (area.width.saturating_sub(w)) / 2;
+    let y = (area.height.saturating_sub(h)) / 2;
+    let popup = Rect::new(area.x + x, area.y + y, w, h);
+    f.render_widget(Clear, popup);
+
+    // Context info
+    let n_paths = picker.paths.len();
+    let title = if n_paths > 1 {
+        format!("  Owner ({n_paths} items) ")
+    } else {
+        "  Owner ".to_string()
+    };
+
+    let block = Block::default()
+        .borders(Borders::ALL)
+        .border_style(Style::default().fg(accent))
+        .title(title)
+        .title_style(Style::default().fg(accent));
+
+    let inner = block.inner(popup);
+    f.render_widget(block, popup);
+
+    if inner.height < 4 || inner.width < 12 {
+        return;
+    }
+
+    let iw = inner.width as usize;
+    let col_w = iw / 2;
+    let list_height = inner.height.saturating_sub(2) as usize;
+
+    // Current selection display at top is built into the columns via highlighting
+
+    // --- Users column (left) ---
+    let user_area = Rect::new(inner.x, inner.y, col_w as u16, list_height as u16);
+    let is_user_active = picker.column == 0;
+
+    let user_scroll = picker.user_scroll;
+
+    let mut user_items: Vec<ListItem> = Vec::new();
+    // Column header
+    let header_style = if is_user_active {
+        Style::default().fg(accent)
+    } else {
+        Style::default().fg(t.fg_dim)
+    };
+    let user_header_pad = col_w.saturating_sub(6);
+    user_items.push(ListItem::new(Line::from(vec![
+        Span::styled(" User", header_style),
+        Span::styled(" ".repeat(user_header_pad.max(1)), Style::default()),
+    ])));
+
+    let user_list_h = list_height.saturating_sub(1); // minus header
+    for (i, (name, uid)) in picker
+        .users
+        .iter()
+        .enumerate()
+        .skip(user_scroll)
+        .take(user_list_h)
+    {
+        let is_cursor = i == picker.user_cursor;
+        let is_current = picker.current_uid == Some(*uid);
+
+        let marker = if is_cursor { "\u{25b8} " } else { "  " };
+        let uid_str = format!("{uid}");
+        let max_name = col_w.saturating_sub(marker.chars().count() + uid_str.len() + 2);
+        let name_display = if name.chars().count() > max_name {
+            let trunc: String = name.chars().take(max_name.saturating_sub(1)).collect();
+            format!("{trunc}\u{2026}")
+        } else {
+            name.clone()
+        };
+        let pad =
+            col_w.saturating_sub(marker.chars().count() + name_display.chars().count() + uid_str.len() + 1);
+
+        if is_cursor && is_user_active {
+            let s = Style::default().fg(t.bg).bg(t.blue);
+            user_items.push(ListItem::new(Line::from(vec![
+                Span::styled(marker, s),
+                Span::styled(name_display, s),
+                Span::styled(" ".repeat(pad), s),
+                Span::styled(uid_str, s),
+                Span::styled(" ", s),
+            ])));
+        } else if is_current {
+            user_items.push(ListItem::new(Line::from(vec![
+                Span::styled(marker, Style::default().fg(t.green)),
+                Span::styled(name_display, Style::default().fg(t.green)),
+                Span::styled(" ".repeat(pad), Style::default()),
+                Span::styled(uid_str, Style::default().fg(t.fg_dim)),
+                Span::styled(" ", Style::default()),
+            ])));
+        } else {
+            user_items.push(ListItem::new(Line::from(vec![
+                Span::styled(marker, Style::default().fg(t.fg_dim)),
+                Span::styled(name_display, Style::default().fg(t.fg)),
+                Span::styled(" ".repeat(pad), Style::default()),
+                Span::styled(uid_str, Style::default().fg(t.fg_dim)),
+                Span::styled(" ", Style::default()),
+            ])));
+        }
+    }
+
+    user_items.truncate(list_height);
+    f.render_widget(List::new(user_items), user_area);
+
+    // --- Groups column (right) ---
+    let group_x = inner.x + col_w as u16;
+    let group_col_w = iw.saturating_sub(col_w);
+    let group_area = Rect::new(group_x, inner.y, group_col_w as u16, list_height as u16);
+    let is_group_active = picker.column == 1;
+
+    let group_scroll = picker.group_scroll;
+
+    let mut group_items: Vec<ListItem> = Vec::new();
+    // Column header
+    let header_style = if is_group_active {
+        Style::default().fg(accent)
+    } else {
+        Style::default().fg(t.fg_dim)
+    };
+    let group_header_pad = group_col_w.saturating_sub(7);
+    group_items.push(ListItem::new(Line::from(vec![
+        Span::styled(" Group", header_style),
+        Span::styled(" ".repeat(group_header_pad.max(1)), Style::default()),
+    ])));
+
+    let group_list_h = list_height.saturating_sub(1);
+    for (i, (name, gid)) in picker
+        .groups
+        .iter()
+        .enumerate()
+        .skip(group_scroll)
+        .take(group_list_h)
+    {
+        let is_cursor = i == picker.group_cursor;
+        let is_current = picker.current_gid == Some(*gid);
+
+        let marker = if is_cursor { "\u{25b8} " } else { "  " };
+        let gid_str = format!("{gid}");
+        let max_name = group_col_w.saturating_sub(marker.chars().count() + gid_str.len() + 2);
+        let name_display = if name.chars().count() > max_name {
+            let trunc: String = name.chars().take(max_name.saturating_sub(1)).collect();
+            format!("{trunc}\u{2026}")
+        } else {
+            name.clone()
+        };
+        let pad = group_col_w
+            .saturating_sub(marker.chars().count() + name_display.chars().count() + gid_str.len() + 1);
+
+        if is_cursor && is_group_active {
+            let s = Style::default().fg(t.bg).bg(t.blue);
+            group_items.push(ListItem::new(Line::from(vec![
+                Span::styled(marker, s),
+                Span::styled(name_display, s),
+                Span::styled(" ".repeat(pad), s),
+                Span::styled(gid_str, s),
+                Span::styled(" ", s),
+            ])));
+        } else if is_current {
+            group_items.push(ListItem::new(Line::from(vec![
+                Span::styled(marker, Style::default().fg(t.green)),
+                Span::styled(name_display, Style::default().fg(t.green)),
+                Span::styled(" ".repeat(pad), Style::default()),
+                Span::styled(gid_str, Style::default().fg(t.fg_dim)),
+                Span::styled(" ", Style::default()),
+            ])));
+        } else {
+            group_items.push(ListItem::new(Line::from(vec![
+                Span::styled(marker, Style::default().fg(t.fg_dim)),
+                Span::styled(name_display, Style::default().fg(t.fg)),
+                Span::styled(" ".repeat(pad), Style::default()),
+                Span::styled(gid_str, Style::default().fg(t.fg_dim)),
+                Span::styled(" ", Style::default()),
+            ])));
+        }
+    }
+
+    group_items.truncate(list_height);
+    f.render_widget(List::new(group_items), group_area);
+
+    // Separator
+    let sep_y = inner.y + list_height as u16;
+    let sep_area = Rect::new(inner.x, sep_y, inner.width, 1);
+    f.render_widget(
+        Paragraph::new(Line::from(Span::styled(
+            "\u{2500}".repeat(iw),
+            Style::default().fg(t.border_inactive),
+        ))),
+        sep_area,
+    );
+
+    // Hint line
+    let hint_line = Line::from(vec![
+        Span::styled(" \u{23ce}", Style::default().fg(accent)),
+        Span::styled(" apply  ", Style::default().fg(t.fg_dim)),
+        Span::styled("tab", Style::default().fg(accent)),
+        Span::styled(" switch  ", Style::default().fg(t.fg_dim)),
+        Span::styled("esc", Style::default().fg(accent)),
+        Span::styled(" cancel", Style::default().fg(t.fg_dim)),
+    ]);
+    let hint_y = inner.y + inner.height.saturating_sub(1);
+    let hint_area = Rect::new(inner.x, hint_y, inner.width, 1);
+    f.render_widget(Paragraph::new(hint_line), hint_area);
+}
+
+

@@ -222,6 +222,14 @@ pub fn render(f: &mut Frame, app: &mut App) {
         overlays::render_input_popup(f, app, full_area);
     }
 
+    if app.mode == Mode::Chmod {
+        overlays::render_chmod_popup(f, app, full_area);
+    }
+
+    if app.mode == Mode::Chown {
+        overlays::render_chown_picker(f, app, full_area);
+    }
+
     if app.mode == Mode::Search {
         overlays::render_search_popup(f, app, full_area);
     }

@@ -232,6 +232,7 @@ dependencies = [
  "chrono",
  "crossterm",
  "dirs",
+ "libc",
  "ratatui",
  "rusqlite",
  "serde",

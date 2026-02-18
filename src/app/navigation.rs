@@ -254,6 +254,7 @@ impl App {
         const GOTO_HINTS: &[(&str, &str)] = &[("g", "top"), ("t", "next tab"), ("T", "prev tab")];
         const YANK_HINTS: &[(&str, &str)] = &[("y", "yank"), ("p", "yank path"), ("n", "yank name")];
         const DELETE_HINTS: &[(&str, &str)] = &[("d", "trash"), ("D", "permanent")];
+        const CHANGE_HINTS: &[(&str, &str)] = &[("p", "permissions"), ("o", "owner")];
         const MARK_HINTS: &[(&str, &str)] = &[("a-z", "go to mark")];
         let pending = self.pending_key?;
         let time = self.pending_key_time?;
@@ -266,6 +267,7 @@ impl App {
             'g' => Some(GOTO_HINTS),
             'y' => Some(YANK_HINTS),
             'd' => Some(DELETE_HINTS),
+            'c' => Some(CHANGE_HINTS),
             '\'' => Some(MARK_HINTS),
             _ => None,
         }
