@@ -202,7 +202,7 @@ pub fn render(f: &mut Frame, app: &mut App) {
         overlays::render_help(f, &app.theme, full_area);
     }
 
-    if app.mode == Mode::Preview {
+    if matches!(app.mode, Mode::Preview | Mode::PreviewSearch) {
         overlays::render_preview_popup(f, app, full_area);
     }
 

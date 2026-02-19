@@ -244,31 +244,41 @@ pub(super) fn render_find(f: &mut Frame, fs: &FindState, t: &Theme, area: Rect) 
             let content_area = Rect::new(right_x, inner.y + 1, right_w, content_height as u16);
             let rwidth = right_w as usize;
 
-            let items: Vec<ListItem> = p
-                .lines
-                .iter()
-                .skip(p.scroll)
-                .take(content_height)
-                .enumerate()
-                .map(|(i, line)| {
-                    let line_num = i + p.scroll + 1;
-                    let num_width = 4;
-                    let max_content = rwidth.saturating_sub(num_width + 2);
-                    let content: String = if line.chars().count() > max_content {
-                        line.chars().take(max_content).collect()
-                    } else {
-                        line.clone()
-                    };
-                    Line::from(vec![
-                        Span::styled(
+            let items: Vec<ListItem> = if p.is_binary {
+                p.lines
+                    .iter()
+                    .skip(p.scroll)
+                    .take(content_height)
+                    .map(|line| {
+                        let max_content = rwidth;
+                        let content: String = if line.chars().count() > max_content {
+                            line.chars().take(max_content).collect()
+                        } else {
+                            line.clone()
+                        };
+                        let spans = super::preview::build_hex_spans(&content, t.fg_dim, t.fg, t.cyan);
+                        ListItem::new(Line::from(spans))
+                    })
+                    .collect()
+            } else {
+                (0..content_height)
+                    .filter_map(|i| {
+                        let line_idx = i + p.scroll;
+                        if line_idx >= p.lines.len() {
+                            return None;
+                        }
+                        let line_num = line_idx + 1;
+                        let num_width = 4;
+                        let max_content = rwidth.saturating_sub(num_width + 2);
+                        let mut spans = vec![Span::styled(
                             format!("{line_num:>num_width$}\u{2502}", num_width = num_width),
                             Style::default().fg(t.fg_dim),
-                        ),
-                        Span::styled(content, Style::default().fg(t.fg)),
-                    ])
-                })
-                .map(ListItem::new)
-                .collect();
+                        )];
+                        spans.extend(super::preview::build_content_spans(p, line_idx, max_content, t.fg));
+                        Some(ListItem::new(Line::from(spans)))
+                    })
+                    .collect()
+            };
 
             f.render_widget(List::new(items), content_area);
         }

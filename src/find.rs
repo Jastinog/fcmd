@@ -302,7 +302,11 @@ impl FindState {
             return;
         }
         self.find_preview_path = current.clone();
-        self.find_preview = current.map(|p| crate::preview::Preview::load(&p));
+        self.find_preview = current.map(|p| {
+            let mut prev = crate::preview::Preview::load(&p);
+            prev.apply_highlighting(&p);
+            prev
+        });
     }
 
     pub fn move_up(&mut self) {

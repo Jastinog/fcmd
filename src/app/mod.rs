@@ -58,6 +58,7 @@ pub enum Mode {
     Rename,
     Create,
     Preview,
+    PreviewSearch,
     ThemePicker,
     Bookmarks,
     BookmarkAdd,
@@ -147,6 +148,10 @@ pub struct App {
     // File preview popup
     pub file_preview: Option<Preview>,
     pub file_preview_path: Option<PathBuf>,
+    // Preview search
+    pub preview_search_query: String,
+    pub preview_search_matches: Vec<(usize, usize)>, // (line_idx, char_offset)
+    pub preview_search_current: usize,
     // Tree
     pub show_tree: bool,
     pub tree_focused: bool,
@@ -297,6 +302,9 @@ impl App {
             preview_path: None,
             file_preview: None,
             file_preview_path: None,
+            preview_search_query: String::new(),
+            preview_search_matches: Vec::new(),
+            preview_search_current: 0,
             show_tree: false,
             tree_focused: false,
             tree_selected: 0,
@@ -411,6 +419,7 @@ impl App {
             Mode::Rename => self.handle_rename(key),
             Mode::Create => self.handle_create(key),
             Mode::Preview => self.handle_preview(key),
+            Mode::PreviewSearch => self.handle_preview_search(key),
             Mode::ThemePicker => self.handle_theme_picker(key),
             Mode::Bookmarks => self.handle_bookmarks(key),
             Mode::BookmarkAdd => self.handle_bookmark_add(key),

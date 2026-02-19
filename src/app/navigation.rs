@@ -189,7 +189,11 @@ impl App {
         }
 
         self.preview_path = current_path.clone();
-        self.preview = current_path.map(|p| Preview::load(&p));
+        self.preview = current_path.map(|p| {
+            let mut prev = Preview::load(&p);
+            prev.apply_highlighting(&p);
+            prev
+        });
     }
 
     pub(super) fn request_open_editor(&mut self, path: PathBuf) {

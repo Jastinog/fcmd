@@ -53,7 +53,9 @@ impl App {
                 if is_file && key.code == KeyCode::Enter {
                     if let Some(entry) = self.active_panel().selected_entry() {
                         let path = entry.path.clone();
-                        self.file_preview = Some(Preview::load(&path));
+                        let mut p = Preview::load(&path);
+                        p.apply_highlighting(&path);
+                        self.file_preview = Some(p);
                         self.file_preview_path = Some(path);
                         self.mode = Mode::Preview;
                     }
