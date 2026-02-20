@@ -552,7 +552,7 @@ pub(super) fn render_input_popup(f: &mut Frame, app: &App, area: Rect) {
     let input = &app.rename_input;
     let prefix = " \u{276f} ";
     let prefix_len = prefix.chars().count();
-    let field_w = iw.saturating_sub(prefix_len);
+    let field_w = iw.saturating_sub(prefix_len).max(1);
 
     let input_chars: Vec<char> = input.chars().collect();
     let input_char_len = input_chars.len();
@@ -876,7 +876,7 @@ pub(super) fn render_preview_popup(f: &mut Frame, app: &App, area: Rect) {
     if is_searching {
         let prefix = " / ";
         let prefix_len = prefix.chars().count();
-        let field_w = iw.saturating_sub(prefix_len);
+        let field_w = iw.saturating_sub(prefix_len).max(1);
         let input_chars: Vec<char> = query.chars().collect();
         let input_char_len = input_chars.len();
         let (visible_input, cursor_pos) = if input_char_len < field_w {
@@ -1364,7 +1364,7 @@ pub(super) fn render_search_popup(f: &mut Frame, app: &App, area: Rect) {
     let input = &app.search_query;
     let prefix = " / ";
     let prefix_len = prefix.chars().count();
-    let field_w = iw.saturating_sub(prefix_len);
+    let field_w = iw.saturating_sub(prefix_len).max(1);
 
     let input_chars: Vec<char> = input.chars().collect();
     let input_char_len = input_chars.len();

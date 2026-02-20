@@ -65,7 +65,7 @@ pub(super) fn render_find(f: &mut Frame, fs: &FindState, t: &Theme, area: Rect) 
     let lw = left_w as usize;
     let prefix = " \u{276f} ";
     let prefix_len = prefix.chars().count();
-    let field_w = lw.saturating_sub(prefix_len);
+    let field_w = lw.saturating_sub(prefix_len).max(1);
     let input = &fs.query;
     let input_chars: Vec<char> = input.chars().collect();
     let input_char_len = input_chars.len();

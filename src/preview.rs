@@ -74,13 +74,17 @@ impl Preview {
 
         match fs::read(path) {
             Ok(bytes) => {
-                // Check larger sample for non-text bytes (NUL, 0x01-0x07, DEL)
+                // Check sample for binary content: NUL bytes or high ratio of control chars
                 let sample = &bytes[..bytes.len().min(8192)];
+                let nul_count = sample.iter().filter(|&&b| b == 0).count();
+                if nul_count > 0 {
+                    return Preview::load_binary(&bytes, title);
+                }
                 let non_text = sample
                     .iter()
-                    .filter(|&&b| b == 0 || b < 0x08 || b == 0x7f)
+                    .filter(|&&b| b < 0x08 || b == 0x7f)
                     .count();
-                if non_text > 0 {
+                if !sample.is_empty() && non_text * 100 / sample.len() > 10 {
                     return Preview::load_binary(&bytes, title);
                 }
 

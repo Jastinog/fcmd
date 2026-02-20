@@ -82,6 +82,14 @@ impl Panel {
         Ok(panel)
     }
 
+    /// Navigate to a new directory, resetting cursor and selection state.
+    pub fn navigate_to(&mut self, path: PathBuf) {
+        self.path = path;
+        self.selected = 0;
+        self.offset = 0;
+        self.marked.clear();
+    }
+
     pub fn load_dir(&mut self) -> std::io::Result<()> {
         self.load_dir_with_sizes(&HashMap::new())
     }
@@ -138,10 +146,13 @@ impl Panel {
             }
         }
 
+        let sort_name = |v: &mut Vec<FileEntry>| {
+            v.sort_by_cached_key(|e| e.name.to_lowercase());
+        };
         match self.sort_mode {
             SortMode::Name => {
-                dirs.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));
-                files.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));
+                sort_name(&mut dirs);
+                sort_name(&mut files);
             }
             SortMode::Size => {
                 dirs.sort_by(|a, b| {
@@ -151,7 +162,7 @@ impl Panel {
                         (Some(sa), Some(sb)) => sa.cmp(&sb),
                         (Some(_), None) => std::cmp::Ordering::Greater,
                         (None, Some(_)) => std::cmp::Ordering::Less,
-                        (None, None) => a.name.to_lowercase().cmp(&b.name.to_lowercase()),
+                        (None, None) => std::cmp::Ordering::Equal,
                     }
                 });
                 files.sort_by(|a, b| a.size.cmp(&b.size));
@@ -165,18 +176,13 @@ impl Panel {
                 files.sort_by(|a, b| a.created.cmp(&b.created));
             }
             SortMode::Extension => {
-                dirs.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));
-                files.sort_by(|a, b| {
-                    let ea = Path::new(&a.name)
+                sort_name(&mut dirs);
+                files.sort_by_cached_key(|e| {
+                    let ext = Path::new(&e.name)
                         .extension()
-                        .map(|e| e.to_string_lossy().to_lowercase())
+                        .map(|x| x.to_string_lossy().to_lowercase())
                         .unwrap_or_default();
-                    let eb = Path::new(&b.name)
-                        .extension()
-                        .map(|e| e.to_string_lossy().to_lowercase())
-                        .unwrap_or_default();
-                    ea.cmp(&eb)
-                        .then_with(|| a.name.to_lowercase().cmp(&b.name.to_lowercase()))
+                    (ext, e.name.to_lowercase())
                 });
             }
         }
@@ -227,10 +233,7 @@ impl Panel {
             && entry.is_dir
         {
             let new_path = entry.path.clone();
-            self.path = new_path;
-            self.selected = 0;
-            self.offset = 0;
-            self.marked.clear();
+            self.navigate_to(new_path);
             self.load_dir()?;
             return Ok(true);
         }
@@ -243,10 +246,7 @@ impl Panel {
                 .path
                 .file_name()
                 .map(|n| n.to_string_lossy().into_owned());
-            self.path = parent;
-            self.selected = 0;
-            self.offset = 0;
-            self.marked.clear();
+            self.navigate_to(parent);
             self.load_dir()?;
 
             if let Some(name) = old_name
@@ -261,10 +261,7 @@ impl Panel {
 
     pub fn go_home(&mut self) -> std::io::Result<()> {
         if let Some(home) = home_dir() {
-            self.path = home;
-            self.selected = 0;
-            self.offset = 0;
-            self.marked.clear();
+            self.navigate_to(home);
             self.load_dir()?;
         }
         Ok(())
@@ -375,7 +372,7 @@ impl Panel {
 }
 
 fn home_dir() -> Option<PathBuf> {
-    std::env::var("HOME").ok().map(PathBuf::from)
+    dirs::home_dir()
 }
 
 #[cfg(test)]

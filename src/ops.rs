@@ -1,11 +1,12 @@
+use std::collections::VecDeque;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::mpsc;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
-#[allow(dead_code)]
 pub enum RegisterOp {
     Yank,
+    #[allow(dead_code)]
     Cut,
 }
 
@@ -24,27 +25,27 @@ pub enum OpRecord {
 const MAX_UNDO: usize = 50;
 
 pub struct UndoStack {
-    entries: Vec<Vec<OpRecord>>,
+    entries: VecDeque<Vec<OpRecord>>,
 }
 
 impl UndoStack {
     pub fn new() -> Self {
         Self {
-            entries: Vec::new(),
+            entries: VecDeque::new(),
         }
     }
 
     pub fn push(&mut self, records: Vec<OpRecord>) {
         if !records.is_empty() {
-            self.entries.push(records);
+            self.entries.push_back(records);
             if self.entries.len() > MAX_UNDO {
-                self.entries.remove(0);
+                self.entries.pop_front();
             }
         }
     }
 
     pub fn pop(&mut self) -> Option<Vec<OpRecord>> {
-        self.entries.pop()
+        self.entries.pop_back()
     }
 }
 
@@ -65,8 +66,15 @@ pub enum ProgressMsg {
 }
 
 /// Total size of a path (recursive for directories).
+/// Uses symlink_metadata to avoid following symlink cycles.
 pub fn path_size(p: &Path) -> u64 {
-    if p.is_dir() {
+    let meta = match fs::symlink_metadata(p) {
+        Ok(m) => m,
+        Err(_) => return 0,
+    };
+    if meta.is_symlink() {
+        meta.len()
+    } else if meta.is_dir() {
         fs::read_dir(p)
             .into_iter()
             .flatten()
@@ -74,7 +82,7 @@ pub fn path_size(p: &Path) -> u64 {
             .map(|e| path_size(&e.path()))
             .sum()
     } else {
-        fs::metadata(p).map(|m| m.len()).unwrap_or(0)
+        meta.len()
     }
 }
 
@@ -275,13 +283,19 @@ fn dir_stats_inner(p: &Path, size: &mut u64, files: &mut usize, dirs: &mut usize
         Err(_) => return,
     };
     for entry in rd.flatten() {
-        let path = entry.path();
-        if path.is_dir() {
+        let ft = match entry.file_type() {
+            Ok(ft) => ft,
+            Err(_) => continue,
+        };
+        if ft.is_symlink() {
+            *files += 1;
+            *size += fs::symlink_metadata(entry.path()).map(|m| m.len()).unwrap_or(0);
+        } else if ft.is_dir() {
             *dirs += 1;
-            dir_stats_inner(&path, size, files, dirs);
+            dir_stats_inner(&entry.path(), size, files, dirs);
         } else {
             *files += 1;
-            *size += fs::metadata(&path).map(|m| m.len()).unwrap_or(0);
+            *size += entry.metadata().map(|m| m.len()).unwrap_or(0);
         }
     }
 }
@@ -354,7 +368,8 @@ pub fn chmod(path: &Path, mode: u32) -> std::io::Result<()> {
 #[cfg(unix)]
 pub fn chown(path: &Path, uid: Option<u32>, gid: Option<u32>) -> std::io::Result<()> {
     use std::ffi::CString;
-    let c_path = CString::new(path.to_string_lossy().as_bytes())
+    use std::os::unix::ffi::OsStrExt;
+    let c_path = CString::new(path.as_os_str().as_bytes())
         .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidInput, e))?;
     let uid = uid.map(|u| u as libc::uid_t).unwrap_or(u32::MAX);
     let gid = gid.map(|g| g as libc::gid_t).unwrap_or(u32::MAX);

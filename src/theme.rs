@@ -64,24 +64,29 @@ fn parse_hex(s: &str) -> Option<Color> {
 
 impl RawTheme {
     fn resolve_color(&self, value: &str) -> Color {
-        // Try hex first
+        self.resolve_color_depth(value, 0)
+    }
+
+    fn resolve_color_depth(&self, value: &str, depth: u8) -> Color {
+        if depth > 4 {
+            return Color::White;
+        }
         if let Some(c) = parse_hex(value) {
             return c;
         }
-        // Otherwise treat as a reference to another field
         match value {
-            "bg" => self.resolve_color(&self.bg),
-            "bg_light" => self.resolve_color(&self.bg_light),
-            "fg" => self.resolve_color(&self.fg),
-            "fg_dim" => self.resolve_color(&self.fg_dim),
-            "red" => self.resolve_color(&self.red),
-            "green" => self.resolve_color(&self.green),
-            "yellow" => self.resolve_color(&self.yellow),
-            "blue" => self.resolve_color(&self.blue),
-            "magenta" => self.resolve_color(&self.magenta),
-            "cyan" => self.resolve_color(&self.cyan),
-            "orange" => self.resolve_color(&self.orange),
-            _ => Color::White, // fallback
+            "bg" => self.resolve_color_depth(&self.bg, depth + 1),
+            "bg_light" => self.resolve_color_depth(&self.bg_light, depth + 1),
+            "fg" => self.resolve_color_depth(&self.fg, depth + 1),
+            "fg_dim" => self.resolve_color_depth(&self.fg_dim, depth + 1),
+            "red" => self.resolve_color_depth(&self.red, depth + 1),
+            "green" => self.resolve_color_depth(&self.green, depth + 1),
+            "yellow" => self.resolve_color_depth(&self.yellow, depth + 1),
+            "blue" => self.resolve_color_depth(&self.blue, depth + 1),
+            "magenta" => self.resolve_color_depth(&self.magenta, depth + 1),
+            "cyan" => self.resolve_color_depth(&self.cyan, depth + 1),
+            "orange" => self.resolve_color_depth(&self.orange, depth + 1),
+            _ => Color::White,
         }
     }
 

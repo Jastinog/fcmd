@@ -87,10 +87,7 @@ impl App {
         if let Some(path) = self.marks.get(&c).cloned() {
             if path.is_dir() {
                 let panel = self.active_panel_mut();
-                panel.path = path;
-                panel.selected = 0;
-                panel.offset = 0;
-                panel.marked.clear();
+                panel.navigate_to(path);
                 if let Err(e) = panel.load_dir() {
                     self.status_message = format!("Mark error: {e}");
                 } else {

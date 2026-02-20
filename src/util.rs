@@ -37,8 +37,10 @@ pub fn progress_bar(pct: u8, width: usize) -> String {
 }
 
 pub fn glob_match(pattern: &str, text: &str) -> bool {
-    let p: Vec<char> = pattern.chars().flat_map(|c| c.to_lowercase()).collect();
+    let mut p: Vec<char> = pattern.chars().flat_map(|c| c.to_lowercase()).collect();
     let t: Vec<char> = text.chars().flat_map(|c| c.to_lowercase()).collect();
+    // Collapse consecutive '*' to avoid exponential backtracking
+    p.dedup_by(|a, b| *a == '*' && *b == '*');
     glob_match_inner(&p, &t)
 }
 
@@ -46,7 +48,6 @@ fn glob_match_inner(pattern: &[char], text: &[char]) -> bool {
     match (pattern.first(), text.first()) {
         (None, None) => true,
         (Some('*'), _) => {
-            // '*' matches zero chars, or consume one char of text
             glob_match_inner(&pattern[1..], text)
                 || (!text.is_empty() && glob_match_inner(pattern, &text[1..]))
         }

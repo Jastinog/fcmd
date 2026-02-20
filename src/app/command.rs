@@ -126,10 +126,7 @@ impl App {
                 };
                 if target.is_dir() {
                     let panel = self.active_panel_mut();
-                    panel.path = target;
-                    panel.selected = 0;
-                    panel.offset = 0;
-                    panel.marked.clear();
+                    panel.navigate_to(target);
                     if let Err(e) = panel.load_dir() {
                         self.status_message = format!("cd: {e}");
                     } else {

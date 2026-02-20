@@ -90,6 +90,7 @@ impl App {
 
             if let Some(err) = error {
                 self.status_message = format!("Paste error: {err}");
+                // Preserve register so user can retry
             } else {
                 let verb = if op == RegisterOp::Yank {
                     "Copied"
@@ -99,9 +100,8 @@ impl App {
                 let dur = format_duration(elapsed);
                 let size = format_bytes(bytes_total);
                 self.status_message = format!("{verb} {n} item(s), {size} in {dur}");
+                self.register = None;
             }
-
-            self.register = None;
 
             self.paste_progress = None;
             self.refresh_panels();

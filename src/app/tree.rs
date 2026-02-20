@@ -87,10 +87,7 @@ impl App {
             let is_dir = line.is_dir;
             if is_dir {
                 let panel = self.active_panel_mut();
-                panel.path = path;
-                panel.selected = 0;
-                panel.offset = 0;
-                panel.marked.clear();
+                panel.navigate_to(path);
                 let _ = panel.load_dir();
                 self.apply_dir_sort();
                 self.rebuild_tree();
@@ -98,13 +95,9 @@ impl App {
                     self.tree_selected = idx;
                 }
             } else if let Some(parent) = path.parent() {
-                // File: navigate panel to parent dir and select the file
                 let file_name = path.file_name().map(|n| n.to_string_lossy().into_owned());
                 let panel = self.active_panel_mut();
-                panel.path = parent.to_path_buf();
-                panel.selected = 0;
-                panel.offset = 0;
-                panel.marked.clear();
+                panel.navigate_to(parent.to_path_buf());
                 let _ = panel.load_dir();
                 self.apply_dir_sort();
                 if let Some(name) = file_name {

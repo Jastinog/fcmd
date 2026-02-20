@@ -46,6 +46,7 @@ impl App {
         let paths = std::mem::take(&mut self.confirm_paths);
         let permanent = self.confirm_permanent;
         let mut count = 0usize;
+        let mut errors: Vec<String> = Vec::new();
         for path in &paths {
             let result = if permanent {
                 ops::remove_path(path)
@@ -55,18 +56,20 @@ impl App {
             match result {
                 Ok(()) => count += 1,
                 Err(e) => {
-                    let verb = if permanent { "Delete" } else { "Trash" };
-                    self.status_message = format!("{verb} error: {e}");
-                    self.refresh_panels();
-                    return;
+                    let name = path.file_name().map(|n| n.to_string_lossy().into_owned())
+                        .unwrap_or_else(|| path.to_string_lossy().into_owned());
+                    errors.push(format!("{name}: {e}"));
                 }
             }
         }
-        self.status_message = if permanent {
-            format!("Permanently deleted {count} item(s)")
+        let verb = if permanent { "Deleted" } else { "Trashed" };
+        if errors.is_empty() {
+            self.status_message = format!("{verb} {count} item(s)");
+        } else if count == 0 {
+            self.status_message = format!("{verb} failed: {}", errors[0]);
         } else {
-            format!("Moved {count} item(s) to Trash")
-        };
+            self.status_message = format!("{verb} {count}, {} failed: {}", errors.len(), errors[0]);
+        }
         self.refresh_panels();
     }
 

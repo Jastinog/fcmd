@@ -7,22 +7,19 @@ impl App {
     /// Check whether git status needs refreshing for either panel.
     pub(super) fn ensure_git_status(&mut self) {
         let tab = &self.tabs[self.active_tab];
-        let dirs = [tab.left.path.clone(), tab.right.path.clone()];
-
-        for (i, dir) in dirs.iter().enumerate() {
-            // Cache hit: directory is inside the known git root
-            if let Some(ref root) = self.git_roots[i] {
-                if dir.starts_with(root) {
-                    continue;
+        let needs_refresh = [&tab.left.path, &tab.right.path]
+            .iter()
+            .enumerate()
+            .any(|(i, dir)| {
+                if let Some(ref root) = self.git_roots[i] {
+                    if dir.starts_with(root) {
+                        return false;
+                    }
                 }
-            }
-            // Already checked this directory and it wasn't a git repo
-            if self.git_checked_dirs[i].as_ref() == Some(dir) {
-                continue;
-            }
-            // Something changed — refetch both panels
+                self.git_checked_dirs[i].as_deref() != Some(dir)
+            });
+        if needs_refresh {
             self.refresh_git_status();
-            return;
         }
     }
 
