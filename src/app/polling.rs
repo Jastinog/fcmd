@@ -55,7 +55,7 @@ impl App {
             let bar = progress_bar(pct, 20);
 
             let elapsed = progress.started_at.elapsed();
-            let eta = if bytes_done > 0 && bytes_total > bytes_done {
+            let eta = if bytes_done > 0 && bytes_total > bytes_done && elapsed.as_secs_f64() > 0.001 {
                 let rate = bytes_done as f64 / elapsed.as_secs_f64();
                 let remaining_bytes = bytes_total - bytes_done;
                 let eta_secs = remaining_bytes as f64 / rate;

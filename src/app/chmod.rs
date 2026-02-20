@@ -108,7 +108,13 @@ impl App {
                     self.status_message = "Invalid octal mode (e.g. 755)".into();
                     return;
                 }
-                let mode = u32::from_str_radix(&input, 8).unwrap();
+                let mode = match u32::from_str_radix(&input, 8) {
+                    Ok(m) => m,
+                    Err(_) => {
+                        self.status_message = "Invalid octal mode".into();
+                        return;
+                    }
+                };
                 let paths = std::mem::take(&mut self.chmod_paths);
                 let n = paths.len();
                 let mut errors = 0;

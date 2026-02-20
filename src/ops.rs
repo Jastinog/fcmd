@@ -401,7 +401,7 @@ fn resolve_conflict(dir: &Path, name: &str) -> PathBuf {
     let ext = Path::new(name)
         .extension()
         .map(|e| format!(".{}", e.to_string_lossy()));
-    for i in 1u32.. {
+    for i in 1u32..=99999 {
         let new_name = match &ext {
             Some(e) => format!("{stem}_{i}{e}"),
             None => format!("{stem}_{i}"),
@@ -411,7 +411,16 @@ fn resolve_conflict(dir: &Path, name: &str) -> PathBuf {
             return p;
         }
     }
-    unreachable!()
+    // Fallback with timestamp
+    let ts = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_millis())
+        .unwrap_or(0);
+    let fallback = match &ext {
+        Some(e) => format!("{stem}_{ts}{e}"),
+        None => format!("{stem}_{ts}"),
+    };
+    dir.join(fallback)
 }
 
 #[cfg(test)]

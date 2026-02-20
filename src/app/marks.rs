@@ -321,9 +321,9 @@ impl App {
                 return;
             }
         }
-        self.theme_cursor = self.theme_index.unwrap_or(0);
+        self.theme_cursor = self.theme_index.unwrap_or(0).min(self.theme_list.len() - 1);
         self.theme_scroll = self.theme_cursor.saturating_sub(5);
-        self.theme_preview = Theme::load_by_name(&self.theme_list[self.theme_cursor]);
+        self.theme_preview = self.theme_list.get(self.theme_cursor).and_then(|n| Theme::load_by_name(n));
         self.mode = Mode::ThemePicker;
     }
 
@@ -337,21 +337,23 @@ impl App {
             KeyCode::Char('j') | KeyCode::Down => {
                 self.theme_cursor = (self.theme_cursor + 1).min(len - 1);
                 self.adjust_theme_scroll();
-                self.theme_preview = Theme::load_by_name(&self.theme_list[self.theme_cursor]);
+                self.theme_preview = self.theme_list.get(self.theme_cursor).and_then(|n| Theme::load_by_name(n));
             }
             KeyCode::Char('k') | KeyCode::Up => {
                 self.theme_cursor = self.theme_cursor.saturating_sub(1);
                 self.adjust_theme_scroll();
-                self.theme_preview = Theme::load_by_name(&self.theme_list[self.theme_cursor]);
+                self.theme_preview = self.theme_list.get(self.theme_cursor).and_then(|n| Theme::load_by_name(n));
             }
             KeyCode::Enter => {
-                let name = &self.theme_list[self.theme_cursor];
+                let Some(name) = self.theme_list.get(self.theme_cursor).cloned() else {
+                    return;
+                };
                 if let Some(preview) = self.theme_preview.take() {
                     self.theme = preview;
                 }
                 self.theme_index = Some(self.theme_cursor);
                 if let Some(ref db) = self.db {
-                    let _ = db.save_theme(name);
+                    let _ = db.save_theme(&name);
                 }
                 self.status_message = format!("Theme: {name}");
                 self.mode = Mode::Normal;

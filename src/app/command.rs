@@ -29,6 +29,9 @@ impl App {
     fn execute_command(&mut self) {
         let input = self.command_input.trim().to_string();
         self.command_input.clear();
+        if input.is_empty() {
+            return;
+        }
 
         let (cmd, arg) = match input.split_once(' ') {
             Some((c, a)) => (c.trim(), Some(a.trim())),

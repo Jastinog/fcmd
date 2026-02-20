@@ -29,11 +29,8 @@ impl App {
             KeyCode::Char('j') | KeyCode::Down => self.active_panel_mut().move_down(),
             KeyCode::Char('k') | KeyCode::Up => self.active_panel_mut().move_up(),
             KeyCode::Char('G') => self.active_panel_mut().go_bottom(),
-            KeyCode::Char('g') | KeyCode::Char('c') => {
-                self.pending_key = Some(match key.code {
-                    KeyCode::Char(c) => c,
-                    _ => unreachable!(),
-                });
+            KeyCode::Char(c @ ('g' | 'c')) => {
+                self.pending_key = Some(c);
                 self.pending_key_time = Some(Instant::now());
             }
             KeyCode::Char('d') if key.modifiers.contains(KeyModifiers::CONTROL) => {
@@ -155,11 +152,8 @@ impl App {
             KeyCode::Char('j') | KeyCode::Down => self.active_panel_mut().move_down(),
             KeyCode::Char('k') | KeyCode::Up => self.active_panel_mut().move_up(),
             KeyCode::Char('G') => self.active_panel_mut().go_bottom(),
-            KeyCode::Char('g') | KeyCode::Char('c') => {
-                self.pending_key = Some(match key.code {
-                    KeyCode::Char(c) => c,
-                    _ => unreachable!(),
-                });
+            KeyCode::Char(c @ ('g' | 'c')) => {
+                self.pending_key = Some(c);
                 self.pending_key_time = Some(Instant::now());
             }
             KeyCode::Char('d') if key.modifiers.contains(KeyModifiers::CONTROL) => {

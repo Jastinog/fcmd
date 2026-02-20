@@ -98,7 +98,9 @@ impl App {
                 self.goto_bookmark();
             }
             KeyCode::Char('d') => {
-                let name = self.bookmarks[self.bookmark_cursor].0.clone();
+                let Some((name, _)) = self.bookmarks.get(self.bookmark_cursor).cloned() else {
+                    return;
+                };
                 self.remove_bookmark_by_name(&name);
                 self.status_message = format!("Bookmark removed: {name}");
                 if self.bookmarks.is_empty() {
@@ -123,10 +125,9 @@ impl App {
     }
 
     pub(super) fn rename_bookmark_prompt(&mut self) {
-        if self.bookmarks.is_empty() {
+        let Some((old_name, _)) = self.bookmarks.get(self.bookmark_cursor).cloned() else {
             return;
-        }
-        let old_name = self.bookmarks[self.bookmark_cursor].0.clone();
+        };
         self.rename_input = old_name.clone();
         self.bookmark_rename_old = Some(old_name);
         self.mode = Mode::BookmarkRename;
