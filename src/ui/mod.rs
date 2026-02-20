@@ -230,6 +230,10 @@ pub fn render(f: &mut Frame, app: &mut App) {
         overlays::render_chown_picker(f, app, full_area);
     }
 
+    if app.mode == Mode::Info {
+        overlays::render_info_popup(f, app, full_area);
+    }
+
     if app.mode == Mode::Search {
         overlays::render_search_popup(f, app, full_area);
     }

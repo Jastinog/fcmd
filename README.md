@@ -44,9 +44,17 @@ Full Vim motions: `hjkl`, `gg`/`G`, `Ctrl-d`/`Ctrl-u`, `/` incremental search wi
 
 ### File Operations with Undo
 
-Yank (`yy`), delete (`dd`), paste (`p`/`P`), rename (`r`), create (`a`). All destructive operations are undoable (`u`) with a 50-step stack. Paste runs in the background with a progress indicator.
+Yank (`yy`), delete (`dd` to trash / `dD` permanently), paste (`p`/`P`), rename (`r`), create (`a`). All destructive operations are undoable (`u`) with a 50-step stack. Paste runs in the background with a progress indicator.
 
 ![Delete confirmation](assets/delete-confirm.png)
+
+### File Info
+
+Press `i` on any file or directory to see detailed information: type, full path, size, permissions (rwx with color coding), owner/group, timestamps (modified, created, accessed), inode, hard links, device, and git status. For directories, total size, file count, and subdirectory count are calculated in the background.
+
+### Permissions & Ownership
+
+`cp` opens an interactive chmod dialog with live octal-to-rwx preview. `co` opens a chown picker with scrollable user/group columns to change ownership.
 
 ### Telescope-Style Fuzzy Find
 
@@ -58,9 +66,9 @@ Yank (`yy`), delete (`dd`), paste (`p`/`P`), rename (`r`), create (`a`). All des
 
 `Space t` toggles a tree view on the left (20% width). Navigate with `j`/`k`, expand/collapse directories, and jump to any location.
 
-### File Preview
+### File Preview with Syntax Highlighting
 
-`Enter` on a file opens a preview popup with syntax-aware content display. `Space p` toggles a persistent side preview panel. Scroll with `j`/`k`, open in your editor with `o`.
+`Enter` on a file opens a preview popup with syntax highlighting (powered by syntect). Binary files are displayed as hex dumps. `Space p` toggles a persistent side preview panel. Scroll with `j`/`k`, search within preview with `/`, navigate matches with `n`/`N`, open in your editor with `o`.
 
 ![File preview popup](assets/file-preview.png)
 
@@ -86,11 +94,11 @@ Auto-detected per-file git status indicators directly in the file list — modif
 
 ![Bookmarks popup](assets/bookmarks.png)
 
-`b` bookmarks the selected directory, `B` opens the bookmarks popup — navigate, add (`a`), delete (`d`), rename (`e`). `m` sets a colored visual mark (3 severity levels) on the current file. `'a`–`'z` sets named jump marks for quick navigation. All marks and bookmarks persist across sessions.
+`b` bookmarks the selected directory, `B` opens the bookmarks popup — navigate, add (`a`), delete (`d`), rename (`e`). `m` sets a colored visual mark (3 severity levels) on the current file, `M` jumps to the next marked file. `'a`–`'z` sets named jump marks for quick navigation. All marks and bookmarks persist across sessions.
 
 ### Session Persistence
 
-Tabs, paths, cursor positions, theme, sort modes, and visual marks are saved automatically in a local SQLite database and restored on next launch.
+Tabs, paths, cursor positions, theme, sort modes, directory sizes, and visual marks are saved automatically in a local SQLite database and restored on next launch.
 
 ---
 
@@ -136,10 +144,17 @@ cargo install --path .
 | `gg` / `G` | Jump to top / bottom |
 | `Ctrl-d` / `Ctrl-u` | Half-page down / up |
 | `Tab` | Switch panel |
+| `Ctrl-l` / `Ctrl-h` | Focus right / left panel |
 | `gt` / `gT` | Next / previous tab |
 | `Ctrl+T` | New tab |
 | `Ctrl+W` | Close tab |
 | `~` | Go to home directory |
+| `-` | Go to parent (alternative) |
+
+### Search
+
+| Key | Action |
+|-----|--------|
 | `/` | Incremental search |
 | `n` / `N` | Next / previous search match |
 
@@ -148,36 +163,37 @@ cargo install --path .
 | Key | Action |
 |-----|--------|
 | `yy` | Yank (copy to register) |
-| `dd` | Delete (with confirmation) |
+| `dd` | Move to trash (with confirmation) |
+| `dD` | Permanently delete (with confirmation) |
 | `p` | Paste into active panel |
 | `P` | Paste (overwrite existing) |
 | `r` | Rename in-place |
-| `a` | Create new file or directory |
+| `a` | Create new file or directory (append `/` for dir) |
 | `u` | Undo last operation |
 | `yp` | Copy file path to clipboard |
+| `yn` | Copy file name to clipboard |
 | `o` | Open in `$VISUAL` / `$EDITOR` |
+| `i` | File / directory info popup |
+| `cp` | Permissions (chmod) |
+| `co` | Owner (chown) |
 
 ### Selection
 
 | Key | Action |
 |-----|--------|
-| `v` | Visual mode (contiguous range) |
+| `v` / `V` | Visual mode (contiguous range) |
 | `Shift+Up/Down` | Select mode (toggle individual) |
 | `Space a` | Select all |
 | `Space n` | Unselect all |
 | `:select <glob>` | Select by glob pattern |
 | `:unselect <glob>` | Unselect by glob pattern |
 
-### Preview Popup
+### Visual Marks
 
 | Key | Action |
 |-----|--------|
-| `Enter` | Open preview on a file |
-| `j` / `k` | Scroll down / up |
-| `G` / `g` | Jump to bottom / top |
-| `Ctrl-d` / `Ctrl-u` | Half-page down / up |
-| `o` | Open in editor |
-| `Esc` / `q` | Close preview |
+| `m` | Toggle visual mark (cycles 3 severity levels) |
+| `M` | Jump to next visual mark |
 
 ### Find
 
@@ -188,15 +204,40 @@ cargo install --path .
 | `Space ,` | Find local (alternative) |
 | `Space .` | Find global (alternative) |
 
-### Sort Shortcuts
+### Preview Popup
+
+| Key | Action |
+|-----|--------|
+| `Enter` | Open preview on a file |
+| `j` / `k` | Scroll down / up |
+| `G` / `g` | Jump to bottom / top |
+| `Ctrl-d` / `Ctrl-u` | Half-page down / up |
+| `Ctrl-f` / `Ctrl-b` | Full page down / up |
+| `/` | Search within preview |
+| `n` / `N` | Next / previous match |
+| `o` | Open in editor |
+| `Esc` / `q` | Close preview |
+
+### Info Popup
+
+| Key | Action |
+|-----|--------|
+| `i` | Open info popup |
+| `j` / `k` | Scroll down / up |
+| `Ctrl-d` / `Ctrl-u` | Half-page down / up |
+| `Esc` / `q` / `i` | Close |
+
+### Sort
 
 | Key | Mode |
 |-----|------|
 | `sn` | Sort by name |
 | `ss` | Sort by size |
-| `sd` | Sort by date modified |
+| `sd` / `sm` | Sort by date modified |
 | `sc` | Sort by date created |
 | `se` | Sort by extension |
+| `sr` | Reverse sort order |
+| `Space s` | Sort popup (interactive) |
 
 ### Space Leader Menu
 
@@ -215,26 +256,62 @@ Press `Space` to open a which-key style popup with all available commands:
 | `Space ?` | Show help |
 | `Space a` | Select all |
 | `Space n` | Unselect all |
+| `Space ,` | Find local |
+| `Space .` | Find global |
+
+### Bookmarks
+
+| Key | Action |
+|-----|--------|
+| `b` | Bookmark current directory |
+| `B` | Open bookmarks popup |
+
+Inside the bookmarks popup: `Enter` to go, `a` to add, `d` to delete, `e` to rename.
+
+### Named Marks
+
+| Key | Action |
+|-----|--------|
+| `'a`–`'z` | Go to named mark |
+
+Set marks via `:mark <a-z>` in command mode.
+
+### Other
+
+| Key | Action |
+|-----|--------|
+| `T` | Theme picker |
+| `J` / `K` | Scroll side preview |
+| `Ctrl-r` | Refresh current panel |
+| `q` | Quit |
 
 ### Command Mode
 
+Press `:` to enter command mode.
+
 | Command | Action |
 |---------|--------|
+| `:q` / `:quit` | Quit |
 | `:cd <path>` | Change directory |
 | `:mkdir <name>` | Create directory |
 | `:touch <name>` | Create file |
 | `:rename <name>` | Rename selected item |
+| `:find <query>` | Find in current directory |
 | `:theme <name>` | Set color theme |
-| `:sort <mode>` | Set sort (name/size/modified/created/ext) |
+| `:sort <mode>` | Set sort (name/size/mod/cre/ext) |
 | `:select <glob>` | Select files matching pattern |
 | `:unselect <glob>` | Unselect files matching pattern |
-| `:bookmark <name>` | Bookmark selected directory |
+| `:hidden` | Toggle hidden files |
+| `:du` | Calculate directory sizes |
+| `:bookmark <name>` | Bookmark current directory |
+| `:bookmarks` | Open bookmarks popup |
 | `:brename <old> <new>` | Rename a bookmark |
 | `:bdel <name>` | Delete a bookmark |
-| `:du` | Calculate directory sizes |
-| `:tabnew` / `Ctrl+T` | Open new tab |
-| `:tabclose` / `Ctrl+W` | Close current tab |
-| `:q` | Quit |
+| `:mark <a-z>` | Set a named mark |
+| `:marks` | List all named marks |
+| `:tabnew` | Open new tab |
+| `:tabclose` | Close current tab |
+| `:tabnext` / `:tabprev` | Navigate tabs |
 
 ---
 
@@ -304,10 +381,10 @@ fcmd stores its data in `~/.config/fcmd/`:
 
 | Path | Description |
 |------|-------------|
-| `~/.config/fcmd/fcmd.db` | SQLite database (session, marks, cache) |
+| `~/.config/fcmd/fcmd.db` | SQLite database (session, marks, bookmarks, sorts, sizes) |
 | `~/.config/fcmd/themes/` | Custom theme files (TOML) |
 
-The editor for `o` is determined by `$VISUAL`, then `$EDITOR`, defaulting to `vim`.
+The editor for `o` is determined by `$VISUAL`, then `$EDITOR`, defaulting to `vi`.
 
 ---
 

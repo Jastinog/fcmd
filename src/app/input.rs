@@ -143,6 +143,9 @@ impl App {
             KeyCode::Char('b') => self.add_bookmark_prompt(),
             KeyCode::Char('B') => self.open_bookmarks(),
 
+            // Info
+            KeyCode::Char('i') => self.enter_info(),
+
             // Toggles & settings
             KeyCode::Char('r') if ctrl => self.refresh_current_panel(),
             KeyCode::Char('T') => self.enter_theme_picker(),

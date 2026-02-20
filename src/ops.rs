@@ -65,7 +65,7 @@ pub enum ProgressMsg {
 }
 
 /// Total size of a path (recursive for directories).
-fn path_size(p: &Path) -> u64 {
+pub fn path_size(p: &Path) -> u64 {
     if p.is_dir() {
         fs::read_dir(p)
             .into_iter()
@@ -258,6 +258,32 @@ pub fn du_in_background(dirs: Vec<PathBuf>, tx: mpsc::Sender<DuMsg>) {
         }
         let _ = tx.send(DuMsg::Finished { sizes });
     });
+}
+
+/// Recursive directory stats: (total_size, file_count, dir_count).
+pub fn dir_stats(p: &Path) -> (u64, usize, usize) {
+    let mut size = 0u64;
+    let mut files = 0usize;
+    let mut dirs = 0usize;
+    dir_stats_inner(p, &mut size, &mut files, &mut dirs);
+    (size, files, dirs)
+}
+
+fn dir_stats_inner(p: &Path, size: &mut u64, files: &mut usize, dirs: &mut usize) {
+    let rd = match fs::read_dir(p) {
+        Ok(rd) => rd,
+        Err(_) => return,
+    };
+    for entry in rd.flatten() {
+        let path = entry.path();
+        if path.is_dir() {
+            *dirs += 1;
+            dir_stats_inner(&path, size, files, dirs);
+        } else {
+            *files += 1;
+            *size += fs::metadata(&path).map(|m| m.len()).unwrap_or(0);
+        }
+    }
 }
 
 // --- Operations ---

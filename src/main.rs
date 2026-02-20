@@ -113,6 +113,7 @@ fn run(
         app.poll_progress();
         app.poll_du();
         app.poll_find();
+        app.poll_info_du();
 
         if let Some(path) = app.open_editor.take() {
             open_in_editor(terminal, app, &path)?;
