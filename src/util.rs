@@ -140,6 +140,10 @@ pub fn copy_to_clipboard(text: &str) -> std::io::Result<()> {
         std::process::Command::new("pbcopy")
             .stdin(std::process::Stdio::piped())
             .spawn()?
+    } else if std::env::var("WAYLAND_DISPLAY").is_ok() {
+        std::process::Command::new("wl-copy")
+            .stdin(std::process::Stdio::piped())
+            .spawn()?
     } else {
         std::process::Command::new("xclip")
             .args(["-selection", "clipboard"])

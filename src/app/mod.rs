@@ -12,6 +12,7 @@ pub(crate) use crate::preview::Preview;
 pub(crate) use crate::theme::Theme;
 
 mod command;
+mod dialogs;
 mod file_ops;
 mod find;
 mod git;
@@ -19,6 +20,7 @@ mod input;
 mod marks;
 mod navigation;
 mod polling;
+mod preview_mode;
 mod rename;
 mod search;
 mod tree;

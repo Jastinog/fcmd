@@ -11,10 +11,10 @@ impl App {
             .iter()
             .enumerate()
             .any(|(i, dir)| {
-                if let Some(ref root) = self.git_roots[i] {
-                    if dir.starts_with(root) {
-                        return false;
-                    }
+                if let Some(ref root) = self.git_roots[i]
+                    && dir.starts_with(root)
+                {
+                    return false;
                 }
                 self.git_checked_dirs[i].as_deref() != Some(dir)
             });
@@ -60,7 +60,7 @@ impl App {
                 &root.to_string_lossy(),
                 "status",
                 "--porcelain=v1",
-                "-uall",
+                "-unormal",
             ]);
             let output = match status_output {
                 Ok(o) if o.status.success() => o,

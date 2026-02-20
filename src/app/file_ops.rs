@@ -51,7 +51,7 @@ impl App {
             let result = if permanent {
                 ops::remove_path(path)
             } else {
-                trash::delete(path).map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))
+                trash::delete(path).map_err(std::io::Error::other)
             };
             match result {
                 Ok(()) => count += 1,

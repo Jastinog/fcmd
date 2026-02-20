@@ -35,27 +35,27 @@ pub(super) fn build_content_spans<'a>(
     max_width: usize,
     default_fg: Color,
 ) -> Vec<Span<'a>> {
-    if let Some(ref styled) = p.styled_lines {
-        if let Some(segments) = styled.get(line_idx) {
-            let mut spans = Vec::new();
-            let mut chars_used = 0;
-            for seg in segments {
-                if chars_used >= max_width {
-                    break;
-                }
-                let remaining = max_width - chars_used;
-                let seg_chars: usize = seg.text.chars().count();
-                if seg_chars <= remaining {
-                    spans.push(Span::styled(seg.text.clone(), seg.style));
-                    chars_used += seg_chars;
-                } else {
-                    let truncated: String = seg.text.chars().take(remaining).collect();
-                    spans.push(Span::styled(truncated, seg.style));
-                    chars_used += remaining;
-                }
+    if let Some(ref styled) = p.styled_lines
+        && let Some(segments) = styled.get(line_idx)
+    {
+        let mut spans = Vec::new();
+        let mut chars_used = 0;
+        for seg in segments {
+            if chars_used >= max_width {
+                break;
             }
-            return spans;
+            let remaining = max_width - chars_used;
+            let seg_chars: usize = seg.text.chars().count();
+            if seg_chars <= remaining {
+                spans.push(Span::styled(seg.text.clone(), seg.style));
+                chars_used += seg_chars;
+            } else {
+                let truncated: String = seg.text.chars().take(remaining).collect();
+                spans.push(Span::styled(truncated, seg.style));
+                chars_used += remaining;
+            }
         }
+        return spans;
     }
     // Fallback: plain text
     let line = &p.lines[line_idx];

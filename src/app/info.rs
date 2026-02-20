@@ -65,10 +65,10 @@ impl App {
         }
 
         // Extension (files only)
-        if !is_dir {
-            if let Some(ext) = path.extension() {
-                lines.push(("Extension".into(), ext.to_string_lossy().into_owned()));
-            }
+        if !is_dir
+            && let Some(ext) = path.extension()
+        {
+            lines.push(("Extension".into(), ext.to_string_lossy().into_owned()));
         }
 
         // Permissions
@@ -105,7 +105,7 @@ impl App {
 
         // Inode, device, hard links (Unix)
         #[cfg(unix)]
-        if let Some(ref m) = symlink_meta.as_ref().or(meta.as_ref()) {
+        if let Some(m) = symlink_meta.as_ref().or(meta.as_ref()) {
             lines.push(("Inode".into(), format!("{}", m.ino())));
             lines.push(("Hard links".into(), format!("{}", m.nlink())));
             lines.push(("Device".into(), format!("{}", m.dev())));
