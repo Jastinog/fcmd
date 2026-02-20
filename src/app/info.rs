@@ -235,6 +235,11 @@ fn get_user_name(uid: u32) -> Option<String> {
     }
 }
 
+#[cfg(not(unix))]
+fn get_user_name(_uid: u32) -> Option<String> {
+    None
+}
+
 #[cfg(unix)]
 fn get_group_name(gid: u32) -> Option<String> {
     unsafe {
@@ -248,4 +253,9 @@ fn get_group_name(gid: u32) -> Option<String> {
                 .into_owned(),
         )
     }
+}
+
+#[cfg(not(unix))]
+fn get_group_name(_gid: u32) -> Option<String> {
+    None
 }

@@ -47,6 +47,18 @@ pub struct DuProgress {
     pub started_at: Instant,
 }
 
+pub enum GitMsg {
+    Finished {
+        statuses: HashMap<PathBuf, char>,
+        roots: [Option<PathBuf>; 2],
+        checked_dirs: [Option<PathBuf>; 2],
+    },
+}
+
+pub struct GitProgress {
+    pub rx: mpsc::Receiver<GitMsg>,
+}
+
 #[derive(PartialEq, Eq)]
 pub enum Mode {
     Normal,
@@ -205,6 +217,7 @@ pub struct App {
     pub git_statuses: HashMap<PathBuf, char>,
     pub(super) git_roots: [Option<PathBuf>; 2],
     pub(super) git_checked_dirs: [Option<PathBuf>; 2],
+    pub(super) git_progress: Option<GitProgress>,
 }
 
 impl App {
@@ -349,6 +362,7 @@ impl App {
             git_statuses: HashMap::new(),
             git_roots: [None, None],
             git_checked_dirs: [None, None],
+            git_progress: None,
         };
         app.refresh_git_status();
         // Apply saved sort preferences to restored panels

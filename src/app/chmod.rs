@@ -272,11 +272,21 @@ fn read_octal_mode(path: &std::path::Path) -> Option<u32> {
     Some(meta.permissions().mode() & 0o7777)
 }
 
+#[cfg(not(unix))]
+fn read_octal_mode(_path: &std::path::Path) -> Option<u32> {
+    None
+}
+
 #[cfg(unix)]
 fn read_uid_gid(path: &std::path::Path) -> Option<(u32, u32)> {
     use std::os::unix::fs::MetadataExt;
     let meta = std::fs::metadata(path).ok()?;
     Some((meta.uid(), meta.gid()))
+}
+
+#[cfg(not(unix))]
+fn read_uid_gid(_path: &std::path::Path) -> Option<(u32, u32)> {
+    None
 }
 
 #[cfg(unix)]
@@ -303,6 +313,11 @@ fn list_system_users() -> Vec<(String, u32)> {
     users
 }
 
+#[cfg(not(unix))]
+fn list_system_users() -> Vec<(String, u32)> {
+    Vec::new()
+}
+
 #[cfg(unix)]
 fn list_system_groups() -> Vec<(String, u32)> {
     let mut seen = HashSet::new();
@@ -325,6 +340,11 @@ fn list_system_groups() -> Vec<(String, u32)> {
         libc::endgrent();
     }
     groups
+}
+
+#[cfg(not(unix))]
+fn list_system_groups() -> Vec<(String, u32)> {
+    Vec::new()
 }
 
 pub(crate) fn format_rwx(mode: u32) -> String {

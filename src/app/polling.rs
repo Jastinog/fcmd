@@ -198,6 +198,30 @@ impl App {
         }
     }
 
+    pub fn poll_git(&mut self) {
+        let progress = match self.git_progress.as_ref() {
+            Some(p) => p,
+            None => return,
+        };
+
+        match progress.rx.try_recv() {
+            Ok(GitMsg::Finished {
+                statuses,
+                roots,
+                checked_dirs,
+            }) => {
+                self.git_statuses = statuses;
+                self.git_roots = roots;
+                self.git_checked_dirs = checked_dirs;
+                self.git_progress = None;
+            }
+            Err(std::sync::mpsc::TryRecvError::Disconnected) => {
+                self.git_progress = None;
+            }
+            Err(std::sync::mpsc::TryRecvError::Empty) => {}
+        }
+    }
+
     fn ensure_dir_sizes_loaded(&mut self) {
         let Some(ref db) = self.db else { return };
         let left = self.tab().left.path.clone();

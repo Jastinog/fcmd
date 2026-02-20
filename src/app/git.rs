@@ -1,5 +1,6 @@
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
+use std::sync::mpsc;
 
 use super::*;
 
@@ -23,95 +24,122 @@ impl App {
         }
     }
 
-    /// Fetch git status for both panels and merge results.
+    /// Spawn a background thread to fetch git status for both panels.
     pub fn refresh_git_status(&mut self) {
-        self.git_statuses.clear();
-        self.git_roots = [None, None];
+        // Skip if a git fetch is already in progress
+        if self.git_progress.is_some() {
+            return;
+        }
 
         let tab = &self.tabs[self.active_tab];
         let dirs = [tab.left.path.clone(), tab.right.path.clone()];
+
+        // Mark checked dirs immediately to prevent re-spawning on every keypress
         self.git_checked_dirs = [Some(dirs[0].clone()), Some(dirs[1].clone())];
 
-        let mut seen_roots = HashSet::new();
+        let (tx, rx) = mpsc::channel();
+        std::thread::spawn(move || {
+            let (statuses, roots, checked_dirs) = compute_git_status(dirs);
+            let _ = tx.send(GitMsg::Finished {
+                statuses,
+                roots,
+                checked_dirs,
+            });
+        });
 
-        for (i, dir) in dirs.iter().enumerate() {
-            let root_output = run_git_command(&[
-                "-C",
-                &dir.to_string_lossy(),
-                "rev-parse",
-                "--show-toplevel",
-            ]);
-            let root = match root_output {
-                Ok(o) if o.status.success() => {
-                    PathBuf::from(String::from_utf8_lossy(&o.stdout).trim())
-                }
-                _ => continue,
-            };
+        self.git_progress = Some(GitProgress { rx });
+    }
+}
 
-            self.git_roots[i] = Some(root.clone());
+type GitResult = (HashMap<PathBuf, char>, [Option<PathBuf>; 2], [Option<PathBuf>; 2]);
 
-            // Skip if we already fetched status for this repo root
-            if !seen_roots.insert(root.clone()) {
+/// Compute git status for both panel directories (runs on any thread).
+fn compute_git_status(dirs: [PathBuf; 2]) -> GitResult {
+    let mut statuses = HashMap::new();
+    let mut roots: [Option<PathBuf>; 2] = [None, None];
+    let checked_dirs = [Some(dirs[0].clone()), Some(dirs[1].clone())];
+
+    let mut seen_roots = HashSet::new();
+
+    for (i, dir) in dirs.iter().enumerate() {
+        let root_output = run_git_command(&[
+            "-C",
+            &dir.to_string_lossy(),
+            "rev-parse",
+            "--show-toplevel",
+        ]);
+        let root = match root_output {
+            Ok(o) if o.status.success() => {
+                PathBuf::from(String::from_utf8_lossy(&o.stdout).trim())
+            }
+            _ => continue,
+        };
+
+        roots[i] = Some(root.clone());
+
+        // Skip if we already fetched status for this repo root
+        if !seen_roots.insert(root.clone()) {
+            continue;
+        }
+
+        let status_output = run_git_command(&[
+            "-C",
+            &root.to_string_lossy(),
+            "status",
+            "--porcelain=v1",
+            "-unormal",
+        ]);
+        let output = match status_output {
+            Ok(o) if o.status.success() => o,
+            _ => continue,
+        };
+
+        let stdout = String::from_utf8_lossy(&output.stdout);
+
+        for line in stdout.lines() {
+            if line.len() < 4 {
                 continue;
             }
-
-            let status_output = run_git_command(&[
-                "-C",
-                &root.to_string_lossy(),
-                "status",
-                "--porcelain=v1",
-                "-unormal",
-            ]);
-            let output = match status_output {
-                Ok(o) if o.status.success() => o,
-                _ => continue,
+            let x = line.as_bytes()[0] as char;
+            let y = line.as_bytes()[1] as char;
+            let rel_path = &line[3..];
+            // For renames: "R  old -> new", use the new path
+            let rel_path = if let Some(pos) = rel_path.find(" -> ") {
+                &rel_path[pos + 4..]
+            } else {
+                rel_path
             };
 
-            let stdout = String::from_utf8_lossy(&output.stdout);
+            let status = match (x, y) {
+                ('?', '?') => '?',
+                (_, 'M') => 'M',
+                (_, 'D') => 'D',
+                ('M', _) => 'M',
+                ('A', _) => 'A',
+                ('R', _) => 'R',
+                ('D', _) => 'D',
+                _ => 'M',
+            };
 
-            for line in stdout.lines() {
-                if line.len() < 4 {
-                    continue;
+            let abs_path = root.join(rel_path);
+            statuses.insert(abs_path.clone(), status);
+
+            // Propagate to parent directories up to root
+            let mut parent = abs_path.parent();
+            while let Some(p) = parent {
+                if !p.starts_with(&root) || p == root {
+                    break;
                 }
-                let x = line.as_bytes()[0] as char;
-                let y = line.as_bytes()[1] as char;
-                let rel_path = &line[3..];
-                // For renames: "R  old -> new", use the new path
-                let rel_path = if let Some(pos) = rel_path.find(" -> ") {
-                    &rel_path[pos + 4..]
-                } else {
-                    rel_path
-                };
-
-                let status = match (x, y) {
-                    ('?', '?') => '?',
-                    (_, 'M') => 'M',
-                    (_, 'D') => 'D',
-                    ('M', _) => 'M',
-                    ('A', _) => 'A',
-                    ('R', _) => 'R',
-                    ('D', _) => 'D',
-                    _ => 'M',
-                };
-
-                let abs_path = root.join(rel_path);
-                self.git_statuses.insert(abs_path.clone(), status);
-
-                // Propagate to parent directories up to root
-                let mut parent = abs_path.parent();
-                while let Some(p) = parent {
-                    if !p.starts_with(&root) || p == root {
-                        break;
-                    }
-                    let existing = self.git_statuses.get(p).copied().unwrap_or('\0');
-                    if git_priority(status) > git_priority(existing) {
-                        self.git_statuses.insert(p.to_path_buf(), status);
-                    }
-                    parent = p.parent();
+                let existing = statuses.get(p).copied().unwrap_or('\0');
+                if git_priority(status) > git_priority(existing) {
+                    statuses.insert(p.to_path_buf(), status);
                 }
+                parent = p.parent();
             }
         }
     }
+
+    (statuses, roots, checked_dirs)
 }
 
 use std::time::{Duration, Instant};

@@ -365,6 +365,14 @@ pub fn chmod(path: &Path, mode: u32) -> std::io::Result<()> {
     fs::set_permissions(path, fs::Permissions::from_mode(mode))
 }
 
+#[cfg(not(unix))]
+pub fn chmod(_path: &Path, _mode: u32) -> std::io::Result<()> {
+    Err(std::io::Error::new(
+        std::io::ErrorKind::Unsupported,
+        "chmod is not supported on this platform",
+    ))
+}
+
 #[cfg(unix)]
 pub fn chown(path: &Path, uid: Option<u32>, gid: Option<u32>) -> std::io::Result<()> {
     use std::ffi::CString;
@@ -379,6 +387,14 @@ pub fn chown(path: &Path, uid: Option<u32>, gid: Option<u32>) -> std::io::Result
     } else {
         Err(std::io::Error::last_os_error())
     }
+}
+
+#[cfg(not(unix))]
+pub fn chown(_path: &Path, _uid: Option<u32>, _gid: Option<u32>) -> std::io::Result<()> {
+    Err(std::io::Error::new(
+        std::io::ErrorKind::Unsupported,
+        "chown is not supported on this platform",
+    ))
 }
 
 // --- Helpers ---
