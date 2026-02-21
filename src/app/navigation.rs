@@ -278,10 +278,13 @@ impl App {
             Some(e) => e.path.to_string_lossy().into_owned(),
             None => return,
         };
-        match copy_to_clipboard(&path_str) {
-            Ok(()) => self.status_message = format!("Path: {path_str}"),
-            Err(_) => self.status_message = "Clipboard not available".into(),
-        }
+        let label = format!("Path: {path_str}");
+        let (tx, rx) = tokio::sync::oneshot::channel();
+        self.file_op_rx = Some(rx);
+        tokio::task::spawn_blocking(move || {
+            let ok = copy_to_clipboard(&path_str).is_ok();
+            let _ = tx.send(super::FileOpResult::Clipboard { label, ok });
+        });
     }
 
     pub(super) fn yank_name(&mut self) {
@@ -289,10 +292,13 @@ impl App {
             Some(e) => e.name.clone(),
             None => return,
         };
-        match copy_to_clipboard(&name) {
-            Ok(()) => self.status_message = format!("Name: {name}"),
-            Err(_) => self.status_message = "Clipboard not available".into(),
-        }
+        let label = format!("Name: {name}");
+        let (tx, rx) = tokio::sync::oneshot::channel();
+        self.file_op_rx = Some(rx);
+        tokio::task::spawn_blocking(move || {
+            let ok = copy_to_clipboard(&name).is_ok();
+            let _ = tx.send(super::FileOpResult::Clipboard { label, ok });
+        });
     }
 
     pub fn which_key_hints(&self) -> Option<&[(&str, &str)]> {

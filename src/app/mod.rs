@@ -169,6 +169,10 @@ pub enum FileOpResult {
     ThemeList {
         themes: Vec<String>,
     },
+    Clipboard {
+        label: String,
+        ok: bool,
+    },
 }
 
 #[derive(PartialEq, Eq, Clone, Copy)]
@@ -796,6 +800,13 @@ impl App {
                     }
                 }
             },
+            FileOpResult::Clipboard { label, ok } => {
+                self.status_message = if ok {
+                    label
+                } else {
+                    "Clipboard not available".into()
+                };
+            }
         }
     }
 
