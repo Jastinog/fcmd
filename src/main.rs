@@ -15,6 +15,7 @@ mod app;
 mod db;
 mod find;
 mod icons;
+mod natsort;
 mod ops;
 mod panel;
 mod preview;

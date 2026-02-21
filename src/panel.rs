@@ -3,6 +3,8 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::time::SystemTime;
 
+use crate::natsort::natsort;
+
 pub struct FileEntry {
     pub name: String,
     pub path: PathBuf,
@@ -149,7 +151,7 @@ impl Panel {
         }
 
         let sort_name = |v: &mut Vec<FileEntry>| {
-            v.sort_by_cached_key(|e| e.name.to_lowercase());
+            v.sort_by(|a, b| natsort(a.name.as_bytes(), b.name.as_bytes()));
         };
         match self.sort_mode {
             SortMode::Name => {
@@ -179,12 +181,18 @@ impl Panel {
             }
             SortMode::Extension => {
                 sort_name(&mut dirs);
-                files.sort_by_cached_key(|e| {
-                    let ext = Path::new(&e.name)
+                files.sort_by(|a, b| {
+                    let ext_a = Path::new(&a.name)
                         .extension()
                         .map(|x| x.to_string_lossy().to_lowercase())
                         .unwrap_or_default();
-                    (ext, e.name.to_lowercase())
+                    let ext_b = Path::new(&b.name)
+                        .extension()
+                        .map(|x| x.to_string_lossy().to_lowercase())
+                        .unwrap_or_default();
+                    ext_a
+                        .cmp(&ext_b)
+                        .then_with(|| natsort(a.name.as_bytes(), b.name.as_bytes()))
                 });
             }
         }
@@ -540,7 +548,7 @@ pub fn load_dir_entries(
     }
 
     let sort_name = |v: &mut Vec<FileEntry>| {
-        v.sort_by_cached_key(|e| e.name.to_lowercase());
+        v.sort_by(|a, b| natsort(a.name.as_bytes(), b.name.as_bytes()));
     };
     match sort_mode {
         SortMode::Name => {
@@ -570,12 +578,18 @@ pub fn load_dir_entries(
         }
         SortMode::Extension => {
             sort_name(&mut dirs);
-            files.sort_by_cached_key(|e| {
-                let ext = Path::new(&e.name)
+            files.sort_by(|a, b| {
+                let ext_a = Path::new(&a.name)
                     .extension()
                     .map(|x| x.to_string_lossy().to_lowercase())
                     .unwrap_or_default();
-                (ext, e.name.to_lowercase())
+                let ext_b = Path::new(&b.name)
+                    .extension()
+                    .map(|x| x.to_string_lossy().to_lowercase())
+                    .unwrap_or_default();
+                ext_a
+                    .cmp(&ext_b)
+                    .then_with(|| natsort(a.name.as_bytes(), b.name.as_bytes()))
             });
         }
     }
