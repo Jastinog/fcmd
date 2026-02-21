@@ -87,6 +87,10 @@ impl App {
             let is_dir = line.is_dir;
             let side = self.tab().active;
             if is_dir {
+                // Skip if already showing this directory
+                if self.active_panel().path == path {
+                    return;
+                }
                 self.active_panel_mut().navigate_to(path);
                 self.apply_dir_sort_no_reload();
                 self.spawn_dir_load(side, None);
