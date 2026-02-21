@@ -66,9 +66,9 @@ Press `i` on any file or directory to see detailed information: type, full path,
 
 `Space t` toggles a tree view on the left (20% width). Navigate with `j`/`k`, expand/collapse directories, and jump to any location.
 
-### File Preview with Syntax Highlighting
+### File Preview
 
-`Enter` on a file opens a preview popup with syntax highlighting (powered by syntect). Binary files are displayed as hex dumps. `Space p` toggles a persistent side preview panel. Scroll with `j`/`k`, search within preview with `/`, navigate matches with `n`/`N`, open in your editor with `o`.
+`Enter` on a file opens a preview popup. Binary files are displayed as hex dumps. `Space p` toggles a persistent side preview panel. Scroll with `j`/`k`, search within preview with `/`, navigate matches with `n`/`N`, open in your editor with `o`.
 
 ![File preview popup](assets/file-preview.png)
 
@@ -76,13 +76,13 @@ Press `i` on any file or directory to see detailed information: type, full path,
 
 ![Tabs](assets/tabs.png)
 
-`Ctrl+T` creates a new tab, `Ctrl+W` closes it, `gt`/`gT` switches between them. Each tab has its own pair of panels and state. Session restores all tabs on next launch.
+`Ctrl+T` creates a new tab, `Ctrl+W` closes it, `gt`/`gT` switches between them. Each tab has its own pair of panels and state. The tab bar is always visible at the top. Session restores all tabs on next launch.
 
-### 166 Built-In Dark Themes
+### 217 Built-In Themes (Dark & Light)
 
 ![Theme picker](assets/theme-picker.png)
 
-Browse themes with `T` or set directly with `:theme <name>`. Includes popular schemes like **catppuccin-mocha**, **tokyo-night**, **gruvbox-dark**, **rose-pine**, **dracula**, **nord**, **kanagawa**, and many more. Add custom themes as TOML files.
+Browse themes with `T` or set directly with `:theme <name>`. The theme picker automatically classifies themes into Dark and Light categories based on background luminance. Includes popular schemes like **catppuccin-mocha**, **tokyo-night**, **gruvbox-dark**, **rose-pine**, **dracula**, **nord**, **kanagawa**, and many more — plus light variants like **catppuccin-latte**, **github-light**, **solarized-light**, **rose-pine-dawn**, and others. Add custom themes as TOML files.
 
 ### Git Integration
 
@@ -317,10 +317,10 @@ Press `:` to enter command mode.
 
 ## Themes
 
-166 built-in dark themes. Browse with `T` or set with `:theme <name>`.
+217 built-in themes (168 dark + 49 light). Browse with `T` or set with `:theme <name>`.
 
 <details>
-<summary><strong>Full theme list</strong></summary>
+<summary><strong>Dark themes (168)</strong></summary>
 
 | | | | |
 |---|---|---|---|
@@ -338,34 +338,55 @@ Press `:` to enter command mode.
 | doom-vibrant | dracula | dracula-pro | duskfox |
 | earthsong | edge-dark | eldritch | embark |
 | espresso | everblush | everforest-dark | fairy-floss |
-| falcon | fleet-dark | forest | frozen |
-| github-dark | github-dark-default | github-dark-high-contrast | github-dark-tritanopia |
-| github-dimmed | gotham | gruvbox-dark | gruvbox-hard |
-| gruvbox-material | hacker | halcyon | hardhacker |
-| horizon | horizon-dark | hybrid | hyper |
-| iceberg | inferno | jellybeans | kanagawa |
-| kanagawa-dragon | kanagawa-wave | lackluster | lavender |
-| materia | material-darker | material-ocean | material-palenight |
-| melange | mellow | miasma | midnight |
-| midnight-blue | min-dark | modus-vivendi | molokai |
-| monochrome | monokai | monokai-pro | moonbow |
-| moonfly | moonlight | nebula | neon |
-| night-city | night-owl | nightfly | nightfox |
-| noctis | noir | nord | nordic |
-| nova | obsidian | oceanic-next | omni |
-| one-dark | one-monokai | onedark-vivid | oxocarbon |
-| palefire | palenight | panda | papercolor-dark |
-| paradise | penumbra-dark | phosphor | pine |
-| poimandres | radical | retrowave | rose-pine |
-| rose-pine-moon | seti | shades-of-purple | slate |
-| snazzy | solarized-dark | solarized-osaka | sonokai |
-| spaceduck | spacemacs-dark | srcery | submarine |
-| sunset | sweetie | synthwave84 | tender |
-| terafox | thunderstorm | tokyo-night | tokyonight-moon |
-| tokyonight-storm | tomorrow-night | tomorrow-night-bright | umbra |
-| vesper | vitesse-dark | vividchalk | vscode-dark |
-| wilmersdorf | witch-hazel | wombat | xcode-dusk |
-| zenbones | zenburn | | |
+| falcon | far-classic | fleet-dark | forest |
+| frozen | github-dark | github-dark-default | github-dark-high-contrast |
+| github-dark-tritanopia | github-dimmed | gotham | gruvbox-dark |
+| gruvbox-hard | gruvbox-material | hacker | halcyon |
+| hardhacker | horizon | horizon-dark | hybrid |
+| hyper | iceberg | inferno | jellybeans |
+| kanagawa | kanagawa-dragon | kanagawa-wave | lackluster |
+| lavender | materia | material-darker | material-ocean |
+| material-palenight | mc-classic | melange | mellow |
+| miasma | midnight | midnight-blue | min-dark |
+| modus-vivendi | molokai | monochrome | monokai |
+| monokai-pro | moonbow | moonfly | moonlight |
+| nebula | neon | night-city | night-owl |
+| nightfly | nightfox | noctis | noir |
+| nord | nordic | nova | obsidian |
+| oceanic-next | omni | one-dark | one-monokai |
+| onedark-vivid | oxocarbon | palefire | palenight |
+| panda | papercolor-dark | paradise | penumbra-dark |
+| phosphor | pine | poimandres | radical |
+| retrowave | rose-pine | rose-pine-moon | seti |
+| shades-of-purple | slate | snazzy | solarized-dark |
+| solarized-osaka | sonokai | spaceduck | spacemacs-dark |
+| srcery | submarine | sunset | sweetie |
+| synthwave84 | tender | terafox | thunderstorm |
+| tokyo-night | tokyonight-moon | tokyonight-storm | tomorrow-night |
+| tomorrow-night-bright | umbra | vesper | vitesse-dark |
+| vividchalk | vscode-dark | wilmersdorf | witch-hazel |
+| wombat | xcode-dusk | zenbones | zenburn |
+
+</details>
+
+<details>
+<summary><strong>Light themes (49)</strong></summary>
+
+| | | | |
+|---|---|---|---|
+| acme | alabaster | ayu-light | base16-default-light |
+| bluloco-light | catppuccin-latte | cosmic-latte | dawnfox |
+| dayfox | edge-light | everforest-light | flatwhite |
+| fleet-light | flexoki-light | github-light | github-light-default |
+| github-light-high-contrast | gruvbox-light | horizon-light | intellij-light |
+| kanagawa-lotus | leuven | lucius-light | material-light |
+| melange-light | min-light | modus-operandi | night-owl-light |
+| noctis-lux | nord-light | one-light | oxocarbon-light |
+| papercolor-light | pencil-light | quiet-light | rose-pine-dawn |
+| sakura | serendipity-light | soft-era | solarized-light |
+| spacemacs-light | summerfruit-light | tokyo-night-day | tomorrow |
+| vitesse-light | vs-light | winter-is-coming-light | xcode-light |
+| zenbones-light | | | |
 
 </details>
 
