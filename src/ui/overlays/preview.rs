@@ -5,6 +5,7 @@ use ratatui::{
     text::{Line, Span},
     widgets::{Block, Borders, Clear, List, ListItem, Paragraph},
 };
+use unicode_width::UnicodeWidthStr;
 
 use crate::app::{App, Mode};
 use crate::ui::util::centered_rect;
@@ -101,9 +102,8 @@ pub(in crate::ui) fn render_preview_popup(f: &mut Frame, app: &App, area: Rect) 
             .skip(p.scroll)
             .take(list_height)
             .map(|line| {
-                let max_content = iw;
-                let content: String = if line.chars().count() > max_content {
-                    line.chars().take(max_content).collect()
+                let content = if line.width() > iw {
+                    crate::ui::preview::truncate_to_width(line, iw)
                 } else {
                     line.clone()
                 };

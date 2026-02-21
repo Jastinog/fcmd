@@ -7,6 +7,29 @@ use ratatui::style::Color;
 use syntect::highlighting::ThemeSet;
 use syntect::parsing::SyntaxSet;
 
+/// Expand tabs to spaces (4-space tab stops) and strip control chars.
+fn sanitize_line(line: &str) -> String {
+    let mut out = String::with_capacity(line.len());
+    let mut col = 0;
+    for ch in line.chars() {
+        match ch {
+            '\t' => {
+                let spaces = 4 - (col % 4);
+                for _ in 0..spaces {
+                    out.push(' ');
+                }
+                col += spaces;
+            }
+            c if c.is_control() => {}
+            c => {
+                out.push(c);
+                col += 1;
+            }
+        }
+    }
+    out
+}
+
 pub const MAX_LINES: usize = 50_000;
 const MAX_FILE_SIZE: u64 = 50 * 1_048_576; // 50 MB
 pub const HEX_DUMP_MAX: usize = 262_144; // 256 KB
@@ -118,7 +141,7 @@ impl Preview {
                 }
 
                 let text = String::from_utf8_lossy(&bytes);
-                let lines: Vec<String> = text.lines().take(MAX_LINES).map(String::from).collect();
+                let lines: Vec<String> = text.lines().take(MAX_LINES).map(|l| sanitize_line(l)).collect();
                 let info = format!("{} lines", lines.len());
                 Preview {
                     lines,
@@ -186,7 +209,7 @@ impl Preview {
         let mut lines = Vec::with_capacity(max_lines);
         for line_result in reader.lines().take(max_lines) {
             match line_result {
-                Ok(line) => lines.push(line),
+                Ok(line) => lines.push(sanitize_line(&line)),
                 Err(_) => break,
             }
         }

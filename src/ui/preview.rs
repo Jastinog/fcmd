@@ -5,9 +5,25 @@ use ratatui::{
     text::{Line, Span},
     widgets::{Block, Borders, List, ListItem, Paragraph},
 };
+use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
 
 use crate::preview::Preview;
 use crate::theme::Theme;
+
+/// Truncate a string to fit within `max_width` terminal cells.
+pub(super) fn truncate_to_width(s: &str, max_width: usize) -> String {
+    let mut out = String::new();
+    let mut w = 0;
+    for ch in s.chars() {
+        let cw = ch.width().unwrap_or(0);
+        if w + cw > max_width {
+            break;
+        }
+        out.push(ch);
+        w += cw;
+    }
+    out
+}
 
 /// Build styled spans for a hex dump line: offset(dim), hex(fg), ascii(accent).
 pub(super) fn build_hex_spans(line: &str, dim: Color, fg: Color, accent: Color) -> Vec<Span<'static>> {
@@ -39,28 +55,28 @@ pub(super) fn build_content_spans<'a>(
         && let Some(segments) = styled.get(line_idx)
     {
         let mut spans = Vec::new();
-        let mut chars_used = 0;
+        let mut width_used = 0;
         for seg in segments {
-            if chars_used >= max_width {
+            if width_used >= max_width {
                 break;
             }
-            let remaining = max_width - chars_used;
-            let seg_chars: usize = seg.text.chars().count();
-            if seg_chars <= remaining {
+            let remaining = max_width - width_used;
+            let seg_w = seg.text.width();
+            if seg_w <= remaining {
                 spans.push(Span::styled(seg.text.clone(), seg.style));
-                chars_used += seg_chars;
+                width_used += seg_w;
             } else {
-                let truncated: String = seg.text.chars().take(remaining).collect();
+                let truncated = truncate_to_width(&seg.text, remaining);
+                width_used += truncated.width();
                 spans.push(Span::styled(truncated, seg.style));
-                chars_used += remaining;
             }
         }
         return spans;
     }
     // Fallback: plain text
     let line = &p.lines[line_idx];
-    let content: String = if line.chars().count() > max_width {
-        line.chars().take(max_width).collect()
+    let content = if line.width() > max_width {
+        truncate_to_width(line, max_width)
     } else {
         line.clone()
     };
@@ -130,9 +146,8 @@ pub(super) fn render_preview(f: &mut Frame, preview: &Option<Preview>, area: Rec
             .skip(p.scroll)
             .take(visible)
             .map(|line| {
-                let max_content = width;
-                let content: String = if line.chars().count() > max_content {
-                    line.chars().take(max_content).collect()
+                let content = if line.width() > width {
+                    truncate_to_width(line, width)
                 } else {
                     line.clone()
                 };
