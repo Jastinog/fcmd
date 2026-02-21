@@ -23,6 +23,7 @@ pub(in crate::ui) fn render_which_key(
         'd' => ("󰗨 ", "Delete"),
         'c' => ("󰌑 ", "Change"),
         '\'' => (" ", "Mark"),
+        'w' => ("󰕰 ", "Layout"),
         _ => return,
     };
 

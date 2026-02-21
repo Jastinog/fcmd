@@ -341,10 +341,20 @@ impl App {
         const DELETE_HINTS: &[(&str, &str)] = &[("d", "trash"), ("D", "permanent")];
         const CHANGE_HINTS: &[(&str, &str)] = &[("p", "permissions"), ("o", "owner")];
         const MARK_HINTS: &[(&str, &str)] = &[("a-z", "go to mark")];
-        const LAYOUT_HINTS: &[(&str, &str)] = &[
-            ("1", "single"),
-            ("2", "dual"),
-            ("3", "triple"),
+        const LAYOUT_SINGLE: &[(&str, &str)] = &[
+            ("1", "● single"),
+            ("2", "  dual"),
+            ("3", "  triple"),
+        ];
+        const LAYOUT_DUAL: &[(&str, &str)] = &[
+            ("1", "  single"),
+            ("2", "● dual"),
+            ("3", "  triple"),
+        ];
+        const LAYOUT_TRIPLE: &[(&str, &str)] = &[
+            ("1", "  single"),
+            ("2", "  dual"),
+            ("3", "● triple"),
         ];
         let pending = self.pending_key?;
         let time = self.pending_key_time?;
@@ -359,7 +369,11 @@ impl App {
             'd' => Some(DELETE_HINTS),
             'c' => Some(CHANGE_HINTS),
             '\'' => Some(MARK_HINTS),
-            'w' => Some(LAYOUT_HINTS),
+            'w' => Some(match self.layout {
+                PanelLayout::Single => LAYOUT_SINGLE,
+                PanelLayout::Dual => LAYOUT_DUAL,
+                PanelLayout::Triple => LAYOUT_TRIPLE,
+            }),
             _ => None,
         }
     }
