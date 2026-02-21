@@ -9,7 +9,7 @@ use ratatui::{
     widgets::Paragraph,
 };
 
-use crate::app::{App, Mode, PanelSide};
+use crate::app::{App, Mode, PanelLayout};
 use crate::ops::Register;
 use crate::theme::Theme;
 
@@ -70,31 +70,19 @@ pub fn render(f: &mut Frame, app: &mut App) {
         render_tab_bar(f, app, area);
     }
 
-    // Build horizontal layout: optional tree + panels (or panel + preview)
-    let (tree_area, panel_areas) = if app.show_tree {
-        let cols = Layout::default()
-            .direction(Direction::Horizontal)
-            .constraints([
-                Constraint::Percentage(20),
-                Constraint::Percentage(40),
-                Constraint::Percentage(40),
-            ])
-            .split(panel_chunk);
-        (Some(cols[0]), vec![cols[1], cols[2]])
-    } else {
-        let cols = Layout::default()
-            .direction(Direction::Horizontal)
-            .constraints([Constraint::Percentage(50), Constraint::Percentage(50)])
-            .split(panel_chunk);
-        (None, vec![cols[0], cols[1]])
-    };
+    // Build horizontal layout based on panel layout + tree
+    let layout = app.layout;
+    let visible_count = layout.count();
+    let (tree_area, panel_areas) = build_panel_layout(app.show_tree, layout, panel_chunk);
 
     let vis_h = panel_areas[0].height.saturating_sub(2) as usize;
     app.visible_height = vis_h;
 
+    // Adjust scroll for all visible panels
     let tab = app.tab_mut();
-    tab.left.adjust_scroll(vis_h);
-    tab.right.adjust_scroll(vis_h);
+    for i in 0..visible_count {
+        tab.panels[i].adjust_scroll(vis_h);
+    }
 
     // Adjust find scroll before rendering
     if let Some(ref mut fs) = app.find_state {
@@ -147,51 +135,35 @@ pub fn render(f: &mut Frame, app: &mut App) {
 
     let panels_active = !app.tree_focused;
     let tab = app.tab();
-    let left_phantoms = app.phantoms_for(&tab.left.path);
-    let right_phantoms = app.phantoms_for(&tab.right.path);
-    if app.preview_mode {
-        match tab.active {
-            PanelSide::Left => {
-                panel::render_panel(
-                    f,
-                    &tab.left,
-                    panel_areas[0],
-                    panels_active,
-                    left_phantoms,
-                    &ctx,
-                );
-                preview::render_preview(f, &app.preview, panel_areas[1], ctx.theme);
-            }
-            PanelSide::Right => {
-                preview::render_preview(f, &app.preview, panel_areas[0], ctx.theme);
-                panel::render_panel(
-                    f,
-                    &tab.right,
-                    panel_areas[1],
-                    panels_active,
-                    right_phantoms,
-                    &ctx,
-                );
-            }
-        }
+    let active_idx = tab.active;
+
+    // Determine how many panels to render as file panels vs preview
+    let preview_replaces_last = app.preview_mode && visible_count >= 2;
+    let file_panel_count = if preview_replaces_last {
+        visible_count - 1
     } else {
+        visible_count
+    };
+
+    // Render file panels
+    for i in 0..file_panel_count {
+        let phantoms = app.phantoms_for(&tab.panels[i].path);
         panel::render_panel(
             f,
-            &tab.left,
-            panel_areas[0],
-            panels_active && tab.active == PanelSide::Left,
-            left_phantoms,
-            &ctx,
-        );
-        panel::render_panel(
-            f,
-            &tab.right,
-            panel_areas[1],
-            panels_active && tab.active == PanelSide::Right,
-            right_phantoms,
+            &tab.panels[i],
+            panel_areas[i],
+            panels_active && i == active_idx,
+            phantoms,
             &ctx,
         );
     }
+
+    // Render preview in the last slot if preview mode is on
+    if preview_replaces_last {
+        let last = visible_count - 1;
+        preview::render_preview(f, &app.preview, panel_areas[last], ctx.theme);
+    }
+
     status::render_status(f, app, status_area);
 
     // Overlays on top of everything
@@ -201,10 +173,6 @@ pub fn render(f: &mut Frame, app: &mut App) {
 
     if matches!(app.mode, Mode::Preview | Mode::PreviewSearch) {
         overlays::render_preview_popup(f, app, full_area);
-    }
-
-    if app.mode == Mode::Sort {
-        overlays::render_sort(f, app, full_area);
     }
 
     if app.mode == Mode::ThemePicker {
@@ -251,6 +219,52 @@ pub fn render(f: &mut Frame, app: &mut App) {
             &app.theme,
             full_area,
         );
+    }
+}
+
+/// Build panel layout areas based on layout mode and tree visibility.
+fn build_panel_layout(
+    show_tree: bool,
+    layout: PanelLayout,
+    chunk: Rect,
+) -> (Option<Rect>, Vec<Rect>) {
+    let constraints: Vec<Constraint> = match (show_tree, layout) {
+        (false, PanelLayout::Single) => vec![Constraint::Percentage(100)],
+        (false, PanelLayout::Dual) => {
+            vec![Constraint::Percentage(50), Constraint::Percentage(50)]
+        }
+        (false, PanelLayout::Triple) => vec![
+            Constraint::Percentage(33),
+            Constraint::Percentage(34),
+            Constraint::Percentage(33),
+        ],
+        (true, PanelLayout::Single) => {
+            vec![Constraint::Percentage(30), Constraint::Percentage(70)]
+        }
+        (true, PanelLayout::Dual) => vec![
+            Constraint::Percentage(25),
+            Constraint::Percentage(38),
+            Constraint::Percentage(37),
+        ],
+        (true, PanelLayout::Triple) => vec![
+            Constraint::Percentage(20),
+            Constraint::Percentage(27),
+            Constraint::Percentage(27),
+            Constraint::Percentage(26),
+        ],
+    };
+
+    let cols = Layout::default()
+        .direction(Direction::Horizontal)
+        .constraints(constraints)
+        .split(chunk);
+
+    if show_tree {
+        let tree_area = cols[0];
+        let panel_areas: Vec<Rect> = cols[1..].to_vec();
+        (Some(tree_area), panel_areas)
+    } else {
+        (None, cols.to_vec())
     }
 }
 

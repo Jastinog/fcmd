@@ -68,7 +68,10 @@ impl App {
             KeyCode::Char('~') => {
                 self.go_home_async();
             }
-            KeyCode::Tab => self.tab_mut().switch_panel(),
+            KeyCode::Tab => {
+                let layout = self.layout;
+                self.tab_mut().cycle_panel(layout);
+            }
             KeyCode::Char('t') if ctrl => self.new_tab(),
             KeyCode::Char('w') if ctrl => self.close_tab(),
 
@@ -188,19 +191,24 @@ impl App {
             ('s', KeyCode::Char('r')) => self.toggle_sort_reverse(),
             ('c', KeyCode::Char('p')) => self.enter_chmod(),
             ('c', KeyCode::Char('o')) => self.enter_chown(),
+            // Layout
+            ('w', KeyCode::Char('1')) => self.set_layout(PanelLayout::Single),
+            ('w', KeyCode::Char('2')) => self.set_layout(PanelLayout::Dual),
+            ('w', KeyCode::Char('3')) => self.set_layout(PanelLayout::Triple),
             // Space as leader key
             (' ', KeyCode::Char('t')) => self.toggle_tree(),
             (' ', KeyCode::Char('h')) => self.toggle_hidden(),
             (' ', KeyCode::Char('p')) => self.preview_mode = !self.preview_mode,
+            (' ', KeyCode::Char('w')) => {
+                self.pending_key = Some('w');
+                self.pending_key_time = Some(Instant::now());
+            }
             (' ', KeyCode::Char('d')) => self.start_du(),
             (' ', KeyCode::Char(',')) => self.open_find_local(),
             (' ', KeyCode::Char('.')) => self.open_find_global(),
             (' ', KeyCode::Char('s')) => {
-                self.sort_cursor = SortMode::ALL
-                    .iter()
-                    .position(|&m| m == self.active_panel().sort_mode)
-                    .unwrap_or(0);
-                self.mode = Mode::Sort;
+                self.pending_key = Some('s');
+                self.pending_key_time = Some(Instant::now());
             }
             (' ', KeyCode::Char('a')) => self.select_all(),
             (' ', KeyCode::Char('n')) => self.unselect_all(),

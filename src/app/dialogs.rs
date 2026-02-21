@@ -1,41 +1,6 @@
 use super::*;
 
 impl App {
-    pub(super) fn handle_sort(&mut self, key: KeyEvent) {
-        let len = SortMode::ALL.len();
-        match key.code {
-            KeyCode::Char('j') | KeyCode::Down => {
-                self.sort_cursor = (self.sort_cursor + 1).min(len - 1);
-            }
-            KeyCode::Char('k') | KeyCode::Up => {
-                self.sort_cursor = self.sort_cursor.saturating_sub(1);
-            }
-            KeyCode::Enter => {
-                let mode = SortMode::ALL[self.sort_cursor];
-                self.active_panel_mut().sort_mode = mode;
-                self.reload_active_panel();
-                self.save_current_sort();
-                let arrow = if self.active_panel().sort_reverse {
-                    "\u{2191}"
-                } else {
-                    "\u{2193}"
-                };
-                self.status_message = format!("Sort: {}{arrow}", mode.label());
-                self.mode = Mode::Normal;
-            }
-            KeyCode::Char('r') => {
-                let rev = !self.active_panel().sort_reverse;
-                self.active_panel_mut().sort_reverse = rev;
-                self.reload_active_panel();
-                self.save_current_sort();
-            }
-            KeyCode::Esc | KeyCode::Char('q') => {
-                self.mode = Mode::Normal;
-            }
-            _ => {}
-        }
-    }
-
     pub(super) fn handle_confirm(&mut self, key: KeyEvent) {
         match key.code {
             KeyCode::Char('y') | KeyCode::Char('Y') | KeyCode::Enter => {

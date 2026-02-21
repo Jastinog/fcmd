@@ -41,7 +41,6 @@ pub enum Mode {
     Search,
     Find,
     Help,
-    Sort,
     Rename,
     Create,
     Preview,
@@ -201,8 +200,6 @@ pub struct App {
     pub theme_preview: Option<Theme>,
     // Per-directory sort preferences
     pub dir_sorts: HashMap<PathBuf, (SortMode, bool)>,
-    // Sort popup
-    pub sort_cursor: usize,
     // Bookmarks
     pub bookmarks: Vec<(String, PathBuf)>,
     pub bookmark_cursor: usize,
@@ -371,7 +368,6 @@ impl App {
             theme_cursor: 0,
             theme_scroll: 0,
             theme_preview: None,
-            sort_cursor: 0,
             bookmarks,
             bookmark_cursor: 0,
             bookmark_scroll: 0,
@@ -723,7 +719,6 @@ impl App {
             Mode::Search => self.handle_search(key),
             Mode::Find => self.handle_find(key),
             Mode::Help => self.handle_help(key),
-            Mode::Sort => self.handle_sort(key),
             Mode::Rename => self.handle_rename(key),
             Mode::Create => self.handle_create(key),
             Mode::Preview => self.handle_preview(key),

@@ -1,5 +1,4 @@
 mod which_key;
-mod sort;
 mod help;
 mod input;
 mod confirm;
@@ -12,7 +11,6 @@ mod info;
 mod chown;
 
 pub(super) use which_key::render_which_key;
-pub(super) use sort::render_sort;
 pub(super) use help::render_help;
 pub(super) use input::render_input_popup;
 pub(super) use confirm::render_confirm_popup;

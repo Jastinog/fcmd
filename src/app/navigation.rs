@@ -328,14 +328,17 @@ impl App {
             ("b", "bookmarks"),
             ("?", "help"),
         ];
-        const SORT_HINTS: &[(&str, &str)] = &[
-            ("n", "name"),
-            ("s", "size"),
-            ("m/d", "modified"),
-            ("c", "created"),
-            ("e", "extension"),
-            ("r", "reverse"),
-        ];
+        const SORT_NAME: &[(&str, &str)] = &[("n", "● name"), ("s", "  size"), ("m/d", "  modified"), ("c", "  created"), ("e", "  extension"), ("r", "  reverse ↓")];
+        const SORT_NAME_R: &[(&str, &str)] = &[("n", "● name"), ("s", "  size"), ("m/d", "  modified"), ("c", "  created"), ("e", "  extension"), ("r", "● reverse ↑")];
+        const SORT_SIZE: &[(&str, &str)] = &[("n", "  name"), ("s", "● size"), ("m/d", "  modified"), ("c", "  created"), ("e", "  extension"), ("r", "  reverse ↓")];
+        const SORT_SIZE_R: &[(&str, &str)] = &[("n", "  name"), ("s", "● size"), ("m/d", "  modified"), ("c", "  created"), ("e", "  extension"), ("r", "● reverse ↑")];
+        const SORT_MOD: &[(&str, &str)] = &[("n", "  name"), ("s", "  size"), ("m/d", "● modified"), ("c", "  created"), ("e", "  extension"), ("r", "  reverse ↓")];
+        const SORT_MOD_R: &[(&str, &str)] = &[("n", "  name"), ("s", "  size"), ("m/d", "● modified"), ("c", "  created"), ("e", "  extension"), ("r", "● reverse ↑")];
+        const SORT_CRE: &[(&str, &str)] = &[("n", "  name"), ("s", "  size"), ("m/d", "  modified"), ("c", "● created"), ("e", "  extension"), ("r", "  reverse ↓")];
+        const SORT_CRE_R: &[(&str, &str)] = &[("n", "  name"), ("s", "  size"), ("m/d", "  modified"), ("c", "● created"), ("e", "  extension"), ("r", "● reverse ↑")];
+        const SORT_EXT: &[(&str, &str)] = &[("n", "  name"), ("s", "  size"), ("m/d", "  modified"), ("c", "  created"), ("e", "● extension"), ("r", "  reverse ↓")];
+        const SORT_EXT_R: &[(&str, &str)] = &[("n", "  name"), ("s", "  size"), ("m/d", "  modified"), ("c", "  created"), ("e", "● extension"), ("r", "● reverse ↑")];
+
         const GOTO_HINTS: &[(&str, &str)] = &[("g", "top"), ("t", "next tab"), ("T", "prev tab")];
         const YANK_HINTS: &[(&str, &str)] = &[("y", "yank"), ("p", "yank path"), ("n", "yank name")];
         const DELETE_HINTS: &[(&str, &str)] = &[("d", "trash"), ("D", "permanent")];
@@ -363,7 +366,21 @@ impl App {
         }
         match pending {
             ' ' => Some(LEADER_HINTS),
-            's' => Some(SORT_HINTS),
+            's' => {
+                let rev = self.active_panel().sort_reverse;
+                Some(match (self.active_panel().sort_mode, rev) {
+                    (SortMode::Name, false) => SORT_NAME,
+                    (SortMode::Name, true) => SORT_NAME_R,
+                    (SortMode::Size, false) => SORT_SIZE,
+                    (SortMode::Size, true) => SORT_SIZE_R,
+                    (SortMode::Modified, false) => SORT_MOD,
+                    (SortMode::Modified, true) => SORT_MOD_R,
+                    (SortMode::Created, false) => SORT_CRE,
+                    (SortMode::Created, true) => SORT_CRE_R,
+                    (SortMode::Extension, false) => SORT_EXT,
+                    (SortMode::Extension, true) => SORT_EXT_R,
+                })
+            }
             'g' => Some(GOTO_HINTS),
             'y' => Some(YANK_HINTS),
             'd' => Some(DELETE_HINTS),
