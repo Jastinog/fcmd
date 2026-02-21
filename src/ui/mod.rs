@@ -39,36 +39,18 @@ pub struct RenderContext<'a> {
 pub fn render(f: &mut Frame, app: &mut App) {
     let full_area = f.area();
 
-    let has_tabs = app.tabs.len() > 1;
+    let chunks = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([
+            Constraint::Length(1), // tab bar (always visible)
+            Constraint::Min(3),    // panels
+            Constraint::Length(1), // status bar
+        ])
+        .split(full_area);
 
-    let chunks = if has_tabs {
-        Layout::default()
-            .direction(Direction::Vertical)
-            .constraints([
-                Constraint::Length(1), // tab bar
-                Constraint::Min(3),    // panels
-                Constraint::Length(1), // status bar
-            ])
-            .split(full_area)
-    } else {
-        Layout::default()
-            .direction(Direction::Vertical)
-            .constraints([
-                Constraint::Min(3),    // panels
-                Constraint::Length(1), // status bar
-            ])
-            .split(full_area)
-    };
+    let (tab_bar_area, panel_chunk, status_area) = (chunks[0], chunks[1], chunks[2]);
 
-    let (tab_bar_area, panel_chunk, status_area) = if has_tabs {
-        (Some(chunks[0]), chunks[1], chunks[2])
-    } else {
-        (None, chunks[0], chunks[1])
-    };
-
-    if let Some(area) = tab_bar_area {
-        render_tab_bar(f, app, area);
-    }
+    render_tab_bar(f, app, tab_bar_area);
 
     // Build horizontal layout based on panel layout + tree
     let layout = app.layout;
@@ -311,15 +293,30 @@ fn render_tab_bar(f: &mut Frame, app: &App, area: Rect) {
         }
     }
 
-    // Fill rest with status bg
+    // Right side: TASKS section
+    let tasks_label = " \u{f0ae} TASKS ";
+    let tasks_sep_w = 1; // SEP_LEFT char
+    let tasks_w = tasks_label.chars().count() + tasks_sep_w;
+
+    // Fill gap between tabs and TASKS
     let used: usize = spans.iter().map(|s| s.content.chars().count()).sum();
-    let remaining = (area.width as usize).saturating_sub(used);
-    if remaining > 0 {
+    let total = area.width as usize;
+    let gap = total.saturating_sub(used + tasks_w);
+    if gap > 0 {
         spans.push(Span::styled(
-            " ".repeat(remaining),
+            " ".repeat(gap),
             Style::default().bg(t.status_bg),
         ));
     }
+
+    spans.push(Span::styled(
+        SEP_LEFT,
+        Style::default().fg(t.magenta).bg(t.status_bg),
+    ));
+    spans.push(Span::styled(
+        tasks_label,
+        Style::default().fg(t.bg_text).bg(t.magenta),
+    ));
 
     let line = Line::from(spans);
     f.render_widget(Paragraph::new(line), area);
