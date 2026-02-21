@@ -5,26 +5,25 @@ use std::time::Duration;
 use super::*;
 
 impl App {
-    /// Check whether git status needs refreshing for either panel.
+    /// Check whether git status needs refreshing for any visible panel.
     pub(super) fn ensure_git_status(&mut self) {
         let tab = &self.tabs[self.active_tab];
-        let needs_refresh = [&tab.left.path, &tab.right.path]
-            .iter()
-            .enumerate()
-            .any(|(i, dir)| {
-                if let Some(ref root) = self.git_roots[i]
-                    && dir.starts_with(root)
-                {
-                    return false;
-                }
-                self.git_checked_dirs[i].as_deref() != Some(dir)
-            });
+        let count = self.layout.count();
+        let needs_refresh = (0..count).any(|i| {
+            let dir = &tab.panels[i].path;
+            if let Some(ref root) = self.git_roots[i]
+                && dir.starts_with(root)
+            {
+                return false;
+            }
+            self.git_checked_dirs[i].as_deref() != Some(dir)
+        });
         if needs_refresh {
             self.refresh_git_status();
         }
     }
 
-    /// Spawn a background task to fetch git status for both panels.
+    /// Spawn a background task to fetch git status for visible panels.
     pub fn refresh_git_status(&mut self) {
         // Skip if a git fetch is already in progress
         if self.git_progress.is_some() {
@@ -32,10 +31,18 @@ impl App {
         }
 
         let tab = &self.tabs[self.active_tab];
-        let dirs = [tab.left.path.clone(), tab.right.path.clone()];
+        let dirs = [
+            tab.panels[0].path.clone(),
+            tab.panels[1].path.clone(),
+            tab.panels[2].path.clone(),
+        ];
 
         // Mark checked dirs immediately to prevent re-spawning on every keypress
-        self.git_checked_dirs = [Some(dirs[0].clone()), Some(dirs[1].clone())];
+        self.git_checked_dirs = [
+            Some(dirs[0].clone()),
+            Some(dirs[1].clone()),
+            Some(dirs[2].clone()),
+        ];
 
         let (tx, rx) = tokio::sync::oneshot::channel();
         tokio::spawn(async move {
@@ -51,15 +58,19 @@ impl App {
     }
 }
 
-type GitResult = (HashMap<PathBuf, char>, [Option<PathBuf>; 2], [Option<PathBuf>; 2]);
+type GitResult = (HashMap<PathBuf, char>, [Option<PathBuf>; 3], [Option<PathBuf>; 3]);
 
 const GIT_TIMEOUT: Duration = Duration::from_secs(5);
 
-/// Compute git status for both panel directories.
-async fn compute_git_status(dirs: [PathBuf; 2]) -> GitResult {
+/// Compute git status for panel directories.
+async fn compute_git_status(dirs: [PathBuf; 3]) -> GitResult {
     let mut statuses = HashMap::new();
-    let mut roots: [Option<PathBuf>; 2] = [None, None];
-    let checked_dirs = [Some(dirs[0].clone()), Some(dirs[1].clone())];
+    let mut roots: [Option<PathBuf>; 3] = [None, None, None];
+    let checked_dirs = [
+        Some(dirs[0].clone()),
+        Some(dirs[1].clone()),
+        Some(dirs[2].clone()),
+    ];
 
     let mut seen_roots = HashSet::new();
 

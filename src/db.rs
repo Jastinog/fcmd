@@ -120,7 +120,7 @@ impl Db {
         let tx = self.conn.unchecked_transaction()?;
 
         tx.execute("DELETE FROM session_tabs", [])?;
-        tx.execute("DELETE FROM session_meta WHERE key NOT IN ('theme', 'layout')", [])?;
+        tx.execute("DELETE FROM session_meta WHERE key NOT IN ('theme', 'layout', 'transparent')", [])?;
 
         for (i, tab) in tabs.iter().enumerate() {
             let left_path = tab.panel_paths.first().map(|p| p.to_string_lossy().into_owned()).unwrap_or_default();
@@ -368,6 +368,25 @@ impl Db {
             map.insert(p, s);
         }
         Ok(map)
+    }
+
+    pub fn save_transparent(&self, val: bool) -> rusqlite::Result<()> {
+        self.conn.execute(
+            "INSERT OR REPLACE INTO session_meta (key, value) VALUES ('transparent', ?1)",
+            params![if val { "1" } else { "0" }],
+        )?;
+        Ok(())
+    }
+
+    pub fn load_transparent(&self) -> bool {
+        self.conn
+            .query_row(
+                "SELECT value FROM session_meta WHERE key = 'transparent'",
+                [],
+                |row| row.get::<_, String>(0),
+            )
+            .ok()
+            .is_some_and(|v| v == "1")
     }
 
     pub fn load_session(&self) -> rusqlite::Result<(Vec<SavedTab>, usize)> {

@@ -192,11 +192,14 @@ pub struct App {
     pub tree_last_hidden: bool,
     pub(super) tree_select_path: Option<PathBuf>,
     // Theme
+    pub transparent: bool,
     pub theme: Theme,
-    pub theme_list: Vec<String>,
-    pub theme_index: Option<usize>,
-    pub theme_cursor: usize,
-    pub theme_scroll: usize,
+    pub theme_dark_list: Vec<String>,
+    pub theme_light_list: Vec<String>,
+    pub theme_col: usize,
+    pub theme_cursors: [usize; 2],
+    pub theme_scrolls: [usize; 2],
+    pub theme_active_name: Option<String>,
     pub theme_preview: Option<Theme>,
     // Per-directory sort preferences
     pub dir_sorts: HashMap<PathBuf, (SortMode, bool)>,
@@ -304,15 +307,13 @@ impl App {
             .unwrap_or(PanelLayout::Dual);
 
         Theme::ensure_builtin_themes();
+        let transparent = db.as_ref().is_some_and(|d| d.load_transparent());
         let saved_theme_name = db.as_ref().and_then(|d| d.load_theme());
         let theme = match saved_theme_name.as_deref().and_then(Theme::load_by_name) {
             Some(t) => t,
             None => Theme::from_config(),
         };
-        let theme_index = saved_theme_name.and_then(|name| {
-            let list = Theme::list_available();
-            list.iter().position(|n| n == &name)
-        });
+        let theme_active_name = saved_theme_name;
 
         let (dir_load_tx, dir_load_rx) = tokio::sync::mpsc::channel(64);
 
@@ -365,11 +366,14 @@ impl App {
             tree_last_path: None,
             tree_last_hidden: false,
             tree_select_path: None,
+            transparent,
             theme,
-            theme_list: Vec::new(),
-            theme_index,
-            theme_cursor: 0,
-            theme_scroll: 0,
+            theme_dark_list: Vec::new(),
+            theme_light_list: Vec::new(),
+            theme_col: 0,
+            theme_cursors: [0; 2],
+            theme_scrolls: [0; 2],
+            theme_active_name,
             theme_preview: None,
             bookmarks,
             bookmark_cursor: 0,
@@ -399,6 +403,7 @@ impl App {
             theme_load_rx: None,
         };
         app.refresh_git_status();
+        app.apply_transparency();
         // Apply saved sort preferences to restored panels
         for tab in &mut app.tabs {
             for panel in tab.panels.iter_mut() {
@@ -430,6 +435,13 @@ impl App {
         }
         if let Err(e) = db.save_layout(self.layout.label()) {
             eprintln!("Warning: failed to save layout: {e}");
+        }
+    }
+
+    pub fn apply_transparency(&mut self) {
+        if self.transparent {
+            self.theme.bg = ratatui::style::Color::Reset;
+            self.theme.status_bg = ratatui::style::Color::Reset;
         }
     }
 
@@ -640,11 +652,13 @@ impl App {
                     self.mode = Mode::Chmod;
                 }
             }
-            FileOpResult::ThemeLoad { name, theme, theme_list } => match theme {
+            FileOpResult::ThemeLoad { name, theme, dark_list, light_list } => match theme {
                 Some(t) => {
                     self.theme = t;
-                    self.theme_list = theme_list;
-                    self.theme_index = self.theme_list.iter().position(|n| n == &name);
+                    self.apply_transparency();
+                    self.theme_dark_list = dark_list;
+                    self.theme_light_list = light_list;
+                    self.theme_active_name = Some(name.clone());
                     if let Some(ref db) = self.db {
                         let _ = db.save_theme(&name);
                     }
@@ -652,24 +666,24 @@ impl App {
                 }
                 None => self.status_message = format!("Theme not found: {name}"),
             },
-            FileOpResult::ThemeList { themes } => {
+            FileOpResult::ThemeList { dark, light } => {
                 if self.mode == Mode::ThemePicker {
-                    // Populating theme picker after async list load
-                    if themes.is_empty() {
+                    if dark.is_empty() && light.is_empty() {
                         self.status_message = "No themes found".into();
                         self.mode = Mode::Normal;
                     } else {
-                        self.theme_list = themes;
-                        self.theme_cursor = self.theme_index.unwrap_or(0).min(self.theme_list.len() - 1);
-                        self.theme_scroll = self.theme_cursor.saturating_sub(5);
+                        self.theme_dark_list = dark;
+                        self.theme_light_list = light;
+                        self.position_theme_cursors();
                         self.spawn_theme_load();
                     }
                 } else {
-                    // :theme command with no argument — show list in status
-                    if themes.is_empty() {
+                    let mut all: Vec<String> = dark.into_iter().chain(light).collect();
+                    all.sort();
+                    if all.is_empty() {
                         self.status_message = "No themes found".into();
                     } else {
-                        self.status_message = themes.join(", ");
+                        self.status_message = all.join(", ");
                     }
                 }
             },
@@ -684,8 +698,14 @@ impl App {
     }
 
     /// Apply async theme preview load (for theme picker).
-    pub fn apply_theme_preview(&mut self, theme: Option<Theme>) {
+    pub fn apply_theme_preview(&mut self, mut theme: Option<Theme>) {
         if self.mode == Mode::ThemePicker {
+            if self.transparent {
+                if let Some(ref mut t) = theme {
+                    t.bg = ratatui::style::Color::Reset;
+                    t.status_bg = ratatui::style::Color::Reset;
+                }
+            }
             self.theme_preview = theme;
         }
     }

@@ -189,6 +189,7 @@ impl App {
             ('s', KeyCode::Char('c')) => self.set_sort(SortMode::Created),
             ('s', KeyCode::Char('e')) => self.set_sort(SortMode::Extension),
             ('s', KeyCode::Char('r')) => self.toggle_sort_reverse(),
+            ('u', KeyCode::Char('t')) => self.toggle_transparent(),
             ('c', KeyCode::Char('p')) => self.enter_chmod(),
             ('c', KeyCode::Char('o')) => self.enter_chown(),
             // Layout
@@ -208,6 +209,10 @@ impl App {
             (' ', KeyCode::Char('.')) => self.open_find_global(),
             (' ', KeyCode::Char('s')) => {
                 self.pending_key = Some('s');
+                self.pending_key_time = Some(Instant::now());
+            }
+            (' ', KeyCode::Char('u')) => {
+                self.pending_key = Some('u');
                 self.pending_key_time = Some(Instant::now());
             }
             (' ', KeyCode::Char('a')) => self.select_all(),

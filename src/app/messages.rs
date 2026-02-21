@@ -21,8 +21,8 @@ pub struct DuProgress {
 pub enum GitMsg {
     Finished {
         statuses: HashMap<PathBuf, char>,
-        roots: [Option<PathBuf>; 2],
-        checked_dirs: [Option<PathBuf>; 2],
+        roots: [Option<PathBuf>; 3],
+        checked_dirs: [Option<PathBuf>; 3],
     },
 }
 
@@ -51,14 +51,14 @@ pub struct DeleteProgress {
 pub enum DirLoadMsg {
     /// Unsorted batch of entries streaming from the filesystem.
     Batch {
-        panel_side: PanelSide,
+        panel_idx: usize,
         tab_index: usize,
         path: PathBuf,
         entries: Vec<FileEntry>,
     },
     /// All entries read and sorted. Replaces the panel's entries.
     Finished {
-        panel_side: PanelSide,
+        panel_idx: usize,
         tab_index: usize,
         path: PathBuf,
         entries: Vec<FileEntry>,
@@ -136,10 +136,12 @@ pub enum FileOpResult {
     ThemeLoad {
         name: String,
         theme: Option<Theme>,
-        theme_list: Vec<String>,
+        dark_list: Vec<String>,
+        light_list: Vec<String>,
     },
     ThemeList {
-        themes: Vec<String>,
+        dark: Vec<String>,
+        light: Vec<String>,
     },
     Clipboard {
         label: String,

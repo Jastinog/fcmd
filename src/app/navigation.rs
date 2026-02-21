@@ -348,12 +348,32 @@ impl App {
         self.status_message = format!("Layout: {}", layout.label());
     }
 
+    pub(super) fn toggle_transparent(&mut self) {
+        self.transparent = !self.transparent;
+        if self.transparent {
+            self.theme.bg = ratatui::style::Color::Reset;
+            self.theme.status_bg = ratatui::style::Color::Reset;
+        } else {
+            self.theme.bg = self.theme.bg_text;
+            self.theme.status_bg = self.theme.status_bg_orig;
+        }
+        if let Some(ref db) = self.db {
+            let _ = db.save_transparent(self.transparent);
+        }
+        self.status_message = if self.transparent {
+            "Background: transparent".into()
+        } else {
+            "Background: opaque".into()
+        };
+    }
+
     pub fn which_key_hints(&self) -> Option<Vec<(&'static str, &'static str)>> {
         const LEADER_HINTS: &[(&str, &str)] = &[
             ("", "Toggle"),
             ("t", "tree"),
             ("h", "hidden"),
             ("p", "preview"),
+            ("u", "ui"),
             ("", "Actions"),
             ("s", "sort"),
             ("d", "dir sizes"),
@@ -388,6 +408,7 @@ impl App {
             'c' => Some(CHANGE_HINTS.to_vec()),
             '\'' => Some(MARK_HINTS.to_vec()),
             'w' => Some(self.build_layout_hints()),
+            'u' => Some(self.build_ui_hints()),
             _ => None,
         }
     }
@@ -409,6 +430,13 @@ impl App {
             ("e", m(mode == SortMode::Extension,"▍extension","  extension")),
             ("", "Direction"),
             ("r", if rev { "▍reverse ↑" } else { "  ascending ↓" }),
+        ]
+    }
+
+    fn build_ui_hints(&self) -> Vec<(&'static str, &'static str)> {
+        vec![
+            ("", "UI"),
+            ("t", if self.transparent { "\u{258a} transparent" } else { "  transparent" }),
         ]
     }
 

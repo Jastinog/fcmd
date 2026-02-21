@@ -42,7 +42,7 @@ impl Preview {
             .map(|n| n.to_string_lossy().into_owned())
             .unwrap_or_else(|| path.to_string_lossy().into_owned());
         Preview {
-            lines: vec!["[Loading...]".into()],
+            lines: vec![],
             scroll: 0,
             title,
             info: "loading".into(),

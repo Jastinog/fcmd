@@ -45,6 +45,8 @@ pub struct Theme {
     pub border_inactive: Color,
     pub status_bg: Color,
     pub cursor_line: Color,
+    pub bg_text: Color,
+    pub status_bg_orig: Color,
 
     pub dir_color: Color,
     pub symlink_color: Color,
@@ -126,6 +128,8 @@ impl RawTheme {
             border_inactive,
             status_bg,
             cursor_line,
+            bg_text: bg,
+            status_bg_orig: status_bg,
             dir_color,
             symlink_color,
             file_color,
@@ -151,6 +155,8 @@ impl Theme {
             border_inactive: Color::Rgb(60, 65, 74),
             status_bg: Color::Rgb(17, 21, 28),
             cursor_line: Color::Rgb(27, 58, 91),
+            bg_text: Color::Rgb(11, 14, 20),
+            status_bg_orig: Color::Rgb(17, 21, 28),
             dir_color: Color::Rgb(89, 194, 255),
             symlink_color: Color::Rgb(230, 182, 115),
             file_color: Color::Rgb(191, 189, 182),
@@ -169,24 +175,35 @@ impl Theme {
         Self::load(&path)
     }
 
-    pub fn list_available() -> Vec<String> {
+    /// Returns (dark_themes, light_themes) sorted alphabetically.
+    pub fn list_available_classified() -> (Vec<String>, Vec<String>) {
         let themes_dir = match crate::util::config_dir() {
             Some(d) => d.join("themes"),
-            None => return Vec::new(),
+            None => return (Vec::new(), Vec::new()),
         };
-        let mut names = Vec::new();
+        let mut dark = Vec::new();
+        let mut light = Vec::new();
         if let Ok(entries) = std::fs::read_dir(&themes_dir) {
             for entry in entries.flatten() {
                 let path = entry.path();
                 if path.extension().is_some_and(|e| e == "toml")
                     && let Some(stem) = path.file_stem().and_then(|s| s.to_str())
                 {
-                    names.push(stem.to_string());
+                    let is_light = std::fs::read_to_string(&path)
+                        .ok()
+                        .map(|c| is_light_theme_content(&c))
+                        .unwrap_or(false);
+                    if is_light {
+                        light.push(stem.to_string());
+                    } else {
+                        dark.push(stem.to_string());
+                    }
                 }
             }
         }
-        names.sort();
-        names
+        dark.sort();
+        light.sort();
+        (dark, light)
     }
 
     pub fn from_config() -> Self {
@@ -236,6 +253,19 @@ impl Theme {
     }
 }
 
+/// Check if a theme's bg color is light (luminance > 128).
+fn is_light_theme_content(content: &str) -> bool {
+    if let Ok(table) = content.parse::<toml::Table>() {
+        if let Some(bg_str) = table.get("bg").and_then(|v| v.as_str()) {
+            if let Some(Color::Rgb(r, g, b)) = parse_hex(bg_str) {
+                let lum = 0.299 * (r as f64) + 0.587 * (g as f64) + 0.114 * (b as f64);
+                return lum > 128.0;
+            }
+        }
+    }
+    false
+}
+
 const BUILTIN_THEMES: &[(&str, &str)] = &[
     ("abyss.toml", include_str!("../themes/abyss.toml")),
     ("afterglow.toml", include_str!("../themes/afterglow.toml")),
@@ -248,6 +278,7 @@ const BUILTIN_THEMES: &[(&str, &str)] = &[
     ("aura-dark.toml", include_str!("../themes/aura-dark.toml")),
     ("aurora.toml", include_str!("../themes/aurora.toml")),
     ("ayu-dark.toml", include_str!("../themes/ayu-dark.toml")),
+    ("ayu-light.toml", include_str!("../themes/ayu-light.toml")),
     ("ayu-mirage.toml", include_str!("../themes/ayu-mirage.toml")),
     ("badwolf.toml", include_str!("../themes/badwolf.toml")),
     ("bamboo.toml", include_str!("../themes/bamboo.toml")),
@@ -260,6 +291,7 @@ const BUILTIN_THEMES: &[(&str, &str)] = &[
     ("boo-berry.toml", include_str!("../themes/boo-berry.toml")),
     ("brogrammer.toml", include_str!("../themes/brogrammer.toml")),
     ("carbonfox.toml", include_str!("../themes/carbonfox.toml")),
+    ("catppuccin-latte.toml", include_str!("../themes/catppuccin-latte.toml")),
     ("catppuccin-frappe.toml", include_str!("../themes/catppuccin-frappe.toml")),
     ("catppuccin-macchiato.toml", include_str!("../themes/catppuccin-macchiato.toml")),
     ("catppuccin-mocha.toml", include_str!("../themes/catppuccin-mocha.toml")),
@@ -292,12 +324,15 @@ const BUILTIN_THEMES: &[(&str, &str)] = &[
     ("espresso.toml", include_str!("../themes/espresso.toml")),
     ("everblush.toml", include_str!("../themes/everblush.toml")),
     ("everforest-dark.toml", include_str!("../themes/everforest-dark.toml")),
+    ("everforest-light.toml", include_str!("../themes/everforest-light.toml")),
     ("fairy-floss.toml", include_str!("../themes/fairy-floss.toml")),
     ("falcon.toml", include_str!("../themes/falcon.toml")),
+    ("far-classic.toml", include_str!("../themes/far-classic.toml")),
     ("fleet-dark.toml", include_str!("../themes/fleet-dark.toml")),
     ("forest.toml", include_str!("../themes/forest.toml")),
     ("frozen.toml", include_str!("../themes/frozen.toml")),
     ("github-dark.toml", include_str!("../themes/github-dark.toml")),
+    ("github-light.toml", include_str!("../themes/github-light.toml")),
     ("github-dark-default.toml", include_str!("../themes/github-dark-default.toml")),
     ("github-dark-high-contrast.toml", include_str!("../themes/github-dark-high-contrast.toml")),
     ("github-dark-tritanopia.toml", include_str!("../themes/github-dark-tritanopia.toml")),
@@ -305,6 +340,7 @@ const BUILTIN_THEMES: &[(&str, &str)] = &[
     ("gotham.toml", include_str!("../themes/gotham.toml")),
     ("gruvbox-dark.toml", include_str!("../themes/gruvbox-dark.toml")),
     ("gruvbox-hard.toml", include_str!("../themes/gruvbox-hard.toml")),
+    ("gruvbox-light.toml", include_str!("../themes/gruvbox-light.toml")),
     ("gruvbox-material.toml", include_str!("../themes/gruvbox-material.toml")),
     ("hacker.toml", include_str!("../themes/hacker.toml")),
     ("halcyon.toml", include_str!("../themes/halcyon.toml")),
@@ -325,6 +361,7 @@ const BUILTIN_THEMES: &[(&str, &str)] = &[
     ("material-darker.toml", include_str!("../themes/material-darker.toml")),
     ("material-ocean.toml", include_str!("../themes/material-ocean.toml")),
     ("material-palenight.toml", include_str!("../themes/material-palenight.toml")),
+    ("mc-classic.toml", include_str!("../themes/mc-classic.toml")),
     ("melange.toml", include_str!("../themes/melange.toml")),
     ("mellow.toml", include_str!("../themes/mellow.toml")),
     ("miasma.toml", include_str!("../themes/miasma.toml")),
@@ -354,6 +391,7 @@ const BUILTIN_THEMES: &[(&str, &str)] = &[
     ("oceanic-next.toml", include_str!("../themes/oceanic-next.toml")),
     ("omni.toml", include_str!("../themes/omni.toml")),
     ("one-dark.toml", include_str!("../themes/one-dark.toml")),
+    ("one-light.toml", include_str!("../themes/one-light.toml")),
     ("one-monokai.toml", include_str!("../themes/one-monokai.toml")),
     ("onedark-vivid.toml", include_str!("../themes/onedark-vivid.toml")),
     ("oxocarbon.toml", include_str!("../themes/oxocarbon.toml")),
@@ -369,12 +407,14 @@ const BUILTIN_THEMES: &[(&str, &str)] = &[
     ("radical.toml", include_str!("../themes/radical.toml")),
     ("retrowave.toml", include_str!("../themes/retrowave.toml")),
     ("rose-pine.toml", include_str!("../themes/rose-pine.toml")),
+    ("rose-pine-dawn.toml", include_str!("../themes/rose-pine-dawn.toml")),
     ("rose-pine-moon.toml", include_str!("../themes/rose-pine-moon.toml")),
     ("seti.toml", include_str!("../themes/seti.toml")),
     ("shades-of-purple.toml", include_str!("../themes/shades-of-purple.toml")),
     ("slate.toml", include_str!("../themes/slate.toml")),
     ("snazzy.toml", include_str!("../themes/snazzy.toml")),
     ("solarized-dark.toml", include_str!("../themes/solarized-dark.toml")),
+    ("solarized-light.toml", include_str!("../themes/solarized-light.toml")),
     ("solarized-osaka.toml", include_str!("../themes/solarized-osaka.toml")),
     ("sonokai.toml", include_str!("../themes/sonokai.toml")),
     ("spaceduck.toml", include_str!("../themes/spaceduck.toml")),
@@ -388,6 +428,7 @@ const BUILTIN_THEMES: &[(&str, &str)] = &[
     ("terafox.toml", include_str!("../themes/terafox.toml")),
     ("thunderstorm.toml", include_str!("../themes/thunderstorm.toml")),
     ("tokyo-night.toml", include_str!("../themes/tokyo-night.toml")),
+    ("tokyo-night-day.toml", include_str!("../themes/tokyo-night-day.toml")),
     ("tokyonight-moon.toml", include_str!("../themes/tokyonight-moon.toml")),
     ("tokyonight-storm.toml", include_str!("../themes/tokyonight-storm.toml")),
     ("tomorrow-night.toml", include_str!("../themes/tomorrow-night.toml")),

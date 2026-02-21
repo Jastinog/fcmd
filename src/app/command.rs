@@ -184,17 +184,16 @@ impl App {
                     self.file_op_rx = Some(rx);
                     tokio::task::spawn_blocking(move || {
                         let theme = Theme::load_by_name(&name);
-                        let theme_list = Theme::list_available();
-                        let _ = tx.send(super::FileOpResult::ThemeLoad { name, theme, theme_list });
+                        let (dark_list, light_list) = Theme::list_available_classified();
+                        let _ = tx.send(super::FileOpResult::ThemeLoad { name, theme, dark_list, light_list });
                     });
                 }
                 None => {
                     let (tx, rx) = tokio::sync::oneshot::channel();
                     self.file_op_rx = Some(rx);
                     tokio::task::spawn_blocking(move || {
-                        let _ = tx.send(super::FileOpResult::ThemeList {
-                            themes: Theme::list_available(),
-                        });
+                        let (dark, light) = Theme::list_available_classified();
+                        let _ = tx.send(super::FileOpResult::ThemeList { dark, light });
                     });
                 }
             },
