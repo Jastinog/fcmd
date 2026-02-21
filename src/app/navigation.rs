@@ -308,7 +308,7 @@ impl App {
         self.status_message = format!("Layout: {}", layout.label());
     }
 
-    pub fn which_key_hints(&self) -> Option<&[(&str, &str)]> {
+    pub fn which_key_hints(&self) -> Option<Vec<(&'static str, &'static str)>> {
         const LEADER_HINTS: &[(&str, &str)] = &[
             ("", "Toggle"),
             ("t", "tree"),
@@ -328,70 +328,59 @@ impl App {
             ("b", "bookmarks"),
             ("?", "help"),
         ];
-        const SORT_NAME: &[(&str, &str)] = &[("n", "● name"), ("s", "  size"), ("m/d", "  modified"), ("c", "  created"), ("e", "  extension"), ("r", "  reverse ↓")];
-        const SORT_NAME_R: &[(&str, &str)] = &[("n", "● name"), ("s", "  size"), ("m/d", "  modified"), ("c", "  created"), ("e", "  extension"), ("r", "● reverse ↑")];
-        const SORT_SIZE: &[(&str, &str)] = &[("n", "  name"), ("s", "● size"), ("m/d", "  modified"), ("c", "  created"), ("e", "  extension"), ("r", "  reverse ↓")];
-        const SORT_SIZE_R: &[(&str, &str)] = &[("n", "  name"), ("s", "● size"), ("m/d", "  modified"), ("c", "  created"), ("e", "  extension"), ("r", "● reverse ↑")];
-        const SORT_MOD: &[(&str, &str)] = &[("n", "  name"), ("s", "  size"), ("m/d", "● modified"), ("c", "  created"), ("e", "  extension"), ("r", "  reverse ↓")];
-        const SORT_MOD_R: &[(&str, &str)] = &[("n", "  name"), ("s", "  size"), ("m/d", "● modified"), ("c", "  created"), ("e", "  extension"), ("r", "● reverse ↑")];
-        const SORT_CRE: &[(&str, &str)] = &[("n", "  name"), ("s", "  size"), ("m/d", "  modified"), ("c", "● created"), ("e", "  extension"), ("r", "  reverse ↓")];
-        const SORT_CRE_R: &[(&str, &str)] = &[("n", "  name"), ("s", "  size"), ("m/d", "  modified"), ("c", "● created"), ("e", "  extension"), ("r", "● reverse ↑")];
-        const SORT_EXT: &[(&str, &str)] = &[("n", "  name"), ("s", "  size"), ("m/d", "  modified"), ("c", "  created"), ("e", "● extension"), ("r", "  reverse ↓")];
-        const SORT_EXT_R: &[(&str, &str)] = &[("n", "  name"), ("s", "  size"), ("m/d", "  modified"), ("c", "  created"), ("e", "● extension"), ("r", "● reverse ↑")];
-
         const GOTO_HINTS: &[(&str, &str)] = &[("g", "top"), ("t", "next tab"), ("T", "prev tab")];
         const YANK_HINTS: &[(&str, &str)] = &[("y", "yank"), ("p", "yank path"), ("n", "yank name")];
         const DELETE_HINTS: &[(&str, &str)] = &[("d", "trash"), ("D", "permanent")];
         const CHANGE_HINTS: &[(&str, &str)] = &[("p", "permissions"), ("o", "owner")];
         const MARK_HINTS: &[(&str, &str)] = &[("a-z", "go to mark")];
-        const LAYOUT_SINGLE: &[(&str, &str)] = &[
-            ("1", "● single"),
-            ("2", "  dual"),
-            ("3", "  triple"),
-        ];
-        const LAYOUT_DUAL: &[(&str, &str)] = &[
-            ("1", "  single"),
-            ("2", "● dual"),
-            ("3", "  triple"),
-        ];
-        const LAYOUT_TRIPLE: &[(&str, &str)] = &[
-            ("1", "  single"),
-            ("2", "  dual"),
-            ("3", "● triple"),
-        ];
+
         let pending = self.pending_key?;
         let time = self.pending_key_time?;
         if time.elapsed() < std::time::Duration::from_millis(400) {
             return None;
         }
         match pending {
-            ' ' => Some(LEADER_HINTS),
-            's' => {
-                let rev = self.active_panel().sort_reverse;
-                Some(match (self.active_panel().sort_mode, rev) {
-                    (SortMode::Name, false) => SORT_NAME,
-                    (SortMode::Name, true) => SORT_NAME_R,
-                    (SortMode::Size, false) => SORT_SIZE,
-                    (SortMode::Size, true) => SORT_SIZE_R,
-                    (SortMode::Modified, false) => SORT_MOD,
-                    (SortMode::Modified, true) => SORT_MOD_R,
-                    (SortMode::Created, false) => SORT_CRE,
-                    (SortMode::Created, true) => SORT_CRE_R,
-                    (SortMode::Extension, false) => SORT_EXT,
-                    (SortMode::Extension, true) => SORT_EXT_R,
-                })
-            }
-            'g' => Some(GOTO_HINTS),
-            'y' => Some(YANK_HINTS),
-            'd' => Some(DELETE_HINTS),
-            'c' => Some(CHANGE_HINTS),
-            '\'' => Some(MARK_HINTS),
-            'w' => Some(match self.layout {
-                PanelLayout::Single => LAYOUT_SINGLE,
-                PanelLayout::Dual => LAYOUT_DUAL,
-                PanelLayout::Triple => LAYOUT_TRIPLE,
-            }),
+            ' ' => Some(LEADER_HINTS.to_vec()),
+            's' => Some(self.build_sort_hints()),
+            'g' => Some(GOTO_HINTS.to_vec()),
+            'y' => Some(YANK_HINTS.to_vec()),
+            'd' => Some(DELETE_HINTS.to_vec()),
+            'c' => Some(CHANGE_HINTS.to_vec()),
+            '\'' => Some(MARK_HINTS.to_vec()),
+            'w' => Some(self.build_layout_hints()),
             _ => None,
         }
+    }
+
+    fn build_sort_hints(&self) -> Vec<(&'static str, &'static str)> {
+        let mode = self.active_panel().sort_mode;
+        let rev = self.active_panel().sort_reverse;
+
+        let m = |active, label, inactive_label| {
+            if active { label } else { inactive_label }
+        };
+
+        vec![
+            ("", "Sort by"),
+            ("n", m(mode == SortMode::Name,     "▍name",     "  name")),
+            ("s", m(mode == SortMode::Size,     "▍size",     "  size")),
+            ("m/d", m(mode == SortMode::Modified, "▍modified", "  modified")),
+            ("c", m(mode == SortMode::Created,  "▍created",  "  created")),
+            ("e", m(mode == SortMode::Extension,"▍extension","  extension")),
+            ("", "Direction"),
+            ("r", if rev { "▍reverse ↑" } else { "  ascending ↓" }),
+        ]
+    }
+
+    fn build_layout_hints(&self) -> Vec<(&'static str, &'static str)> {
+        let l = self.layout;
+        let m = |active, label, inactive_label| {
+            if active { label } else { inactive_label }
+        };
+        vec![
+            ("1", m(l == PanelLayout::Single, "▍single", "  single")),
+            ("2", m(l == PanelLayout::Dual,   "▍dual",   "  dual")),
+            ("3", m(l == PanelLayout::Triple, "▍triple", "  triple")),
+        ]
     }
 }

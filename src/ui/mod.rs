@@ -214,7 +214,7 @@ pub fn render(f: &mut Frame, app: &mut App) {
     if let Some(hints) = app.which_key_hints() {
         overlays::render_which_key(
             f,
-            hints,
+            &hints,
             app.pending_key.unwrap_or(' '),
             &app.theme,
             full_area,
