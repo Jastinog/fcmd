@@ -48,11 +48,50 @@ impl App {
                 if let Some(ref mut p) = self.file_preview {
                     let max = p.lines.len().saturating_sub(self.visible_height);
                     p.scroll = max;
+                    p.hscroll = 0;
                 }
             }
             KeyCode::Char('g') => {
                 if let Some(ref mut p) = self.file_preview {
                     p.scroll = 0;
+                    p.hscroll = 0;
+                }
+            }
+            KeyCode::Char('h') | KeyCode::Left => {
+                if let Some(ref mut p) = self.file_preview {
+                    p.scroll_left(1);
+                }
+            }
+            KeyCode::Char('l') | KeyCode::Right => {
+                if let Some(ref mut p) = self.file_preview {
+                    p.scroll_right(1);
+                }
+            }
+            KeyCode::Char('H') => {
+                if let Some(ref mut p) = self.file_preview {
+                    p.scroll_left(8);
+                }
+            }
+            KeyCode::Char('L') => {
+                if let Some(ref mut p) = self.file_preview {
+                    p.scroll_right(8);
+                }
+            }
+            KeyCode::Char('0') => {
+                if let Some(ref mut p) = self.file_preview {
+                    p.hscroll = 0;
+                }
+            }
+            KeyCode::Char('$') => {
+                if let Some(ref mut p) = self.file_preview {
+                    let visible = self.visible_height;
+                    let max_line_width = p.lines.iter()
+                        .skip(p.scroll)
+                        .take(visible)
+                        .map(|l| unicode_width::UnicodeWidthStr::width(l.as_str()))
+                        .max()
+                        .unwrap_or(0);
+                    p.hscroll = max_line_width.saturating_sub(10);
                 }
             }
             KeyCode::Char('o') => {

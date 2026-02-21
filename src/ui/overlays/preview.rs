@@ -127,12 +127,19 @@ pub(in crate::ui) fn render_preview_popup(f: &mut Frame, app: &App, area: Rect) 
                 )];
 
                 if !query_lower.is_empty() && query_len > 0 {
-                    // Render with search highlights
+                    // Render with search highlights, applying hscroll
                     let line = &p.lines[line_idx];
-                    let line_chars: Vec<char> = line.chars().collect();
-                    let display_len = line_chars.len().min(max_content);
+                    let shifted = crate::ui::preview::skip_columns(line, p.hscroll);
+                    let shifted_chars: Vec<char> = shifted.chars().collect();
+                    let display_len = shifted_chars.len().min(max_content);
+
+                    // Compute how many chars were skipped by hscroll
+                    let total_chars = line.chars().count();
+                    let shifted_char_count = shifted_chars.len();
+                    let chars_skipped = total_chars - shifted_char_count;
+
                     let line_lower = line.to_lowercase();
-                    // Find all match offsets in this line
+                    // Find all match offsets in this line (char-based on original line)
                     let mut match_ranges: Vec<(usize, usize, bool)> = Vec::new();
                     let mut start = 0;
                     while let Some(pos) = line_lower[start..].find(&query_lower) {
@@ -143,41 +150,47 @@ pub(in crate::ui) fn render_preview_popup(f: &mut Frame, app: &App, area: Rect) 
                     }
 
                     if match_ranges.is_empty() {
-                        spans.extend(crate::ui::preview::build_content_spans(p, line_idx, max_content, t.fg));
+                        spans.extend(crate::ui::preview::build_content_spans(p, line_idx, max_content, t.fg, p.hscroll));
                     } else {
-                        let mut pos = 0;
+                        // Shift match ranges by chars_skipped and clamp to visible window
+                        let mut pos = 0usize;
                         for (m_start, m_end, is_cur) in &match_ranges {
+                            let vis_start = m_start.saturating_sub(chars_skipped);
+                            let vis_end = m_end.saturating_sub(chars_skipped);
+                            if vis_end == 0 || vis_start >= display_len {
+                                continue;
+                            }
+                            let vis_start = vis_start.max(pos);
+                            let vis_end = vis_end.min(display_len);
+                            if vis_start >= vis_end {
+                                continue;
+                            }
                             if pos >= display_len {
                                 break;
                             }
                             // Text before match
-                            if pos < *m_start {
-                                let end = (*m_start).min(display_len);
-                                let text: String = line_chars[pos..end].iter().collect();
+                            if pos < vis_start {
+                                let text: String = shifted_chars[pos..vis_start].iter().collect();
                                 spans.push(Span::styled(text, Style::default().fg(t.fg)));
-                                pos = end;
                             }
                             // Match text
-                            if pos < display_len && pos < *m_end {
-                                let end = (*m_end).min(display_len);
-                                let text: String = line_chars[pos..end].iter().collect();
-                                let style = if *is_cur {
-                                    Style::default().fg(t.bg_text).bg(t.orange)
-                                } else {
-                                    Style::default().fg(t.bg_text).bg(t.yellow)
-                                };
-                                spans.push(Span::styled(text, style));
-                                pos = end;
-                            }
+                            let text: String = shifted_chars[vis_start..vis_end].iter().collect();
+                            let style = if *is_cur {
+                                Style::default().fg(t.bg_text).bg(t.orange)
+                            } else {
+                                Style::default().fg(t.bg_text).bg(t.yellow)
+                            };
+                            spans.push(Span::styled(text, style));
+                            pos = vis_end;
                         }
                         // Remaining text
                         if pos < display_len {
-                            let text: String = line_chars[pos..display_len].iter().collect();
+                            let text: String = shifted_chars[pos..display_len].iter().collect();
                             spans.push(Span::styled(text, Style::default().fg(t.fg)));
                         }
                     }
                 } else {
-                    spans.extend(crate::ui::preview::build_content_spans(p, line_idx, max_content, t.fg));
+                    spans.extend(crate::ui::preview::build_content_spans(p, line_idx, max_content, t.fg, p.hscroll));
                 }
 
                 Some(ListItem::new(Line::from(spans)))
@@ -244,6 +257,8 @@ pub(in crate::ui) fn render_preview_popup(f: &mut Frame, app: &App, area: Rect) 
         let mut hints = vec![
             Span::styled(" j/k", Style::default().fg(t.cyan)),
             Span::styled(" scroll  ", Style::default().fg(t.fg_dim)),
+            Span::styled("h/l", Style::default().fg(t.cyan)),
+            Span::styled(" left/right  ", Style::default().fg(t.fg_dim)),
             Span::styled("G/g", Style::default().fg(t.cyan)),
             Span::styled(" top/bottom  ", Style::default().fg(t.fg_dim)),
             Span::styled("/", Style::default().fg(t.cyan)),

@@ -51,6 +51,7 @@ pub struct StyledSegment {
 pub struct Preview {
     pub lines: Vec<String>,
     pub scroll: usize,
+    pub hscroll: usize,
     pub title: String,
     pub info: String,
     pub is_binary: bool,
@@ -67,6 +68,7 @@ impl Preview {
         Preview {
             lines: vec![],
             scroll: 0,
+            hscroll: 0,
             title,
             info: "loading".into(),
             is_binary: false,
@@ -91,6 +93,7 @@ impl Preview {
                 return Preview {
                     lines: vec!["[Cannot read]".into()],
                     scroll: 0,
+                    hscroll: 0,
                     title,
                     info: "error".into(),
                     is_binary: false,
@@ -104,6 +107,7 @@ impl Preview {
             return Preview {
                 lines: vec![format!("[Too large: {} bytes]", meta.len())],
                 scroll: 0,
+                hscroll: 0,
                 title,
                 info: format!("{} bytes", meta.len()),
                 is_binary: false,
@@ -146,6 +150,7 @@ impl Preview {
                 Preview {
                     lines,
                     scroll: 0,
+                    hscroll: 0,
                     title,
                     info,
                     is_binary: false,
@@ -156,6 +161,7 @@ impl Preview {
             Err(_) => Preview {
                 lines: vec!["[Cannot read]".into()],
                 scroll: 0,
+                hscroll: 0,
                 title,
                 info: "error".into(),
                 is_binary: false,
@@ -172,6 +178,7 @@ impl Preview {
                 return Preview {
                     lines: vec!["[Cannot read]".into()],
                     scroll: 0,
+                    hscroll: 0,
                     title,
                     info: "error".into(),
                     is_binary: false,
@@ -222,6 +229,7 @@ impl Preview {
         Preview {
             lines,
             scroll: 0,
+            hscroll: 0,
             title,
             info,
             is_binary: false,
@@ -249,6 +257,7 @@ impl Preview {
                 Preview {
                     lines: names,
                     scroll: 0,
+                    hscroll: 0,
                     title,
                     info,
                     is_binary: false,
@@ -259,6 +268,7 @@ impl Preview {
             Err(_) => Preview {
                 lines: vec!["[Cannot read directory]".into()],
                 scroll: 0,
+                hscroll: 0,
                 title,
                 info: "error".into(),
                 is_binary: false,
@@ -312,6 +322,7 @@ impl Preview {
         Preview {
             lines,
             scroll: 0,
+            hscroll: 0,
             title,
             info,
             is_binary: true,
@@ -398,5 +409,13 @@ impl Preview {
     pub fn scroll_down(&mut self, n: usize, visible: usize) {
         let max = self.lines.len().saturating_sub(visible);
         self.scroll = (self.scroll + n).min(max);
+    }
+
+    pub fn scroll_left(&mut self, n: usize) {
+        self.hscroll = self.hscroll.saturating_sub(n);
+    }
+
+    pub fn scroll_right(&mut self, n: usize) {
+        self.hscroll += n;
     }
 }

@@ -275,7 +275,7 @@ pub(super) fn render_find(f: &mut Frame, fs: &FindState, t: &Theme, area: Rect) 
                             format!("{line_num:>num_width$}\u{2502}", num_width = num_width),
                             Style::default().fg(t.fg_dim),
                         )];
-                        spans.extend(super::preview::build_content_spans(p, line_idx, max_content, t.fg));
+                        spans.extend(super::preview::build_content_spans(p, line_idx, max_content, t.fg, 0));
                         Some(ListItem::new(Line::from(spans)))
                     })
                     .collect()
