@@ -51,20 +51,71 @@ pub(super) fn render_status(f: &mut Frame, app: &App, area: Rect) {
     let width = area.width as usize;
 
     // ── Mode segment ────────────────
-    let (mode_str, mode_bg) = if app.tree_focused && app.mode == Mode::Normal {
-        (" TREE", t.cyan)
+    let mode_str: String;
+    let (mode_ref, mode_bg) = if app.tree_focused && app.mode == Mode::Normal {
+        mode_str = format!("\u{f0645} TREE");    // 󰙅
+        (mode_str.as_str(), t.cyan)
     } else {
         match app.mode {
-            Mode::Normal => ("󰆍 NORMAL", t.green),
-            Mode::Visual => ("󰒉 VISUAL", t.magenta),
-            Mode::Select => ("󰄵 SELECT", t.orange),
-            Mode::Find => (" FIND", t.cyan),
-            Mode::Preview => ("󰈈 PREVIEW", t.cyan),
-            Mode::Help => ("󰋖 HELP", t.cyan),
-            Mode::ThemePicker => ("󰏘 THEME", t.cyan),
-            _ => ("", t.fg_dim),
+            Mode::Normal => {
+                mode_str = format!("\u{f018d} NORMAL");  // 󰆍
+                (mode_str.as_str(), t.green)
+            }
+            Mode::Visual => {
+                mode_str = format!("\u{f0489} VISUAL");  // 󰒉
+                (mode_str.as_str(), t.magenta)
+            }
+            Mode::Select => {
+                mode_str = format!("\u{f0135} SELECT");  // 󰄵
+                (mode_str.as_str(), t.orange)
+            }
+            Mode::Find => {
+                mode_str = format!("\u{f002} FIND");     //
+                (mode_str.as_str(), t.cyan)
+            }
+            Mode::Preview => {
+                mode_str = format!("\u{f0208} PREVIEW"); // 󰈈
+                (mode_str.as_str(), t.cyan)
+            }
+            Mode::Help => {
+                mode_str = format!("\u{f02d6} HELP");    // 󰋖
+                (mode_str.as_str(), t.cyan)
+            }
+            Mode::ThemePicker => {
+                mode_str = format!("\u{f03d8} THEME");   // 󰏘
+                (mode_str.as_str(), t.cyan)
+            }
+            Mode::Bookmarks => {
+                mode_str = format!("\u{f02e6} BOOKMARKS"); // 󰋦
+                (mode_str.as_str(), t.cyan)
+            }
+            Mode::Rename => {
+                mode_str = format!("\u{f03eb} RENAME");  // 󰏫
+                (mode_str.as_str(), t.yellow)
+            }
+            Mode::Create => {
+                mode_str = format!("\u{f0415} CREATE");  // 󰐕
+                (mode_str.as_str(), t.green)
+            }
+            Mode::Chmod => {
+                mode_str = format!("\u{f033e} CHMOD");   // 󰌾
+                (mode_str.as_str(), t.orange)
+            }
+            Mode::Chown => {
+                mode_str = format!("\u{f0004} CHOWN");   // 󰀄
+                (mode_str.as_str(), t.orange)
+            }
+            Mode::Info => {
+                mode_str = format!("\u{f02fd} INFO");    // 󰋽
+                (mode_str.as_str(), t.cyan)
+            }
+            _ => {
+                mode_str = String::new();
+                (mode_str.as_str(), t.fg_dim)
+            }
         }
     };
+    let mode_str = mode_ref;
 
     let mode_span = Span::styled(
         format!(" {mode_str} "),
