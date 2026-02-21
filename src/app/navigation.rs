@@ -230,9 +230,13 @@ impl App {
     pub(super) fn enter_dir_async(&mut self) {
         let panel = self.active_panel();
         let entry = match panel.entries.get(panel.selected) {
-            Some(e) if e.is_dir && e.name != ".." => e,
+            Some(e) if e.is_dir => e,
             _ => return,
         };
+        if entry.name == ".." {
+            self.go_parent_async();
+            return;
+        }
         let new_path = entry.path.clone();
         let idx = self.tab().active;
         self.navigate_cached(new_path, idx, None);
