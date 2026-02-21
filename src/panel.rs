@@ -5,6 +5,7 @@ use std::time::SystemTime;
 
 use crate::util::natsort::natsort;
 
+#[derive(Clone)]
 pub struct FileEntry {
     pub name: String,
     pub path: PathBuf,
@@ -84,14 +85,6 @@ impl Panel {
         Ok(panel)
     }
 
-    /// Navigate to a new directory, resetting cursor and selection state.
-    pub fn navigate_to(&mut self, path: PathBuf) {
-        self.path = path;
-        self.selected = 0;
-        self.offset = 0;
-        self.marked.clear();
-    }
-
     pub fn load_dir(&mut self) -> std::io::Result<()> {
         self.load_dir_with_sizes(&HashMap::new())
     }
@@ -148,57 +141,7 @@ impl Panel {
             }
         }
 
-        let sort_name = |v: &mut Vec<FileEntry>| {
-            v.sort_by(|a, b| natsort(a.name.as_bytes(), b.name.as_bytes()));
-        };
-        match self.sort_mode {
-            SortMode::Name => {
-                sort_name(&mut dirs);
-                sort_name(&mut files);
-            }
-            SortMode::Size => {
-                dirs.sort_by(|a, b| {
-                    let sa = dir_sizes.get(&a.path).copied();
-                    let sb = dir_sizes.get(&b.path).copied();
-                    match (sa, sb) {
-                        (Some(sa), Some(sb)) => sa.cmp(&sb),
-                        (Some(_), None) => std::cmp::Ordering::Greater,
-                        (None, Some(_)) => std::cmp::Ordering::Less,
-                        (None, None) => std::cmp::Ordering::Equal,
-                    }
-                });
-                files.sort_by(|a, b| a.size.cmp(&b.size));
-            }
-            SortMode::Modified => {
-                dirs.sort_by(|a, b| a.modified.cmp(&b.modified));
-                files.sort_by(|a, b| a.modified.cmp(&b.modified));
-            }
-            SortMode::Created => {
-                dirs.sort_by(|a, b| a.created.cmp(&b.created));
-                files.sort_by(|a, b| a.created.cmp(&b.created));
-            }
-            SortMode::Extension => {
-                sort_name(&mut dirs);
-                files.sort_by(|a, b| {
-                    let ext_a = Path::new(&a.name)
-                        .extension()
-                        .map(|x| x.to_string_lossy().to_lowercase())
-                        .unwrap_or_default();
-                    let ext_b = Path::new(&b.name)
-                        .extension()
-                        .map(|x| x.to_string_lossy().to_lowercase())
-                        .unwrap_or_default();
-                    ext_a
-                        .cmp(&ext_b)
-                        .then_with(|| natsort(a.name.as_bytes(), b.name.as_bytes()))
-                });
-            }
-        }
-
-        if self.sort_reverse {
-            dirs.reverse();
-            files.reverse();
-        }
+        sort_file_entries(&mut dirs, &mut files, self.sort_mode, self.sort_reverse, dir_sizes);
 
         self.entries.extend(dirs);
         self.entries.extend(files);
@@ -394,7 +337,7 @@ pub struct DirLoadRequest {
     pub sort_mode: SortMode,
     pub sort_reverse: bool,
     pub dir_sizes: HashMap<PathBuf, u64>,
-    pub panel_side: crate::app::PanelSide,
+    pub panel_idx: usize,
     pub tab_index: usize,
     pub select_name: Option<String>,
 }
@@ -411,7 +354,7 @@ pub fn stream_dir_entries(
         sort_mode,
         sort_reverse,
         ref dir_sizes,
-        panel_side,
+        panel_idx,
         tab_index,
         select_name,
     } = req;
@@ -465,7 +408,7 @@ pub fn stream_dir_entries(
 
                 if batch.len() >= BATCH_SIZE {
                     let msg = crate::app::DirLoadMsg::Batch {
-                        panel_side,
+                        panel_idx,
                         tab_index,
                         path: path.clone(),
                         entries: std::mem::replace(&mut batch, Vec::with_capacity(BATCH_SIZE)),
@@ -480,7 +423,7 @@ pub fn stream_dir_entries(
 
     // Send the final sorted result
     let _ = tx.blocking_send(crate::app::DirLoadMsg::Finished {
-        panel_side,
+        panel_idx,
         tab_index,
         path: path.clone(),
         entries,
@@ -544,13 +487,28 @@ pub fn load_dir_entries(
         }
     }
 
+    sort_file_entries(&mut dirs, &mut files, sort_mode, sort_reverse, dir_sizes);
+
+    entries.extend(dirs);
+    entries.extend(files);
+    Ok(entries)
+}
+
+/// Sort dirs and files vectors in place according to the given sort mode.
+pub fn sort_file_entries(
+    dirs: &mut Vec<FileEntry>,
+    files: &mut Vec<FileEntry>,
+    sort_mode: SortMode,
+    sort_reverse: bool,
+    dir_sizes: &HashMap<PathBuf, u64>,
+) {
     let sort_name = |v: &mut Vec<FileEntry>| {
         v.sort_by(|a, b| natsort(a.name.as_bytes(), b.name.as_bytes()));
     };
     match sort_mode {
         SortMode::Name => {
-            sort_name(&mut dirs);
-            sort_name(&mut files);
+            sort_name(dirs);
+            sort_name(files);
         }
         SortMode::Size => {
             dirs.sort_by(|a, b| {
@@ -574,7 +532,7 @@ pub fn load_dir_entries(
             files.sort_by(|a, b| a.created.cmp(&b.created));
         }
         SortMode::Extension => {
-            sort_name(&mut dirs);
+            sort_name(dirs);
             files.sort_by(|a, b| {
                 let ext_a = Path::new(&a.name)
                     .extension()
@@ -595,10 +553,107 @@ pub fn load_dir_entries(
         dirs.reverse();
         files.reverse();
     }
+}
 
+/// Re-sort a flat entries list (which may start with "..") using the given sort mode.
+pub fn resort_entries(
+    entries: &mut Vec<FileEntry>,
+    sort_mode: SortMode,
+    sort_reverse: bool,
+    dir_sizes: &HashMap<PathBuf, u64>,
+) {
+    // Separate ".." from the rest, then split into dirs/files
+    let has_dotdot = entries.first().is_some_and(|e| e.name == "..");
+    let dotdot = if has_dotdot {
+        Some(entries.remove(0))
+    } else {
+        None
+    };
+
+    let mut dirs = Vec::new();
+    let mut files = Vec::new();
+    for entry in entries.drain(..) {
+        if entry.is_dir {
+            dirs.push(entry);
+        } else {
+            files.push(entry);
+        }
+    }
+
+    sort_file_entries(&mut dirs, &mut files, sort_mode, sort_reverse, dir_sizes);
+
+    if let Some(dd) = dotdot {
+        entries.push(dd);
+    }
     entries.extend(dirs);
     entries.extend(files);
-    Ok(entries)
+}
+
+pub struct DirCacheEntry {
+    pub entries: Vec<FileEntry>,
+    pub sort_mode: SortMode,
+    pub sort_reverse: bool,
+    pub show_hidden: bool,
+}
+
+use std::collections::VecDeque;
+
+pub struct DirCache {
+    map: HashMap<PathBuf, DirCacheEntry>,
+    order: VecDeque<PathBuf>,
+    capacity: usize,
+}
+
+impl DirCache {
+    pub fn new(capacity: usize) -> Self {
+        DirCache {
+            map: HashMap::new(),
+            order: VecDeque::new(),
+            capacity,
+        }
+    }
+
+    pub fn get(&mut self, path: &Path) -> Option<&DirCacheEntry> {
+        if self.map.contains_key(path) {
+            // Promote to most-recent (back)
+            if let Some(pos) = self.order.iter().position(|p| p == path) {
+                self.order.remove(pos);
+            }
+            self.order.push_back(path.to_path_buf());
+            self.map.get(path)
+        } else {
+            None
+        }
+    }
+
+    pub fn insert(&mut self, path: PathBuf, entry: DirCacheEntry) {
+        if self.map.contains_key(&path) {
+            // Update existing — re-promote
+            if let Some(pos) = self.order.iter().position(|p| p == &path) {
+                self.order.remove(pos);
+            }
+        } else if self.map.len() >= self.capacity {
+            // Evict LRU (front)
+            if let Some(old) = self.order.pop_front() {
+                self.map.remove(&old);
+            }
+        }
+        self.order.push_back(path.clone());
+        self.map.insert(path, entry);
+    }
+
+    pub fn remove(&mut self, path: &Path) {
+        if self.map.remove(path).is_some() {
+            if let Some(pos) = self.order.iter().position(|p| p == path) {
+                self.order.remove(pos);
+            }
+        }
+    }
+
+    pub fn clear(&mut self) {
+        self.map.clear();
+        self.order.clear();
+    }
 }
 
 #[cfg(test)]
@@ -641,7 +696,6 @@ mod tests {
             sort_mode: SortMode::Name,
             sort_reverse: false,
             show_hidden: false,
-            loading: false,
         }
     }
 

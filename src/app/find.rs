@@ -93,14 +93,10 @@ impl App {
 
         let side = self.tab().active;
         if is_dir {
-            self.active_panel_mut().navigate_to(path);
-            self.apply_dir_sort_no_reload();
-            self.spawn_dir_load(side, None);
+            self.navigate_cached(path, side, None);
         } else if let Some(parent) = path.parent() {
             let name = path.file_name().map(|n| n.to_string_lossy().into_owned());
-            self.active_panel_mut().navigate_to(parent.to_path_buf());
-            self.apply_dir_sort_no_reload();
-            self.spawn_dir_load(side, name);
+            self.navigate_cached(parent.to_path_buf(), side, name);
         }
     }
 }

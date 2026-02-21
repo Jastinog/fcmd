@@ -6,7 +6,7 @@ pub(crate) use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
 pub(crate) use crate::find::{FindScope, FindState};
 pub(crate) use crate::ops::{self, DuMsg, ProgressMsg, Register, RegisterOp, UndoStack};
-pub(crate) use crate::panel::{self, FileEntry, Panel, SortMode};
+pub(crate) use crate::panel::{self, DirCache, FileEntry, Panel, SortMode};
 pub(crate) use crate::preview::Preview;
 pub(crate) use crate::theme::Theme;
 
@@ -220,6 +220,8 @@ pub struct App {
     pub(super) git_progress: Option<GitProgress>,
     // Delete progress
     pub delete_progress: Option<DeleteProgress>,
+    // Directory cache (LRU)
+    pub dir_cache: DirCache,
     // Async dir loading (streaming batches + sorted final result)
     pub(super) dir_load_tx: tokio::sync::mpsc::Sender<DirLoadMsg>,
     pub dir_load_rx: tokio::sync::mpsc::Receiver<DirLoadMsg>,
@@ -383,6 +385,7 @@ impl App {
             git_checked_dirs: [None, None, None],
             git_progress: None,
             delete_progress: None,
+            dir_cache: DirCache::new(64),
             dir_load_tx,
             dir_load_rx,
             preview_load_rx: None,
@@ -501,6 +504,15 @@ impl App {
                 if panel.path != path {
                     return;
                 }
+                self.dir_cache.insert(
+                    path,
+                    panel::DirCacheEntry {
+                        entries: entries.clone(),
+                        sort_mode: panel.sort_mode,
+                        sort_reverse: panel.sort_reverse,
+                        show_hidden: panel.show_hidden,
+                    },
+                );
                 panel.apply_entries(entries, select_name.as_deref());
             }
         }
@@ -537,9 +549,7 @@ impl App {
         }
         let side = self.tab().active;
         if result.is_dir {
-            self.active_panel_mut().navigate_to(result.path);
-            self.apply_dir_sort_no_reload();
-            self.spawn_dir_load(side, None);
+            self.navigate_cached(result.path, side, None);
         } else {
             // File: navigate to parent and select the file
             if let Some(parent) = result.path.parent() {
@@ -547,9 +557,7 @@ impl App {
                     .path
                     .file_name()
                     .map(|n| n.to_string_lossy().into_owned());
-                self.active_panel_mut().navigate_to(parent.to_path_buf());
-                self.apply_dir_sort_no_reload();
-                self.spawn_dir_load(side, name);
+                self.navigate_cached(parent.to_path_buf(), side, name);
             }
         }
     }

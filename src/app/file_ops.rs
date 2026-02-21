@@ -162,16 +162,31 @@ impl App {
     }
 
     pub fn reload_active_panel(&mut self) {
+        let path = self.active_panel().path.clone();
+        self.dir_cache.remove(&path);
         let side = self.tab().active;
         self.spawn_dir_load(side, None);
     }
 
     pub(super) fn refresh_panels(&mut self) {
-        // Load both panels async
-        self.spawn_dir_load(PanelSide::Left, None);
-        self.spawn_dir_load(PanelSide::Right, None);
+        // Invalidate cache for all visible panel paths and their parents
+        let tab = &self.tabs[self.active_tab];
+        let paths: Vec<PathBuf> = tab.panels.iter().flat_map(|p| {
+            let mut v = vec![p.path.clone()];
+            if let Some(parent) = p.path.parent() {
+                v.push(parent.to_path_buf());
+            }
+            v
+        }).collect();
+        for p in paths {
+            self.dir_cache.remove(&p);
+        }
+        // Load all panels async
+        for i in 0..3 {
+            self.spawn_dir_load(i, None);
+        }
         self.tree_dirty = true;
-        self.git_checked_dirs = [None, None]; // force re-fetch
+        self.git_checked_dirs = [None, None, None]; // force re-fetch
         self.refresh_git_status();
     }
 }

@@ -93,6 +93,7 @@ impl App {
                 panel.show_hidden = hidden;
             }
         }
+        self.dir_cache.clear();
         // Load all panels async
         for i in 0..3 {
             self.spawn_dir_load(i, None);
@@ -117,7 +118,7 @@ impl App {
     pub(super) fn toggle_sort_reverse(&mut self) {
         let rev = !self.active_panel().sort_reverse;
         self.active_panel_mut().sort_reverse = rev;
-        self.reload_active_panel();
+        self.resort_from_cache_or_reload();
         self.save_current_sort();
         let arrow = if rev { "\u{2191}" } else { "\u{2193}" };
         let label = self.active_panel().sort_mode.label();
@@ -126,9 +127,26 @@ impl App {
 
     pub(super) fn set_sort(&mut self, mode: SortMode) {
         self.active_panel_mut().sort_mode = mode;
-        self.reload_active_panel();
+        self.resort_from_cache_or_reload();
         self.save_current_sort();
         self.status_message = format!("Sort: {}", mode.label());
+    }
+
+    fn resort_from_cache_or_reload(&mut self) {
+        let path = self.active_panel().path.clone();
+        let sort_mode = self.active_panel().sort_mode;
+        let sort_reverse = self.active_panel().sort_reverse;
+        let show_hidden = self.active_panel().show_hidden;
+
+        if let Some(cached) = self.dir_cache.get(&path) {
+            if cached.show_hidden == show_hidden {
+                let mut entries = cached.entries.clone();
+                panel::resort_entries(&mut entries, sort_mode, sort_reverse, &self.dir_sizes);
+                self.active_panel_mut().apply_entries(entries, None);
+                return;
+            }
+        }
+        self.reload_active_panel();
     }
 
     pub(super) fn save_current_sort(&mut self) {
@@ -146,6 +164,8 @@ impl App {
     }
 
     pub(super) fn refresh_current_panel(&mut self) {
+        let path = self.active_panel().path.clone();
+        self.dir_cache.remove(&path);
         let idx = self.tab().active;
         self.spawn_dir_load(idx, None);
         self.tree_dirty = true;
@@ -213,14 +233,12 @@ impl App {
     pub(super) fn enter_dir_async(&mut self) {
         let panel = self.active_panel();
         let entry = match panel.entries.get(panel.selected) {
-            Some(e) if e.is_dir => e,
+            Some(e) if e.is_dir && e.name != ".." => e,
             _ => return,
         };
         let new_path = entry.path.clone();
         let idx = self.tab().active;
-        self.active_panel_mut().navigate_to(new_path);
-        self.apply_dir_sort_no_reload();
-        self.spawn_dir_load(idx, None);
+        self.navigate_cached(new_path, idx, None);
     }
 
     /// Go to parent directory on the active panel (async).
@@ -235,9 +253,7 @@ impl App {
             .file_name()
             .map(|n| n.to_string_lossy().into_owned());
         let idx = self.tab().active;
-        self.active_panel_mut().navigate_to(parent);
-        self.apply_dir_sort_no_reload();
-        self.spawn_dir_load(idx, old_name);
+        self.navigate_cached(parent, idx, old_name);
     }
 
     /// Go to home directory on the active panel (async).
@@ -246,22 +262,44 @@ impl App {
             return;
         };
         let idx = self.tab().active;
-        self.active_panel_mut().navigate_to(home);
-        self.apply_dir_sort_no_reload();
-        self.spawn_dir_load(idx, None);
+        self.navigate_cached(home, idx, None);
     }
 
-    /// Apply dir sort preference without reloading entries (used before async load).
-    pub(super) fn apply_dir_sort_no_reload(&mut self) {
-        let path = self.active_panel().path.clone();
-        let (new_mode, new_rev) = self
+    /// Navigate to a directory using the cache if available, then spawn a background refresh.
+    pub(super) fn navigate_cached(&mut self, path: PathBuf, panel_idx: usize, select_name: Option<String>) {
+        let panel = &mut self.tabs[self.active_tab].panels[panel_idx];
+        panel.path = path.clone();
+        panel.selected = 0;
+        panel.offset = 0;
+        panel.marked.clear();
+
+        // Apply sort prefs for this directory
+        let (sort_mode, sort_reverse) = self
             .dir_sorts
             .get(&path)
             .copied()
             .unwrap_or((SortMode::Name, false));
-        let panel = self.active_panel_mut();
-        panel.sort_mode = new_mode;
-        panel.sort_reverse = new_rev;
+        let panel = &mut self.tabs[self.active_tab].panels[panel_idx];
+        panel.sort_mode = sort_mode;
+        panel.sort_reverse = sort_reverse;
+
+        let show_hidden = panel.show_hidden;
+
+        // Try cache hit
+        if let Some(cached) = self.dir_cache.get(&path) {
+            if cached.show_hidden == show_hidden {
+                let mut entries = cached.entries.clone();
+                // Re-sort if sort mode differs from cached
+                if cached.sort_mode != sort_mode || cached.sort_reverse != sort_reverse {
+                    panel::resort_entries(&mut entries, sort_mode, sort_reverse, &self.dir_sizes);
+                }
+                let panel = &mut self.tabs[self.active_tab].panels[panel_idx];
+                panel.apply_entries(entries, select_name.as_deref());
+            }
+        }
+
+        // Always refresh from disk in background
+        self.spawn_dir_load(panel_idx, select_name);
     }
 
     pub(super) fn request_open_editor(&mut self, path: PathBuf) {
