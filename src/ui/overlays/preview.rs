@@ -26,14 +26,14 @@ pub(in crate::ui) fn render_preview_popup(f: &mut Frame, app: &App, area: Rect) 
     // Title with optional match count or hex position
     let title = if has_matches {
         format!(
-            " 󰈈 {} [{}] ({}/{}) ",
+            " \u{f0208} {} [{}] ({}/{}) ",
             p.title,
             p.info,
             app.preview_search_current + 1,
             app.preview_search_matches.len()
         )
     } else {
-        format!(" 󰈈 {} [{}] ", p.title, p.info)
+        format!(" \u{f0208} {} [{}] ", p.title, p.info)
     };
 
     let block = Block::default()
@@ -87,7 +87,7 @@ pub(in crate::ui) fn render_preview_popup(f: &mut Frame, app: &App, area: Rect) 
     let reserved: u16 = 2 + if is_searching { 1 } else { 0 };
     let list_height = inner.height.saturating_sub(reserved) as usize;
 
-    // Build match lookup: for each visible line, collect char offsets of matches
+    // Build match lookup
     let query_lower = query.to_lowercase();
     let query_len = query_lower.chars().count();
     let current_match = if has_matches {
@@ -126,20 +126,18 @@ pub(in crate::ui) fn render_preview_popup(f: &mut Frame, app: &App, area: Rect) 
                     Style::default().fg(t.fg_dim),
                 )];
 
+                let line = &p.lines[line_idx];
+                let display: String = if line.width() > max_content {
+                    crate::ui::preview::truncate_to_width(line, max_content)
+                } else {
+                    line.clone()
+                };
+
                 if !query_lower.is_empty() && query_len > 0 {
-                    // Render with search highlights, applying hscroll
-                    let line = &p.lines[line_idx];
-                    let shifted = crate::ui::preview::skip_columns(line, p.hscroll);
-                    let shifted_chars: Vec<char> = shifted.chars().collect();
-                    let display_len = shifted_chars.len().min(max_content);
-
-                    // Compute how many chars were skipped by hscroll
-                    let total_chars = line.chars().count();
-                    let shifted_char_count = shifted_chars.len();
-                    let chars_skipped = total_chars - shifted_char_count;
-
+                    // Render with search highlights
+                    let display_chars: Vec<char> = display.chars().collect();
+                    let display_len = display_chars.len();
                     let line_lower = line.to_lowercase();
-                    // Find all match offsets in this line (char-based on original line)
                     let mut match_ranges: Vec<(usize, usize, bool)> = Vec::new();
                     let mut start = 0;
                     while let Some(pos) = line_lower[start..].find(&query_lower) {
@@ -150,18 +148,12 @@ pub(in crate::ui) fn render_preview_popup(f: &mut Frame, app: &App, area: Rect) 
                     }
 
                     if match_ranges.is_empty() {
-                        spans.extend(crate::ui::preview::build_content_spans(p, line_idx, max_content, t.fg, p.hscroll));
+                        spans.push(Span::styled(display, Style::default().fg(t.fg)));
                     } else {
-                        // Shift match ranges by chars_skipped and clamp to visible window
                         let mut pos = 0usize;
                         for (m_start, m_end, is_cur) in &match_ranges {
-                            let vis_start = m_start.saturating_sub(chars_skipped);
-                            let vis_end = m_end.saturating_sub(chars_skipped);
-                            if vis_end == 0 || vis_start >= display_len {
-                                continue;
-                            }
-                            let vis_start = vis_start.max(pos);
-                            let vis_end = vis_end.min(display_len);
+                            let vis_start = (*m_start).max(pos);
+                            let vis_end = (*m_end).min(display_len);
                             if vis_start >= vis_end {
                                 continue;
                             }
@@ -170,11 +162,11 @@ pub(in crate::ui) fn render_preview_popup(f: &mut Frame, app: &App, area: Rect) 
                             }
                             // Text before match
                             if pos < vis_start {
-                                let text: String = shifted_chars[pos..vis_start].iter().collect();
+                                let text: String = display_chars[pos..vis_start].iter().collect();
                                 spans.push(Span::styled(text, Style::default().fg(t.fg)));
                             }
                             // Match text
-                            let text: String = shifted_chars[vis_start..vis_end].iter().collect();
+                            let text: String = display_chars[vis_start..vis_end].iter().collect();
                             let style = if *is_cur {
                                 Style::default().fg(t.bg_text).bg(t.orange)
                             } else {
@@ -185,12 +177,12 @@ pub(in crate::ui) fn render_preview_popup(f: &mut Frame, app: &App, area: Rect) 
                         }
                         // Remaining text
                         if pos < display_len {
-                            let text: String = shifted_chars[pos..display_len].iter().collect();
+                            let text: String = display_chars[pos..display_len].iter().collect();
                             spans.push(Span::styled(text, Style::default().fg(t.fg)));
                         }
                     }
                 } else {
-                    spans.extend(crate::ui::preview::build_content_spans(p, line_idx, max_content, t.fg, p.hscroll));
+                    spans.push(Span::styled(display, Style::default().fg(t.fg)));
                 }
 
                 Some(ListItem::new(Line::from(spans)))
@@ -257,8 +249,6 @@ pub(in crate::ui) fn render_preview_popup(f: &mut Frame, app: &App, area: Rect) 
         let mut hints = vec![
             Span::styled(" j/k", Style::default().fg(t.cyan)),
             Span::styled(" scroll  ", Style::default().fg(t.fg_dim)),
-            Span::styled("h/l", Style::default().fg(t.cyan)),
-            Span::styled(" left/right  ", Style::default().fg(t.fg_dim)),
             Span::styled("G/g", Style::default().fg(t.cyan)),
             Span::styled(" top/bottom  ", Style::default().fg(t.fg_dim)),
             Span::styled("/", Style::default().fg(t.cyan)),

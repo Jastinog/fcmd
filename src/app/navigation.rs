@@ -203,8 +203,7 @@ impl App {
         let vis = self.visible_height;
 
         tokio::task::spawn_blocking(move || {
-            let mut preview = Preview::load(&path, vis);
-            preview.apply_highlighting(&path, vis);
+            let preview = Preview::load(&path, vis);
             let _ = tx.send(super::PreviewLoadResult {
                 path,
                 preview,
@@ -217,11 +216,9 @@ impl App {
         let (tx, rx) = tokio::sync::oneshot::channel();
         // Drop old receiver (cancels stale load)
         self.file_preview_rx = Some(rx);
-        let vis = self.visible_height;
 
         tokio::task::spawn_blocking(move || {
-            let mut preview = Preview::load(&path, crate::preview::MAX_LINES);
-            preview.apply_highlighting(&path, vis);
+            let preview = Preview::load(&path, crate::preview::MAX_LINES);
             let _ = tx.send(super::PreviewLoadResult {
                 path,
                 preview,

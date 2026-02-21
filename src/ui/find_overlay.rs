@@ -5,6 +5,7 @@ use ratatui::{
     text::{Line, Span},
     widgets::{Block, Borders, Clear, List, ListItem, Paragraph},
 };
+use unicode_width::UnicodeWidthStr;
 
 use crate::find::{FindScope, FindState};
 use crate::util::icons::file_icon;
@@ -275,7 +276,13 @@ pub(super) fn render_find(f: &mut Frame, fs: &FindState, t: &Theme, area: Rect) 
                             format!("{line_num:>num_width$}\u{2502}", num_width = num_width),
                             Style::default().fg(t.fg_dim),
                         )];
-                        spans.extend(super::preview::build_content_spans(p, line_idx, max_content, t.fg, 0));
+                        let line = &p.lines[line_idx];
+                        let content = if line.width() > max_content {
+                            super::preview::truncate_to_width(line, max_content)
+                        } else {
+                            line.clone()
+                        };
+                        spans.push(Span::styled(content, Style::default().fg(t.fg)));
                         Some(ListItem::new(Line::from(spans)))
                     })
                     .collect()

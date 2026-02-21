@@ -310,8 +310,7 @@ impl FindState {
             let path = p.clone();
             let vis = visible_height;
             tokio::task::spawn_blocking(move || {
-                let mut prev = crate::preview::Preview::load(&path, vis);
-                prev.apply_highlighting(&path, vis);
+                let prev = crate::preview::Preview::load(&path, vis);
                 let _ = tx.send((path, prev));
             });
         } else {

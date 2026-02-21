@@ -44,92 +44,6 @@ pub(super) fn build_hex_spans(line: &str, dim: Color, fg: Color, accent: Color) 
     }
 }
 
-/// Skip the first `skip` display columns of a string, returning the remainder.
-pub(super) fn skip_columns(s: &str, skip: usize) -> String {
-    if skip == 0 {
-        return s.to_string();
-    }
-    let mut cols = 0;
-    let mut chars = s.chars();
-    for ch in chars.by_ref() {
-        let cw = ch.width().unwrap_or(0);
-        cols += cw;
-        if cols >= skip {
-            break;
-        }
-    }
-    chars.collect()
-}
-
-/// Build content spans for a preview line, using syntax highlighting if available.
-/// `hscroll` columns are skipped from the left before truncating to `max_width`.
-pub(super) fn build_content_spans<'a>(
-    p: &Preview,
-    line_idx: usize,
-    max_width: usize,
-    default_fg: Color,
-    hscroll: usize,
-) -> Vec<Span<'a>> {
-    if let Some(ref styled) = p.styled_lines
-        && let Some(segments) = styled.get(line_idx)
-    {
-        let mut spans = Vec::new();
-        let mut width_used = 0;
-        let mut cols_skipped = 0;
-        for seg in segments {
-            if width_used >= max_width {
-                break;
-            }
-            let seg_w = seg.text.width();
-            // Still skipping columns
-            if cols_skipped < hscroll {
-                if cols_skipped + seg_w <= hscroll {
-                    cols_skipped += seg_w;
-                    continue;
-                }
-                // Partial skip within this segment
-                let skip_in_seg = hscroll - cols_skipped;
-                let partial = skip_columns(&seg.text, skip_in_seg);
-                cols_skipped = hscroll;
-                let partial_w = partial.width();
-                let remaining = max_width - width_used;
-                if partial_w <= remaining {
-                    spans.push(Span::styled(partial, seg.style));
-                    width_used += partial_w;
-                } else {
-                    let truncated = truncate_to_width(&partial, remaining);
-                    width_used += truncated.width();
-                    spans.push(Span::styled(truncated, seg.style));
-                }
-                continue;
-            }
-            let remaining = max_width - width_used;
-            if seg_w <= remaining {
-                spans.push(Span::styled(seg.text.clone(), seg.style));
-                width_used += seg_w;
-            } else {
-                let truncated = truncate_to_width(&seg.text, remaining);
-                width_used += truncated.width();
-                spans.push(Span::styled(truncated, seg.style));
-            }
-        }
-        return spans;
-    }
-    // Fallback: plain text
-    let line = &p.lines[line_idx];
-    let shifted = if hscroll > 0 {
-        skip_columns(line, hscroll)
-    } else {
-        line.clone()
-    };
-    let content = if shifted.width() > max_width {
-        truncate_to_width(&shifted, max_width)
-    } else {
-        shifted
-    };
-    vec![Span::styled(content, Style::default().fg(default_fg))]
-}
-
 pub(super) fn render_preview(f: &mut Frame, preview: &Option<Preview>, area: Rect, t: &Theme) {
     let (title, info) = match preview {
         Some(p) => (p.title.as_str(), p.info.as_str()),
@@ -212,11 +126,19 @@ pub(super) fn render_preview(f: &mut Frame, preview: &Option<Preview>, area: Rec
                 let line_num = line_idx + 1;
                 let num_width = 4;
                 let max_content = width.saturating_sub(num_width + 2);
-                let mut spans = vec![Span::styled(
-                    format!("{line_num:>num_width$} ", num_width = num_width),
-                    Style::default().fg(t.fg_dim),
-                )];
-                spans.extend(build_content_spans(p, line_idx, max_content, t.fg, 0));
+                let line = &p.lines[line_idx];
+                let content = if line.width() > max_content {
+                    truncate_to_width(line, max_content)
+                } else {
+                    line.clone()
+                };
+                let spans = vec![
+                    Span::styled(
+                        format!("{line_num:>num_width$} ", num_width = num_width),
+                        Style::default().fg(t.fg_dim),
+                    ),
+                    Span::styled(content, Style::default().fg(t.fg)),
+                ];
                 ListItem::new(Line::from(spans))
             })
             .collect()

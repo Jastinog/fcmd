@@ -1,11 +1,6 @@
 use std::fs;
 use std::io::{BufRead, BufReader, Read, Seek, SeekFrom};
 use std::path::Path;
-use std::sync::LazyLock;
-
-use ratatui::style::Color;
-use syntect::highlighting::ThemeSet;
-use syntect::parsing::SyntaxSet;
 
 /// Expand tabs to spaces (4-space tab stops) and strip control chars.
 fn sanitize_line(line: &str) -> String {
@@ -34,29 +29,13 @@ pub const MAX_LINES: usize = 50_000;
 const MAX_FILE_SIZE: u64 = 50 * 1_048_576; // 50 MB
 pub const HEX_DUMP_MAX: usize = 262_144; // 256 KB
 
-/// Skip syntax highlighting for files above this size (lines)
-const HIGHLIGHT_MAX_LINES: usize = 5_000;
-
-static SYNTAX_SET: LazyLock<SyntaxSet> = LazyLock::new(two_face::syntax::extra_newlines);
-static HIGHLIGHT_THEME: LazyLock<syntect::highlighting::Theme> = LazyLock::new(|| {
-    let ts = ThemeSet::load_defaults();
-    ts.themes["base16-ocean.dark"].clone()
-});
-
-pub struct StyledSegment {
-    pub text: String,
-    pub style: ratatui::style::Style,
-}
-
 pub struct Preview {
     pub lines: Vec<String>,
     pub scroll: usize,
-    pub hscroll: usize,
     pub title: String,
     pub info: String,
     pub is_binary: bool,
     pub binary_size: usize,
-    pub styled_lines: Option<Vec<Vec<StyledSegment>>>,
 }
 
 impl Preview {
@@ -68,12 +47,10 @@ impl Preview {
         Preview {
             lines: vec![],
             scroll: 0,
-            hscroll: 0,
             title,
             info: "loading".into(),
             is_binary: false,
             binary_size: 0,
-            styled_lines: None,
         }
     }
 
@@ -93,12 +70,10 @@ impl Preview {
                 return Preview {
                     lines: vec!["[Cannot read]".into()],
                     scroll: 0,
-                    hscroll: 0,
                     title,
                     info: "error".into(),
                     is_binary: false,
                     binary_size: 0,
-                    styled_lines: None,
                 };
             }
         };
@@ -107,12 +82,10 @@ impl Preview {
             return Preview {
                 lines: vec![format!("[Too large: {} bytes]", meta.len())],
                 scroll: 0,
-                hscroll: 0,
                 title,
                 info: format!("{} bytes", meta.len()),
                 is_binary: false,
                 binary_size: 0,
-                styled_lines: None,
             };
         }
 
@@ -150,23 +123,19 @@ impl Preview {
                 Preview {
                     lines,
                     scroll: 0,
-                    hscroll: 0,
                     title,
                     info,
                     is_binary: false,
                     binary_size: 0,
-                    styled_lines: None,
                 }
             }
             Err(_) => Preview {
                 lines: vec!["[Cannot read]".into()],
                 scroll: 0,
-                hscroll: 0,
                 title,
                 info: "error".into(),
                 is_binary: false,
                 binary_size: 0,
-                styled_lines: None,
             },
         }
     }
@@ -178,12 +147,10 @@ impl Preview {
                 return Preview {
                     lines: vec!["[Cannot read]".into()],
                     scroll: 0,
-                    hscroll: 0,
                     title,
                     info: "error".into(),
                     is_binary: false,
                     binary_size: 0,
-                    styled_lines: None,
                 };
             }
         };
@@ -229,12 +196,10 @@ impl Preview {
         Preview {
             lines,
             scroll: 0,
-            hscroll: 0,
             title,
             info,
             is_binary: false,
             binary_size: 0,
-            styled_lines: None,
         }
     }
 
@@ -257,23 +222,19 @@ impl Preview {
                 Preview {
                     lines: names,
                     scroll: 0,
-                    hscroll: 0,
                     title,
                     info,
                     is_binary: false,
                     binary_size: 0,
-                    styled_lines: None,
                 }
             }
             Err(_) => Preview {
                 lines: vec!["[Cannot read directory]".into()],
                 scroll: 0,
-                hscroll: 0,
                 title,
                 info: "error".into(),
                 is_binary: false,
                 binary_size: 0,
-                styled_lines: None,
             },
         }
     }
@@ -322,12 +283,10 @@ impl Preview {
         Preview {
             lines,
             scroll: 0,
-            hscroll: 0,
             title,
             info,
             is_binary: true,
             binary_size: total_size,
-            styled_lines: None,
         }
     }
 
@@ -341,46 +300,6 @@ impl Preview {
         let last = (self.scroll + visible).min(total);
         let pct = ((last as u64 * 100) / total as u64) as u8;
         (first, total, pct)
-    }
-
-    pub fn apply_highlighting(&mut self, path: &Path, visible_lines: usize) {
-        if self.is_binary || self.lines.is_empty() || self.lines.len() > HIGHLIGHT_MAX_LINES {
-            return;
-        }
-        let syntax = match SYNTAX_SET.find_syntax_for_file(path) {
-            Ok(Some(s)) => s,
-            _ => {
-                // Fallback: detect by first line content (shebangs, modelines, etc.)
-                match SYNTAX_SET.find_syntax_by_first_line(&self.lines[0]) {
-                    Some(s) => s,
-                    None => return,
-                }
-            }
-        };
-        let limit = visible_lines.max(40);
-        let mut h = syntect::easy::HighlightLines::new(syntax, &HIGHLIGHT_THEME);
-        let mut result = Vec::with_capacity(limit.min(self.lines.len()));
-        for line in self.lines.iter().take(limit) {
-            let regions = match h.highlight_line(line, &SYNTAX_SET) {
-                Ok(r) => r,
-                Err(_) => {
-                    return; // abort on error, fall back to plain
-                }
-            };
-            let segments: Vec<StyledSegment> = regions
-                .into_iter()
-                .map(|(style, text)| {
-                    let fg = style.foreground;
-                    StyledSegment {
-                        text: text.to_string(),
-                        style: ratatui::style::Style::default()
-                            .fg(Color::Rgb(fg.r, fg.g, fg.b)),
-                    }
-                })
-                .collect();
-            result.push(segments);
-        }
-        self.styled_lines = Some(result);
     }
 
     /// For binary previews: returns (first_byte_offset, last_byte_offset, total_bytes, percentage)
@@ -409,13 +328,5 @@ impl Preview {
     pub fn scroll_down(&mut self, n: usize, visible: usize) {
         let max = self.lines.len().saturating_sub(visible);
         self.scroll = (self.scroll + n).min(max);
-    }
-
-    pub fn scroll_left(&mut self, n: usize) {
-        self.hscroll = self.hscroll.saturating_sub(n);
-    }
-
-    pub fn scroll_right(&mut self, n: usize) {
-        self.hscroll += n;
     }
 }
