@@ -408,7 +408,7 @@ async fn global_search_read(stdout: tokio::process::ChildStdout, tx: &tokio::syn
             break;
         }
         let path = PathBuf::from(&line);
-        let is_dir = path.is_dir();
+        let is_dir = tokio::task::block_in_place(|| path.is_dir());
         let display = abbreviate_home(&line);
         let display_lower = display.to_lowercase();
         if tx
