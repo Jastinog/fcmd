@@ -147,6 +147,7 @@ async fn run(
                 app.poll_find();
                 app.poll_info_du();
                 app.poll_git();
+                app.poll_delete();
             }
             result = recv_or_pend(&mut app.dir_load_rx) => {
                 app.apply_dir_load(result);

@@ -52,10 +52,10 @@ impl App {
             lines.push(("Files".into(), "Calculating...".into()));
             lines.push(("Subdirs".into(), "Calculating...".into()));
 
-            // Spawn background thread
+            // Spawn background task
             let bg_path = path.clone();
-            let (tx, rx) = mpsc::channel();
-            std::thread::spawn(move || {
+            let (tx, rx) = tokio::sync::oneshot::channel();
+            tokio::task::spawn_blocking(move || {
                 let (size, files, dirs) = ops::dir_stats(&bg_path);
                 let _ = tx.send((size, files, dirs));
             });
@@ -132,7 +132,7 @@ impl App {
     }
 
     pub fn poll_info_du(&mut self) {
-        let rx = match self.info_du_rx.as_ref() {
+        let rx = match self.info_du_rx.as_mut() {
             Some(rx) => rx,
             None => return,
         };
@@ -151,8 +151,8 @@ impl App {
                 }
                 self.info_du_rx = None;
             }
-            Err(std::sync::mpsc::TryRecvError::Disconnected) => {
-                // Thread died, remove placeholders
+            Err(tokio::sync::oneshot::error::TryRecvError::Closed) => {
+                // Task died, remove placeholders
                 for (_, v) in &mut self.info_lines {
                     if v == "Calculating..." {
                         *v = "Error".into();
@@ -160,7 +160,7 @@ impl App {
                 }
                 self.info_du_rx = None;
             }
-            Err(std::sync::mpsc::TryRecvError::Empty) => {}
+            Err(tokio::sync::oneshot::error::TryRecvError::Empty) => {}
         }
     }
 

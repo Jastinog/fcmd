@@ -761,6 +761,23 @@ pub(super) fn render_preview_popup(f: &mut Frame, app: &App, area: Rect) {
                 pos_area,
             );
         }
+    } else if !p.lines.is_empty() {
+        let reserved: u16 = 2 + if is_searching { 1 } else { 0 };
+        let vis = inner.height.saturating_sub(reserved) as usize;
+        let (first, total, pct) = p.text_position(vis);
+        let pos_text = format!(" {first}/{total} {pct}% ");
+        let pos_w = pos_text.chars().count() as u16;
+        if popup.width > pos_w + 4 {
+            let pos_x = popup.x + popup.width - pos_w - 1;
+            let pos_area = Rect::new(pos_x, popup.y, pos_w, 1);
+            f.render_widget(
+                Paragraph::new(Line::from(Span::styled(
+                    pos_text,
+                    Style::default().fg(t.fg_dim),
+                ))),
+                pos_area,
+            );
+        }
     }
 
     let iw = inner.width as usize;

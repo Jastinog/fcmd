@@ -29,7 +29,8 @@ impl App {
                     finished = Some(msg);
                     break;
                 }
-                Err(_) => break,
+                Err(tokio::sync::mpsc::error::TryRecvError::Empty) => break,
+                Err(tokio::sync::mpsc::error::TryRecvError::Disconnected) => break,
             }
         }
 
@@ -126,7 +127,7 @@ impl App {
             return;
         }
         let n = dirs.len();
-        let (tx, rx) = mpsc::channel();
+        let (tx, rx) = tokio::sync::mpsc::channel(64);
         ops::du_in_background(dirs, tx);
         self.du_progress = Some(DuProgress {
             rx,
@@ -138,7 +139,7 @@ impl App {
     pub fn poll_du(&mut self) {
         self.ensure_dir_sizes_loaded();
 
-        let progress = match self.du_progress.as_ref() {
+        let progress = match self.du_progress.as_mut() {
             Some(p) => p,
             None => return,
         };
@@ -200,7 +201,7 @@ impl App {
     }
 
     pub fn poll_git(&mut self) {
-        let progress = match self.git_progress.as_ref() {
+        let progress = match self.git_progress.as_mut() {
             Some(p) => p,
             None => return,
         };
@@ -216,10 +217,66 @@ impl App {
                 self.git_checked_dirs = checked_dirs;
                 self.git_progress = None;
             }
-            Err(std::sync::mpsc::TryRecvError::Disconnected) => {
+            Err(tokio::sync::oneshot::error::TryRecvError::Closed) => {
                 self.git_progress = None;
             }
-            Err(std::sync::mpsc::TryRecvError::Empty) => {}
+            Err(tokio::sync::oneshot::error::TryRecvError::Empty) => {}
+        }
+    }
+
+    pub fn poll_delete(&mut self) {
+        let progress = match self.delete_progress.as_mut() {
+            Some(p) => p,
+            None => return,
+        };
+
+        let mut last_progress = None;
+        let mut finished = None;
+
+        loop {
+            match progress.rx.try_recv() {
+                Ok(msg @ DeleteMsg::Progress { .. }) => {
+                    last_progress = Some(msg);
+                }
+                Ok(msg @ DeleteMsg::Finished { .. }) => {
+                    finished = Some(msg);
+                    break;
+                }
+                Err(_) => break,
+            }
+        }
+
+        if let Some(DeleteMsg::Progress {
+            done,
+            total,
+            current,
+        }) = last_progress
+        {
+            let verb = if progress.permanent {
+                "Deleting"
+            } else {
+                "Trashing"
+            };
+            self.status_message = format!("{verb} [{}/{}] {current}", done + 1, total);
+        }
+
+        if let Some(DeleteMsg::Finished {
+            deleted,
+            errors,
+            permanent,
+        }) = finished
+        {
+            let verb = if permanent { "Deleted" } else { "Trashed" };
+            if errors.is_empty() {
+                self.status_message = format!("{verb} {deleted} item(s)");
+            } else if deleted == 0 {
+                self.status_message = format!("{verb} failed: {}", errors[0]);
+            } else {
+                self.status_message =
+                    format!("{verb} {deleted}, {} failed: {}", errors.len(), errors[0]);
+            }
+            self.delete_progress = None;
+            self.refresh_panels();
         }
     }
 

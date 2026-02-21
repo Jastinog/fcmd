@@ -1,6 +1,5 @@
 pub(crate) use std::collections::{HashMap, HashSet};
 pub(crate) use std::path::PathBuf;
-pub(crate) use std::sync::mpsc;
 pub(crate) use std::time::Instant;
 
 pub(crate) use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
@@ -35,7 +34,7 @@ pub struct PhantomEntry {
 }
 
 pub struct PasteProgress {
-    pub rx: mpsc::Receiver<ProgressMsg>,
+    pub rx: tokio::sync::mpsc::Receiver<ProgressMsg>,
     pub op: RegisterOp,
     pub started_at: Instant,
     pub dst_dir: PathBuf,
@@ -43,7 +42,7 @@ pub struct PasteProgress {
 }
 
 pub struct DuProgress {
-    pub rx: mpsc::Receiver<DuMsg>,
+    pub rx: tokio::sync::mpsc::Receiver<DuMsg>,
     pub started_at: Instant,
 }
 
@@ -56,7 +55,25 @@ pub enum GitMsg {
 }
 
 pub struct GitProgress {
-    pub rx: mpsc::Receiver<GitMsg>,
+    pub rx: tokio::sync::oneshot::Receiver<GitMsg>,
+}
+
+pub enum DeleteMsg {
+    Progress {
+        done: usize,
+        total: usize,
+        current: String,
+    },
+    Finished {
+        deleted: usize,
+        errors: Vec<String>,
+        permanent: bool,
+    },
+}
+
+pub struct DeleteProgress {
+    pub rx: tokio::sync::mpsc::Receiver<DeleteMsg>,
+    pub permanent: bool,
 }
 
 pub struct DirLoadResult {
@@ -233,12 +250,14 @@ pub struct App {
     // Info popup
     pub info_lines: Vec<(String, String)>,
     pub info_scroll: usize,
-    pub(super) info_du_rx: Option<mpsc::Receiver<(u64, usize, usize)>>,
+    pub(super) info_du_rx: Option<tokio::sync::oneshot::Receiver<(u64, usize, usize)>>,
     // Git status (tracked for both panels)
     pub git_statuses: HashMap<PathBuf, char>,
     pub(super) git_roots: [Option<PathBuf>; 2],
     pub(super) git_checked_dirs: [Option<PathBuf>; 2],
     pub(super) git_progress: Option<GitProgress>,
+    // Delete progress
+    pub delete_progress: Option<DeleteProgress>,
     // Async dir loading
     pub dir_load_rx: Option<tokio::sync::oneshot::Receiver<DirLoadResult>>,
     // Async preview loading
@@ -390,6 +409,7 @@ impl App {
             git_roots: [None, None],
             git_checked_dirs: [None, None],
             git_progress: None,
+            delete_progress: None,
             dir_load_rx: None,
             preview_load_rx: None,
             file_preview_rx: None,

@@ -84,12 +84,28 @@ pub(super) fn render_preview(f: &mut Frame, preview: &Option<Preview>, area: Rec
 
     let Some(p) = preview else { return };
 
-    // Right-aligned position in title area for binary
+    // Right-aligned position in title area
     if p.is_binary {
         let visible = inner.height as usize;
         let (_, last_byte, total, pct) = p.hex_position(visible);
         let size_text = super::overlays::format_binary_size(total);
         let pos_text = format!(" 0x{last_byte:04X} {size_text} {pct}% ");
+        let pos_w = pos_text.chars().count() as u16;
+        if area.width > pos_w + 4 {
+            let pos_x = area.x + area.width - pos_w - 1;
+            let pos_area = Rect::new(pos_x, area.y, pos_w, 1);
+            f.render_widget(
+                Paragraph::new(Line::from(Span::styled(
+                    pos_text,
+                    Style::default().fg(t.fg_dim),
+                ))),
+                pos_area,
+            );
+        }
+    } else if !p.lines.is_empty() {
+        let visible = inner.height as usize;
+        let (first, total, pct) = p.text_position(visible);
+        let pos_text = format!(" {first}/{total} {pct}% ");
         let pos_w = pos_text.chars().count() as u16;
         if area.width > pos_w + 4 {
             let pos_x = area.x + area.width - pos_w - 1;

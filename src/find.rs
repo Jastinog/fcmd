@@ -2,7 +2,6 @@ use std::fs;
 use std::io::BufRead;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
-use std::sync::mpsc;
 use std::time::Instant;
 
 const MAX_ENTRIES: usize = 5000;
@@ -38,7 +37,7 @@ struct Entry {
 pub struct FindState {
     pub query: String,
     entries: Vec<Entry>,
-    rx: Option<mpsc::Receiver<Entry>>,
+    rx: Option<tokio::sync::mpsc::Receiver<Entry>>,
     pub filtered: Vec<usize>,
     pub selected: usize,
     pub scroll: usize,
@@ -48,7 +47,7 @@ pub struct FindState {
     search_child: Option<std::process::Child>,
     pub find_preview: Option<crate::preview::Preview>,
     find_preview_path: Option<PathBuf>,
-    find_preview_rx: Option<mpsc::Receiver<(PathBuf, crate::preview::Preview)>>,
+    find_preview_rx: Option<tokio::sync::oneshot::Receiver<(PathBuf, crate::preview::Preview)>>,
     pub search_started: Option<Instant>,
     pub tick: usize,
 }
@@ -64,9 +63,9 @@ impl Drop for FindState {
 
 impl FindState {
     pub fn new_local(base_dir: &Path) -> Self {
-        let (tx, rx) = mpsc::channel();
+        let (tx, rx) = tokio::sync::mpsc::channel(1024);
         let base = base_dir.to_path_buf();
-        std::thread::spawn(move || {
+        tokio::task::spawn_blocking(move || {
             walk_send(&base, &base, &tx, 0, &mut 0);
         });
         FindState {
@@ -147,7 +146,7 @@ impl FindState {
             return;
         }
 
-        let (tx, rx) = mpsc::channel();
+        let (tx, rx) = tokio::sync::mpsc::channel(1024);
         let query = self.query.clone();
 
         // Sanitize: strip characters that could be interpreted by find/mdfind
@@ -190,7 +189,7 @@ impl FindState {
                 self.loading = true;
                 self.search_started = Some(Instant::now());
 
-                std::thread::spawn(move || {
+                tokio::task::spawn_blocking(move || {
                     let count = global_search_read(stdout, &tx);
                     // If mdfind returned 0 results (Spotlight disabled), retry with find
                     if count == 0 {
@@ -244,7 +243,7 @@ impl FindState {
     /// Returns true if new entries arrived.
     pub fn poll_entries(&mut self) -> bool {
         self.tick = self.tick.wrapping_add(1);
-        let Some(rx) = &self.rx else {
+        let Some(rx) = &mut self.rx else {
             return false;
         };
         let mut added = false;
@@ -254,8 +253,8 @@ impl FindState {
                     self.entries.push(entry);
                     added = true;
                 }
-                Err(mpsc::TryRecvError::Empty) => break,
-                Err(mpsc::TryRecvError::Disconnected) => {
+                Err(tokio::sync::mpsc::error::TryRecvError::Empty) => break,
+                Err(tokio::sync::mpsc::error::TryRecvError::Disconnected) => {
                     self.rx = None;
                     self.loading = false;
                     break;
@@ -307,10 +306,10 @@ impl FindState {
         self.find_preview_path = current.clone();
         if let Some(p) = current {
             self.find_preview = Some(crate::preview::Preview::loading_placeholder(&p));
-            let (tx, rx) = std::sync::mpsc::channel();
+            let (tx, rx) = tokio::sync::oneshot::channel();
             self.find_preview_rx = Some(rx);
             let path = p.clone();
-            std::thread::spawn(move || {
+            tokio::task::spawn_blocking(move || {
                 let mut prev = crate::preview::Preview::load(&path);
                 prev.apply_highlighting(&path);
                 let _ = tx.send((path, prev));
@@ -321,7 +320,7 @@ impl FindState {
     }
 
     pub fn poll_find_preview(&mut self) {
-        let rx = match self.find_preview_rx.as_ref() {
+        let rx = match self.find_preview_rx.as_mut() {
             Some(rx) => rx,
             None => return,
         };
@@ -332,10 +331,10 @@ impl FindState {
                 }
                 self.find_preview_rx = None;
             }
-            Err(std::sync::mpsc::TryRecvError::Disconnected) => {
+            Err(tokio::sync::oneshot::error::TryRecvError::Closed) => {
                 self.find_preview_rx = None;
             }
-            Err(std::sync::mpsc::TryRecvError::Empty) => {}
+            Err(tokio::sync::oneshot::error::TryRecvError::Empty) => {}
         }
     }
 
@@ -392,7 +391,7 @@ fn abbreviate_home(path: &str) -> String {
     path.to_string()
 }
 
-fn global_search_read(stdout: std::process::ChildStdout, tx: &mpsc::Sender<Entry>) -> usize {
+fn global_search_read(stdout: std::process::ChildStdout, tx: &tokio::sync::mpsc::Sender<Entry>) -> usize {
     let reader = std::io::BufReader::new(stdout);
     let mut count = 0;
     for line in reader.lines().map_while(Result::ok) {
@@ -404,7 +403,7 @@ fn global_search_read(stdout: std::process::ChildStdout, tx: &mpsc::Sender<Entry
         let display = abbreviate_home(&line);
         let display_lower = display.to_lowercase();
         if tx
-            .send(Entry {
+            .blocking_send(Entry {
                 rel_path: display,
                 rel_path_lower: display_lower,
                 full_path: path,
@@ -419,7 +418,7 @@ fn global_search_read(stdout: std::process::ChildStdout, tx: &mpsc::Sender<Entry
     count
 }
 
-fn walk_send(dir: &Path, base: &Path, tx: &mpsc::Sender<Entry>, depth: usize, count: &mut usize) {
+fn walk_send(dir: &Path, base: &Path, tx: &tokio::sync::mpsc::Sender<Entry>, depth: usize, count: &mut usize) {
     if depth > MAX_DEPTH || *count >= MAX_ENTRIES {
         return;
     }
@@ -456,7 +455,7 @@ fn walk_send(dir: &Path, base: &Path, tx: &mpsc::Sender<Entry>, depth: usize, co
         let rel_lower = rel.to_lowercase();
 
         if tx
-            .send(Entry {
+            .blocking_send(Entry {
                 rel_path: rel,
                 rel_path_lower: rel_lower,
                 full_path: path.clone(),

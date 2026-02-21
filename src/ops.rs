@@ -1,7 +1,6 @@
 use std::collections::VecDeque;
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::sync::mpsc;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum RegisterOp {
@@ -87,7 +86,7 @@ pub fn path_size(p: &Path) -> u64 {
 }
 
 struct ProgressCtx {
-    tx: mpsc::Sender<ProgressMsg>,
+    tx: tokio::sync::mpsc::Sender<ProgressMsg>,
     bytes_done: u64,
     bytes_total: u64,
     item_index: usize,
@@ -96,7 +95,7 @@ struct ProgressCtx {
 
 impl ProgressCtx {
     fn report(&self) {
-        let _ = self.tx.send(ProgressMsg::Progress {
+        let _ = self.tx.blocking_send(ProgressMsg::Progress {
             bytes_done: self.bytes_done,
             bytes_total: self.bytes_total,
             item_index: self.item_index,
@@ -183,9 +182,9 @@ pub fn paste_in_background(
     paths: Vec<PathBuf>,
     dst_dir: PathBuf,
     op: RegisterOp,
-    tx: mpsc::Sender<ProgressMsg>,
+    tx: tokio::sync::mpsc::Sender<ProgressMsg>,
 ) {
-    std::thread::spawn(move || {
+    tokio::task::spawn_blocking(move || {
         // Pre-compute total bytes
         let bytes_total: u64 = paths.iter().map(|p| path_size(p)).sum();
         let item_total = paths.len();
@@ -217,7 +216,7 @@ pub fn paste_in_background(
             match result {
                 Ok(rec) => records.push(rec),
                 Err(e) => {
-                    let _ = tx.send(ProgressMsg::Finished {
+                    let _ = tx.blocking_send(ProgressMsg::Finished {
                         records,
                         error: Some(format!("{e}")),
                         bytes_total,
@@ -226,7 +225,7 @@ pub fn paste_in_background(
                 }
             }
         }
-        let _ = tx.send(ProgressMsg::Finished {
+        let _ = tx.blocking_send(ProgressMsg::Finished {
             records,
             error: None,
             bytes_total,
@@ -247,8 +246,8 @@ pub enum DuMsg {
     },
 }
 
-pub fn du_in_background(dirs: Vec<PathBuf>, tx: mpsc::Sender<DuMsg>) {
-    std::thread::spawn(move || {
+pub fn du_in_background(dirs: Vec<PathBuf>, tx: tokio::sync::mpsc::Sender<DuMsg>) {
+    tokio::task::spawn_blocking(move || {
         let total = dirs.len();
         let mut sizes = Vec::new();
         for (i, dir) in dirs.iter().enumerate() {
@@ -256,7 +255,7 @@ pub fn du_in_background(dirs: Vec<PathBuf>, tx: mpsc::Sender<DuMsg>) {
                 .file_name()
                 .map(|n| n.to_string_lossy().into_owned())
                 .unwrap_or_default();
-            let _ = tx.send(DuMsg::Progress {
+            let _ = tx.blocking_send(DuMsg::Progress {
                 done: i,
                 total,
                 current: name,
@@ -264,7 +263,7 @@ pub fn du_in_background(dirs: Vec<PathBuf>, tx: mpsc::Sender<DuMsg>) {
             let size = path_size(dir);
             sizes.push((dir.clone(), size));
         }
-        let _ = tx.send(DuMsg::Finished { sizes });
+        let _ = tx.blocking_send(DuMsg::Finished { sizes });
     });
 }
 

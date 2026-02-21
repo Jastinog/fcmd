@@ -1,6 +1,5 @@
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
-use std::sync::mpsc;
 
 use super::*;
 
@@ -24,7 +23,7 @@ impl App {
         }
     }
 
-    /// Spawn a background thread to fetch git status for both panels.
+    /// Spawn a background task to fetch git status for both panels.
     pub fn refresh_git_status(&mut self) {
         // Skip if a git fetch is already in progress
         if self.git_progress.is_some() {
@@ -37,8 +36,8 @@ impl App {
         // Mark checked dirs immediately to prevent re-spawning on every keypress
         self.git_checked_dirs = [Some(dirs[0].clone()), Some(dirs[1].clone())];
 
-        let (tx, rx) = mpsc::channel();
-        std::thread::spawn(move || {
+        let (tx, rx) = tokio::sync::oneshot::channel();
+        tokio::task::spawn_blocking(move || {
             let (statuses, roots, checked_dirs) = compute_git_status(dirs);
             let _ = tx.send(GitMsg::Finished {
                 statuses,

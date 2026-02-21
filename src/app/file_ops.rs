@@ -45,32 +45,45 @@ impl App {
     pub(super) fn execute_delete(&mut self) {
         let paths = std::mem::take(&mut self.confirm_paths);
         let permanent = self.confirm_permanent;
-        let mut count = 0usize;
-        let mut errors: Vec<String> = Vec::new();
-        for path in &paths {
-            let result = if permanent {
-                ops::remove_path(path)
-            } else {
-                trash::delete(path).map_err(std::io::Error::other)
-            };
-            match result {
-                Ok(()) => count += 1,
-                Err(e) => {
-                    let name = path.file_name().map(|n| n.to_string_lossy().into_owned())
-                        .unwrap_or_else(|| path.to_string_lossy().into_owned());
-                    errors.push(format!("{name}: {e}"));
+        let total = paths.len();
+        let (tx, rx) = tokio::sync::mpsc::channel(64);
+
+        tokio::task::spawn_blocking(move || {
+            let mut deleted = 0usize;
+            let mut errors = Vec::new();
+            for (i, path) in paths.iter().enumerate() {
+                let name = path
+                    .file_name()
+                    .map(|n| n.to_string_lossy().into_owned())
+                    .unwrap_or_else(|| path.to_string_lossy().into_owned());
+                let _ = tx.blocking_send(DeleteMsg::Progress {
+                    done: i,
+                    total,
+                    current: name.clone(),
+                });
+                let result = if permanent {
+                    ops::remove_path(path)
+                } else {
+                    trash::delete(path).map_err(std::io::Error::other)
+                };
+                match result {
+                    Ok(()) => deleted += 1,
+                    Err(e) => errors.push(format!("{name}: {e}")),
                 }
             }
-        }
-        let verb = if permanent { "Deleted" } else { "Trashed" };
-        if errors.is_empty() {
-            self.status_message = format!("{verb} {count} item(s)");
-        } else if count == 0 {
-            self.status_message = format!("{verb} failed: {}", errors[0]);
-        } else {
-            self.status_message = format!("{verb} {count}, {} failed: {}", errors.len(), errors[0]);
-        }
-        self.refresh_panels();
+            let _ = tx.blocking_send(DeleteMsg::Finished {
+                deleted,
+                errors,
+                permanent,
+            });
+        });
+
+        self.delete_progress = Some(DeleteProgress {
+            rx,
+            permanent,
+        });
+        self.mode = Mode::Normal;
+        self.status_message = format!("Deleting {total} item(s)...");
     }
 
     pub(super) fn paste(&mut self, to_other_panel: bool) {
@@ -104,7 +117,7 @@ impl App {
             })
             .collect();
 
-        let (tx, rx) = mpsc::channel();
+        let (tx, rx) = tokio::sync::mpsc::channel(64);
         ops::paste_in_background(paths, dst_dir.clone(), op, tx);
 
         let verb = if op == RegisterOp::Yank {
