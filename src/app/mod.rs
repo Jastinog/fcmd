@@ -164,6 +164,10 @@ pub enum FileOpResult {
     ThemeLoad {
         name: String,
         theme: Option<Theme>,
+        theme_list: Vec<String>,
+    },
+    ThemeList {
+        themes: Vec<String>,
     },
 }
 
@@ -759,10 +763,10 @@ impl App {
                     self.mode = Mode::Chmod;
                 }
             }
-            FileOpResult::ThemeLoad { name, theme } => match theme {
+            FileOpResult::ThemeLoad { name, theme, theme_list } => match theme {
                 Some(t) => {
                     self.theme = t;
-                    self.theme_list = Theme::list_available();
+                    self.theme_list = theme_list;
                     self.theme_index = self.theme_list.iter().position(|n| n == &name);
                     if let Some(ref db) = self.db {
                         let _ = db.save_theme(&name);
@@ -770,6 +774,27 @@ impl App {
                     self.status_message = format!("Theme: {name}");
                 }
                 None => self.status_message = format!("Theme not found: {name}"),
+            },
+            FileOpResult::ThemeList { themes } => {
+                if self.mode == Mode::ThemePicker {
+                    // Populating theme picker after async list load
+                    if themes.is_empty() {
+                        self.status_message = "No themes found".into();
+                        self.mode = Mode::Normal;
+                    } else {
+                        self.theme_list = themes;
+                        self.theme_cursor = self.theme_index.unwrap_or(0).min(self.theme_list.len() - 1);
+                        self.theme_scroll = self.theme_cursor.saturating_sub(5);
+                        self.spawn_theme_load();
+                    }
+                } else {
+                    // :theme command with no argument — show list in status
+                    if themes.is_empty() {
+                        self.status_message = "No themes found".into();
+                    } else {
+                        self.status_message = themes.join(", ");
+                    }
+                }
             },
         }
     }

@@ -75,11 +75,16 @@ impl App {
 
     pub(super) fn enter_theme_picker(&mut self) {
         if self.theme_list.is_empty() {
-            self.theme_list = Theme::list_available();
-            if self.theme_list.is_empty() {
-                self.status_message = "No themes found".into();
-                return;
-            }
+            // Load theme list asynchronously; picker will be populated in apply_file_op
+            self.mode = Mode::ThemePicker;
+            let (tx, rx) = tokio::sync::oneshot::channel();
+            self.file_op_rx = Some(rx);
+            tokio::task::spawn_blocking(move || {
+                let _ = tx.send(super::FileOpResult::ThemeList {
+                    themes: Theme::list_available(),
+                });
+            });
+            return;
         }
         self.theme_cursor = self.theme_index.unwrap_or(0).min(self.theme_list.len() - 1);
         self.theme_scroll = self.theme_cursor.saturating_sub(5);
@@ -127,7 +132,7 @@ impl App {
         }
     }
 
-    fn spawn_theme_load(&mut self) {
+    pub(super) fn spawn_theme_load(&mut self) {
         if let Some(name) = self.theme_list.get(self.theme_cursor).cloned() {
             let (tx, rx) = tokio::sync::oneshot::channel();
             self.theme_load_rx = Some(rx);

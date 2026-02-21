@@ -184,16 +184,18 @@ impl App {
                     self.file_op_rx = Some(rx);
                     tokio::task::spawn_blocking(move || {
                         let theme = Theme::load_by_name(&name);
-                        let _ = tx.send(super::FileOpResult::ThemeLoad { name, theme });
+                        let theme_list = Theme::list_available();
+                        let _ = tx.send(super::FileOpResult::ThemeLoad { name, theme, theme_list });
                     });
                 }
                 None => {
-                    let themes = Theme::list_available();
-                    if themes.is_empty() {
-                        self.status_message = "No themes found".into();
-                    } else {
-                        self.status_message = themes.join(", ");
-                    }
+                    let (tx, rx) = tokio::sync::oneshot::channel();
+                    self.file_op_rx = Some(rx);
+                    tokio::task::spawn_blocking(move || {
+                        let _ = tx.send(super::FileOpResult::ThemeList {
+                            themes: Theme::list_available(),
+                        });
+                    });
                 }
             },
 
