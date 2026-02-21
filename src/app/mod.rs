@@ -76,12 +76,22 @@ pub struct DeleteProgress {
     pub permanent: bool,
 }
 
-pub struct DirLoadResult {
-    pub panel_side: PanelSide,
-    pub tab_index: usize,
-    pub path: PathBuf,
-    pub entries: Vec<FileEntry>,
-    pub select_name: Option<String>,
+pub enum DirLoadMsg {
+    /// Unsorted batch of entries streaming from the filesystem.
+    Batch {
+        panel_side: PanelSide,
+        tab_index: usize,
+        path: PathBuf,
+        entries: Vec<FileEntry>,
+    },
+    /// All entries read and sorted. Replaces the panel's entries.
+    Finished {
+        panel_side: PanelSide,
+        tab_index: usize,
+        path: PathBuf,
+        entries: Vec<FileEntry>,
+        select_name: Option<String>,
+    },
 }
 
 pub struct PreviewLoadResult {
@@ -258,8 +268,8 @@ pub struct App {
     pub(super) git_progress: Option<GitProgress>,
     // Delete progress
     pub delete_progress: Option<DeleteProgress>,
-    // Async dir loading
-    pub dir_load_rx: Option<tokio::sync::oneshot::Receiver<DirLoadResult>>,
+    // Async dir loading (streaming batches + sorted final result)
+    pub dir_load_rx: Option<tokio::sync::mpsc::Receiver<DirLoadMsg>>,
     // Async preview loading
     pub preview_load_rx: Option<tokio::sync::oneshot::Receiver<PreviewLoadResult>>,
     pub file_preview_rx: Option<tokio::sync::oneshot::Receiver<PreviewLoadResult>>,
@@ -452,6 +462,7 @@ impl App {
     }
 
     /// Spawn an async directory load for the given panel side.
+    /// Entries stream in batches, then a sorted final result is sent.
     /// `select_name` optionally re-selects an entry by name after loading.
     pub fn spawn_dir_load(&mut self, side: PanelSide, select_name: Option<String>) {
         let tab = &mut self.tabs[self.active_tab];
@@ -468,38 +479,70 @@ impl App {
         let dir_sizes = self.dir_sizes.clone();
         let tab_index = self.active_tab;
 
-        let (tx, rx) = tokio::sync::oneshot::channel();
+        let (tx, rx) = tokio::sync::mpsc::channel(16);
         // Drop old receiver (cancels stale load)
         self.dir_load_rx = Some(rx);
 
         tokio::task::spawn_blocking(move || {
-            let entries = panel::load_dir_entries(&path, show_hidden, sort_mode, sort_reverse, &dir_sizes)
-                .unwrap_or_default();
-            let _ = tx.send(DirLoadResult {
-                panel_side: side,
+            panel::stream_dir_entries(
+                panel::DirLoadRequest {
+                    path,
+                    show_hidden,
+                    sort_mode,
+                    sort_reverse,
+                    dir_sizes,
+                    panel_side: side,
+                    tab_index,
+                    select_name,
+                },
+                &tx,
+            );
+        });
+    }
+
+    /// Handle a message from the streaming directory loader.
+    pub fn handle_dir_load_msg(&mut self, msg: DirLoadMsg) {
+        match msg {
+            DirLoadMsg::Batch {
+                panel_side,
+                tab_index,
+                path,
+                entries,
+            } => {
+                if tab_index >= self.tabs.len() {
+                    return;
+                }
+                let tab = &mut self.tabs[tab_index];
+                let panel = match panel_side {
+                    PanelSide::Left => &mut tab.left,
+                    PanelSide::Right => &mut tab.right,
+                };
+                if panel.path != path {
+                    return;
+                }
+                panel.append_entries(entries);
+            }
+            DirLoadMsg::Finished {
+                panel_side,
                 tab_index,
                 path,
                 entries,
                 select_name,
-            });
-        });
-    }
-
-    /// Apply the results of an async directory load.
-    pub fn apply_dir_load(&mut self, result: DirLoadResult) {
-        if result.tab_index >= self.tabs.len() {
-            return;
+            } => {
+                if tab_index >= self.tabs.len() {
+                    return;
+                }
+                let tab = &mut self.tabs[tab_index];
+                let panel = match panel_side {
+                    PanelSide::Left => &mut tab.left,
+                    PanelSide::Right => &mut tab.right,
+                };
+                if panel.path != path {
+                    return;
+                }
+                panel.apply_entries(entries, select_name.as_deref());
+            }
         }
-        let tab = &mut self.tabs[result.tab_index];
-        let panel = match result.panel_side {
-            PanelSide::Left => &mut tab.left,
-            PanelSide::Right => &mut tab.right,
-        };
-        // Only apply if the panel is still at the same path
-        if panel.path != result.path {
-            return;
-        }
-        panel.apply_entries(result.entries, result.select_name.as_deref());
     }
 
     /// Apply preview loaded asynchronously (side panel preview).

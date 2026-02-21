@@ -364,6 +364,12 @@ impl Panel {
         }
     }
 
+    /// Append a batch of unsorted entries during streaming load.
+    pub fn append_entries(&mut self, new_entries: Vec<FileEntry>) {
+        self.entries.extend(new_entries);
+        self.clamp_selected();
+    }
+
     /// Swap in entries loaded asynchronously, optionally re-selecting a named entry.
     pub fn apply_entries(&mut self, entries: Vec<FileEntry>, select_name: Option<&str>) {
         self.entries = entries;
@@ -378,6 +384,108 @@ impl Panel {
             self.clamp_selected();
         }
     }
+}
+
+const BATCH_SIZE: usize = 1000;
+
+pub struct DirLoadRequest {
+    pub path: PathBuf,
+    pub show_hidden: bool,
+    pub sort_mode: SortMode,
+    pub sort_reverse: bool,
+    pub dir_sizes: HashMap<PathBuf, u64>,
+    pub panel_side: crate::app::PanelSide,
+    pub tab_index: usize,
+    pub select_name: Option<String>,
+}
+
+/// Stream directory entries in batches, then send sorted final result.
+/// For small directories (< BATCH_SIZE), no intermediate batches are sent.
+pub fn stream_dir_entries(
+    req: DirLoadRequest,
+    tx: &tokio::sync::mpsc::Sender<crate::app::DirLoadMsg>,
+) {
+    let DirLoadRequest {
+        ref path,
+        show_hidden,
+        sort_mode,
+        sort_reverse,
+        ref dir_sizes,
+        panel_side,
+        tab_index,
+        select_name,
+    } = req;
+
+    let entries = load_dir_entries(path, show_hidden, sort_mode, sort_reverse, dir_sizes)
+        .unwrap_or_default();
+
+    // For large directories, send intermediate batches of unsorted entries
+    // so the user sees content appearing progressively.
+    if entries.len() > BATCH_SIZE
+        && let Ok(read_dir) = fs::read_dir(path)
+    {
+            let mut batch = Vec::with_capacity(BATCH_SIZE);
+
+            // Start with ".." entry in the first batch
+            if let Some(parent) = path.parent() {
+                batch.push(FileEntry {
+                    name: "..".into(),
+                    path: parent.to_path_buf(),
+                    is_dir: true,
+                    size: 0,
+                    modified: None,
+                    created: None,
+                    is_symlink: false,
+                });
+            }
+
+            for entry in read_dir.flatten() {
+                let metadata = match entry.metadata() {
+                    Ok(m) => m,
+                    Err(_) => continue,
+                };
+                let symlink_meta = entry.path().symlink_metadata().ok();
+                let is_symlink = symlink_meta.map(|m| m.is_symlink()).unwrap_or(false);
+
+                let file_entry = FileEntry {
+                    name: entry.file_name().to_string_lossy().into(),
+                    path: entry.path(),
+                    is_dir: metadata.is_dir(),
+                    size: metadata.len(),
+                    modified: metadata.modified().ok(),
+                    created: metadata.created().ok(),
+                    is_symlink,
+                };
+
+                if !show_hidden && file_entry.name.starts_with('.') {
+                    continue;
+                }
+
+                batch.push(file_entry);
+
+                if batch.len() >= BATCH_SIZE {
+                    let msg = crate::app::DirLoadMsg::Batch {
+                        panel_side,
+                        tab_index,
+                        path: path.clone(),
+                        entries: std::mem::replace(&mut batch, Vec::with_capacity(BATCH_SIZE)),
+                    };
+                    if tx.blocking_send(msg).is_err() {
+                        return; // Receiver dropped (stale load cancelled)
+                    }
+                }
+            }
+            // Don't send the last partial batch — it will be replaced by the sorted Finished
+    }
+
+    // Send the final sorted result
+    let _ = tx.blocking_send(crate::app::DirLoadMsg::Finished {
+        panel_side,
+        tab_index,
+        path: path.clone(),
+        entries,
+        select_name,
+    });
 }
 
 /// Load directory entries as a pure function (can run on any thread).

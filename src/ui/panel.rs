@@ -30,7 +30,16 @@ pub(super) fn render_panel(
     };
 
     let path_str = panel.path.to_string_lossy();
-    let loading_suffix = if panel.loading { " [Loading...]" } else { "" };
+    let loading_suffix = if panel.loading {
+        let count = panel.entries.len();
+        if count > 0 {
+            format!(" [Loading... {count}]")
+        } else {
+            " [Loading...]".to_string()
+        }
+    } else {
+        String::new()
+    };
     let full_title = format!("{path_str}{loading_suffix}");
     let max_title = area.width.saturating_sub(4) as usize;
     let title_chars: Vec<char> = full_title.chars().collect();

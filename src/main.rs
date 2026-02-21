@@ -116,6 +116,21 @@ async fn recv_or_pend<T>(rx: &mut Option<tokio::sync::oneshot::Receiver<T>>) -> 
     }
 }
 
+/// Helper: await a value from an Option<mpsc::Receiver>, or pend forever if None.
+async fn recv_mpsc_or_pend<T>(rx: &mut Option<tokio::sync::mpsc::Receiver<T>>) -> T {
+    match rx {
+        Some(r) => match r.recv().await {
+            Some(val) => val,
+            None => {
+                // Channel closed
+                *rx = None;
+                std::future::pending().await
+            }
+        },
+        None => std::future::pending().await,
+    }
+}
+
 async fn run(
     terminal: &mut Terminal<CrosstermBackend<io::Stdout>>,
     app: &mut app::App,
@@ -149,8 +164,8 @@ async fn run(
                 app.poll_git();
                 app.poll_delete();
             }
-            result = recv_or_pend(&mut app.dir_load_rx) => {
-                app.apply_dir_load(result);
+            msg = recv_mpsc_or_pend(&mut app.dir_load_rx) => {
+                app.handle_dir_load_msg(msg);
             }
             result = recv_or_pend(&mut app.preview_load_rx) => {
                 app.apply_preview_load(result);
