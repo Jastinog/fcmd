@@ -43,47 +43,43 @@ impl App {
 
             "mkdir" => {
                 let name = match arg.filter(|a| !a.is_empty()) {
-                    Some(n) => n,
+                    Some(n) => n.to_string(),
                     None => {
                         self.status_message = "Usage: :mkdir <name>".into();
                         return;
                     }
                 };
                 let dir = self.active_panel().path.clone();
-                match ops::mkdir(&dir, name) {
-                    Ok(rec) => {
-                        self.undo_stack.push(vec![rec]);
-                        self.refresh_panels();
-                        self.active_panel_mut().select_by_name(name);
-                        self.status_message = format!("Created directory: {name}");
-                    }
-                    Err(e) => self.status_message = format!("mkdir: {e}"),
-                }
+                let (tx, rx) = tokio::sync::oneshot::channel();
+                self.file_op_rx = Some(rx);
+                let name2 = name.clone();
+                tokio::task::spawn_blocking(move || {
+                    let result = ops::mkdir(&dir, &name2).map_err(|e| e.to_string());
+                    let _ = tx.send(super::FileOpResult::Mkdir { name: name2, result });
+                });
             }
 
             "touch" => {
                 let name = match arg.filter(|a| !a.is_empty()) {
-                    Some(n) => n,
+                    Some(n) => n.to_string(),
                     None => {
                         self.status_message = "Usage: :touch <name>".into();
                         return;
                     }
                 };
                 let dir = self.active_panel().path.clone();
-                match ops::touch(&dir, name) {
-                    Ok(rec) => {
-                        self.undo_stack.push(vec![rec]);
-                        self.refresh_panels();
-                        self.active_panel_mut().select_by_name(name);
-                        self.status_message = format!("Created file: {name}");
-                    }
-                    Err(e) => self.status_message = format!("touch: {e}"),
-                }
+                let (tx, rx) = tokio::sync::oneshot::channel();
+                self.file_op_rx = Some(rx);
+                let name2 = name.clone();
+                tokio::task::spawn_blocking(move || {
+                    let result = ops::touch(&dir, &name2).map_err(|e| e.to_string());
+                    let _ = tx.send(super::FileOpResult::Touch { name: name2, result });
+                });
             }
 
             "rename" | "rn" => {
                 let new_name = match arg.filter(|a| !a.is_empty()) {
-                    Some(n) => n,
+                    Some(n) => n.to_string(),
                     None => {
                         self.status_message = "Usage: :rename <new_name>".into();
                         return;
@@ -100,15 +96,16 @@ impl App {
                         return;
                     }
                 };
-                match ops::rename_path(&path, new_name) {
-                    Ok(rec) => {
-                        self.undo_stack.push(vec![rec]);
-                        self.refresh_panels();
-                        self.active_panel_mut().select_by_name(new_name);
-                        self.status_message = format!("Renamed to: {new_name}");
-                    }
-                    Err(e) => self.status_message = format!("rename: {e}"),
-                }
+                let (tx, rx) = tokio::sync::oneshot::channel();
+                self.file_op_rx = Some(rx);
+                let new_name2 = new_name.clone();
+                tokio::task::spawn_blocking(move || {
+                    let result = ops::rename_path(&path, &new_name2).map_err(|e| e.to_string());
+                    let _ = tx.send(super::FileOpResult::Rename {
+                        new_name: new_name2,
+                        result,
+                    });
+                });
             }
 
             "cd" => {
@@ -127,14 +124,18 @@ impl App {
                 } else {
                     self.active_panel().path.join(path_str)
                 };
-                if target.is_dir() {
-                    let side = self.tab().active;
-                    self.active_panel_mut().navigate_to(target);
-                    self.apply_dir_sort_no_reload();
-                    self.spawn_dir_load(side, None);
-                } else {
-                    self.status_message = format!("Not a directory: {path_str}");
-                }
+                let (tx, rx) = tokio::sync::oneshot::channel();
+                self.nav_check_rx = Some(rx);
+                tokio::task::spawn_blocking(move || {
+                    let exists = target.exists();
+                    let is_dir = target.is_dir();
+                    let _ = tx.send(super::NavCheckResult {
+                        path: target,
+                        is_dir,
+                        exists,
+                        source: super::NavSource::Cd,
+                    });
+                });
             }
 
             "find" => {

@@ -9,8 +9,14 @@ pub enum RegisterOp {
     Cut,
 }
 
+#[derive(Clone)]
+pub struct RegisterEntry {
+    pub path: PathBuf,
+    pub is_dir: bool,
+}
+
 pub struct Register {
-    pub paths: Vec<PathBuf>,
+    pub entries: Vec<RegisterEntry>,
     pub op: RegisterOp,
 }
 

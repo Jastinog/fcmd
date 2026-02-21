@@ -113,6 +113,56 @@ pub struct ChownLoadResult {
     pub paths: Vec<PathBuf>,
 }
 
+/// Result of an async path validation for navigation.
+pub struct NavCheckResult {
+    pub path: PathBuf,
+    pub is_dir: bool,
+    pub exists: bool,
+    pub source: NavSource,
+}
+
+pub enum NavSource {
+    Cd,
+    Bookmark,
+    Mark(char),
+}
+
+/// Result of an async file operation (mkdir, touch, rename, chmod, chown, undo).
+pub enum FileOpResult {
+    Mkdir {
+        name: String,
+        result: Result<ops::OpRecord, String>,
+    },
+    Touch {
+        name: String,
+        result: Result<ops::OpRecord, String>,
+    },
+    Rename {
+        new_name: String,
+        result: Result<ops::OpRecord, String>,
+    },
+    Chmod {
+        input: String,
+        count: usize,
+        errors: usize,
+        last_error: Option<String>,
+    },
+    Chown {
+        user_name: String,
+        group_name: String,
+        count: usize,
+        errors: usize,
+        last_error: Option<String>,
+    },
+    Undo {
+        result: Result<String, String>,
+    },
+    ChmodPrefill {
+        prefill: String,
+        paths: Vec<PathBuf>,
+    },
+}
+
 #[derive(PartialEq, Eq, Clone, Copy)]
 pub enum Mode {
     Normal,
@@ -295,6 +345,10 @@ pub struct App {
     pub info_load_rx: Option<tokio::sync::oneshot::Receiver<Vec<(String, String)>>>,
     // Async chown picker loading
     pub chown_load_rx: Option<tokio::sync::oneshot::Receiver<ChownLoadResult>>,
+    // Async navigation validation
+    pub nav_check_rx: Option<tokio::sync::oneshot::Receiver<NavCheckResult>>,
+    // Async file operations (mkdir, touch, rename, chmod, chown, undo)
+    pub file_op_rx: Option<tokio::sync::oneshot::Receiver<FileOpResult>>,
 }
 
 impl App {
@@ -452,6 +506,8 @@ impl App {
             tree_load_rx: None,
             info_load_rx: None,
             chown_load_rx: None,
+            nav_check_rx: None,
+            file_op_rx: None,
         };
         app.refresh_git_status();
         // Apply saved sort preferences to restored panels
@@ -584,6 +640,118 @@ impl App {
     pub fn apply_file_preview_load(&mut self, result: PreviewLoadResult) {
         if self.file_preview_path.as_ref() == Some(&result.path) {
             self.file_preview = Some(result.preview);
+        }
+    }
+
+    /// Handle async navigation validation result.
+    pub fn apply_nav_check(&mut self, result: NavCheckResult) {
+        if !result.exists {
+            let label = match result.source {
+                NavSource::Cd => "Not a directory",
+                NavSource::Bookmark => "Bookmark directory no longer exists",
+                NavSource::Mark(c) => {
+                    self.status_message = format!("Mark '{c}' directory no longer exists");
+                    return;
+                }
+            };
+            self.status_message = label.into();
+            return;
+        }
+        let side = self.tab().active;
+        if result.is_dir {
+            self.active_panel_mut().navigate_to(result.path);
+            self.apply_dir_sort_no_reload();
+            self.spawn_dir_load(side, None);
+        } else {
+            // File: navigate to parent and select the file
+            if let Some(parent) = result.path.parent() {
+                let name = result
+                    .path
+                    .file_name()
+                    .map(|n| n.to_string_lossy().into_owned());
+                self.active_panel_mut().navigate_to(parent.to_path_buf());
+                self.apply_dir_sort_no_reload();
+                self.spawn_dir_load(side, name);
+            }
+        }
+    }
+
+    /// Handle async file operation result.
+    pub fn apply_file_op(&mut self, result: FileOpResult) {
+        match result {
+            FileOpResult::Mkdir { name, result } => match result {
+                Ok(rec) => {
+                    self.undo_stack.push(vec![rec]);
+                    self.refresh_panels();
+                    self.active_panel_mut().select_by_name(&name);
+                    self.status_message = format!("Created directory: {name}");
+                }
+                Err(e) => self.status_message = format!("mkdir: {e}"),
+            },
+            FileOpResult::Touch { name, result } => match result {
+                Ok(rec) => {
+                    self.undo_stack.push(vec![rec]);
+                    self.refresh_panels();
+                    self.active_panel_mut().select_by_name(&name);
+                    self.status_message = format!("Created file: {name}");
+                }
+                Err(e) => self.status_message = format!("touch: {e}"),
+            },
+            FileOpResult::Rename { new_name, result } => match result {
+                Ok(rec) => {
+                    self.undo_stack.push(vec![rec]);
+                    self.refresh_panels();
+                    self.active_panel_mut().select_by_name(&new_name);
+                    self.status_message = format!("Renamed to: {new_name}");
+                }
+                Err(e) => self.status_message = format!("rename: {e}"),
+            },
+            FileOpResult::Chmod {
+                input,
+                count,
+                errors,
+                last_error,
+            } => {
+                if errors > 0 {
+                    if let Some(e) = last_error {
+                        self.status_message = format!("chmod: {e}");
+                    }
+                } else {
+                    self.status_message = format!("chmod {input} ({count} item(s))");
+                }
+                self.refresh_panels();
+            }
+            FileOpResult::Chown {
+                user_name,
+                group_name,
+                count,
+                errors,
+                last_error,
+            } => {
+                if errors > 0 {
+                    if let Some(e) = last_error {
+                        self.status_message = format!("chown: {e}");
+                    }
+                } else {
+                    self.status_message =
+                        format!("chown {user_name}:{group_name} ({count} item(s))");
+                }
+                self.refresh_panels();
+            }
+            FileOpResult::Undo { result } => {
+                match result {
+                    Ok(msg) => self.status_message = msg,
+                    Err(e) => self.status_message = format!("Undo error: {e}"),
+                }
+                self.refresh_panels();
+            }
+            FileOpResult::ChmodPrefill { prefill, paths } => {
+                if self.mode == Mode::Normal || self.mode == Mode::Visual || self.mode == Mode::Select {
+                    self.rename_input = prefill;
+                    self.chmod_paths = paths;
+                    self.mode = Mode::Chmod;
+                }
+            }
         }
     }
 

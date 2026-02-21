@@ -43,14 +43,14 @@ impl App {
             }
 
             KeyCode::Char('y') => {
-                let paths = self.active_panel().targeted_paths();
+                let entries = self.active_panel().targeted_register_entries();
                 self.exit_visual();
-                if paths.is_empty() {
+                if entries.is_empty() {
                     self.status_message = "Nothing to yank".into();
                 } else {
-                    let n = paths.len();
+                    let n = entries.len();
                     self.register = Some(Register {
-                        paths,
+                        entries,
                         op: RegisterOp::Yank,
                     });
                     self.status_message = format!("Yanked {n} item(s)");
@@ -162,15 +162,15 @@ impl App {
             }
 
             KeyCode::Char('y') => {
-                let paths = self.active_panel().targeted_paths();
+                let entries = self.active_panel().targeted_register_entries();
                 self.active_panel_mut().marked.clear();
                 self.exit_select();
-                if paths.is_empty() {
+                if entries.is_empty() {
                     self.status_message = "Nothing to yank".into();
                 } else {
-                    let n = paths.len();
+                    let n = entries.len();
                     self.register = Some(Register {
-                        paths,
+                        entries,
                         op: RegisterOp::Yank,
                     });
                     self.status_message = format!("Yanked {n} item(s)");

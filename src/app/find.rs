@@ -80,6 +80,11 @@ impl App {
             .as_ref()
             .and_then(|fs| fs.selected_path())
             .map(|p| p.to_path_buf());
+        let is_dir = self
+            .find_state
+            .as_ref()
+            .map(|fs| fs.selected_is_dir())
+            .unwrap_or(false);
 
         self.find_state = None;
         self.mode = Mode::Normal;
@@ -87,7 +92,7 @@ impl App {
         let Some(path) = target else { return };
 
         let side = self.tab().active;
-        if path.is_dir() {
+        if is_dir {
             self.active_panel_mut().navigate_to(path);
             self.apply_dir_sort_no_reload();
             self.spawn_dir_load(side, None);

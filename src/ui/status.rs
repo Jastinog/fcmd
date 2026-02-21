@@ -104,7 +104,7 @@ pub(super) fn render_status(f: &mut Frame, app: &App, area: Rect) {
             crate::ops::RegisterOp::Yank => "y",
             crate::ops::RegisterOp::Cut => "d",
         };
-        right_parts.push((format!(" {op}:{} ", r.paths.len()), t.yellow, t.bg_light));
+        right_parts.push((format!(" {op}:{} ", r.entries.len()), t.yellow, t.bg_light));
     }
 
     // Search pattern

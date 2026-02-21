@@ -263,6 +263,32 @@ impl Panel {
         }
     }
 
+    /// Targeted entries with is_dir info (for Register).
+    pub fn targeted_register_entries(&self) -> Vec<crate::ops::RegisterEntry> {
+        let to_entry = |e: &FileEntry| crate::ops::RegisterEntry {
+            path: e.path.clone(),
+            is_dir: e.is_dir,
+        };
+        if !self.marked.is_empty() {
+            self.entries
+                .iter()
+                .filter(|e| e.name != ".." && self.marked.contains(&e.path))
+                .map(to_entry)
+                .collect()
+        } else if let Some((lo, hi)) = self.visual_range() {
+            self.entries[lo..=hi]
+                .iter()
+                .filter(|e| e.name != "..")
+                .map(to_entry)
+                .collect()
+        } else {
+            self.selected_entry()
+                .filter(|e| e.name != "..")
+                .map(|e| vec![to_entry(e)])
+                .unwrap_or_default()
+        }
+    }
+
     /// Number of targeted entries (for status display).
     pub fn targeted_count(&self) -> usize {
         if !self.marked.is_empty() {

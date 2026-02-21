@@ -33,12 +33,20 @@ impl App {
         if paths.is_empty() {
             return;
         }
-        let prefill = read_octal_mode(&paths[0])
-            .map(|m| format!("{m:o}"))
-            .unwrap_or_default();
-        self.rename_input = prefill;
-        self.chmod_paths = paths;
+        // Show chmod popup immediately with empty prefill, load mode async
+        self.rename_input = String::new();
+        self.chmod_paths = Vec::new();
         self.mode = Mode::Chmod;
+
+        let first_path = paths[0].clone();
+        let (tx, rx) = tokio::sync::oneshot::channel();
+        self.file_op_rx = Some(rx);
+        tokio::task::spawn_blocking(move || {
+            let prefill = read_octal_mode(&first_path)
+                .map(|m| format!("{m:o}"))
+                .unwrap_or_default();
+            let _ = tx.send(super::FileOpResult::ChmodPrefill { prefill, paths });
+        });
     }
 
     pub(super) fn enter_chown(&mut self) {
@@ -153,17 +161,25 @@ impl App {
                 };
                 let paths = std::mem::take(&mut self.chmod_paths);
                 let n = paths.len();
-                let mut errors = 0;
-                for p in &paths {
-                    if let Err(e) = ops::chmod(p, mode) {
-                        self.status_message = format!("chmod: {e}");
-                        errors += 1;
+                let input2 = input.clone();
+                let (tx, rx) = tokio::sync::oneshot::channel();
+                self.file_op_rx = Some(rx);
+                tokio::task::spawn_blocking(move || {
+                    let mut errors = 0;
+                    let mut last_error = None;
+                    for p in &paths {
+                        if let Err(e) = ops::chmod(p, mode) {
+                            last_error = Some(e.to_string());
+                            errors += 1;
+                        }
                     }
-                }
-                if errors == 0 {
-                    self.status_message = format!("chmod {input} ({n} item(s))");
-                }
-                self.refresh_panels();
+                    let _ = tx.send(super::FileOpResult::Chmod {
+                        input: input2,
+                        count: n,
+                        errors,
+                        last_error,
+                    });
+                });
                 self.mode = Mode::Normal;
             }
             KeyCode::Esc => {
@@ -264,18 +280,25 @@ impl App {
                 let paths = std::mem::take(&mut picker.paths);
                 let n = paths.len();
                 self.chown_picker = None;
-                let mut errors = 0;
-                for p in &paths {
-                    if let Err(e) = ops::chown(p, uid, gid) {
-                        self.status_message = format!("chown: {e}");
-                        errors += 1;
+                let (tx, rx) = tokio::sync::oneshot::channel();
+                self.file_op_rx = Some(rx);
+                tokio::task::spawn_blocking(move || {
+                    let mut errors = 0;
+                    let mut last_error = None;
+                    for p in &paths {
+                        if let Err(e) = ops::chown(p, uid, gid) {
+                            last_error = Some(e.to_string());
+                            errors += 1;
+                        }
                     }
-                }
-                if errors == 0 {
-                    self.status_message =
-                        format!("chown {user_name}:{group_name} ({n} item(s))");
-                }
-                self.refresh_panels();
+                    let _ = tx.send(super::FileOpResult::Chown {
+                        user_name,
+                        group_name,
+                        count: n,
+                        errors,
+                        last_error,
+                    });
+                });
                 self.mode = Mode::Normal;
             }
             KeyCode::Esc => {

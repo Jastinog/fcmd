@@ -366,6 +366,14 @@ impl FindState {
             .map(|e| e.full_path.as_path())
     }
 
+    pub fn selected_is_dir(&self) -> bool {
+        self.filtered
+            .get(self.selected)
+            .and_then(|&i| self.entries.get(i))
+            .map(|e| e.is_dir)
+            .unwrap_or(false)
+    }
+
     pub fn total_count(&self) -> usize {
         self.entries.len()
     }

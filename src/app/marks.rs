@@ -85,14 +85,18 @@ impl App {
 
     pub(super) fn goto_mark(&mut self, c: char) {
         if let Some(path) = self.marks.get(&c).cloned() {
-            if path.is_dir() {
-                let side = self.tab().active;
-                self.active_panel_mut().navigate_to(path);
-                self.apply_dir_sort_no_reload();
-                self.spawn_dir_load(side, None);
-            } else {
-                self.status_message = format!("Mark '{c}' directory no longer exists");
-            }
+            let (tx, rx) = tokio::sync::oneshot::channel();
+            self.nav_check_rx = Some(rx);
+            tokio::task::spawn_blocking(move || {
+                let exists = path.exists();
+                let is_dir = path.is_dir();
+                let _ = tx.send(super::NavCheckResult {
+                    path,
+                    is_dir,
+                    exists,
+                    source: super::NavSource::Mark(c),
+                });
+            });
         } else {
             self.status_message = format!("Mark '{c}' not set");
         }

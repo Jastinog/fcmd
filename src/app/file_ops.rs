@@ -2,14 +2,14 @@ use super::*;
 
 impl App {
     pub(super) fn yank_targeted(&mut self) {
-        let paths = self.active_panel().targeted_paths();
-        if paths.is_empty() {
+        let entries = self.active_panel().targeted_register_entries();
+        if entries.is_empty() {
             self.status_message = "Nothing to yank".into();
             return;
         }
-        let n = paths.len();
+        let n = entries.len();
         self.register = Some(Register {
-            paths,
+            entries,
             op: RegisterOp::Yank,
         });
         self.status_message = format!("Yanked {n} item(s)");
@@ -92,8 +92,8 @@ impl App {
             return;
         }
 
-        let (paths, op) = match &self.register {
-            Some(r) => (r.paths.clone(), r.op),
+        let (reg_entries, op) = match &self.register {
+            Some(r) => (r.entries.clone(), r.op),
             None => {
                 self.status_message = "Register empty \u{2014} yy to yank, dd to cut".into();
                 return;
@@ -106,17 +106,19 @@ impl App {
             self.active_panel().path.clone()
         };
 
-        let phantoms: Vec<PhantomEntry> = paths
+        let phantoms: Vec<PhantomEntry> = reg_entries
             .iter()
-            .map(|p| PhantomEntry {
-                name: p
+            .map(|e| PhantomEntry {
+                name: e
+                    .path
                     .file_name()
                     .map(|n| n.to_string_lossy().into_owned())
                     .unwrap_or_default(),
-                is_dir: p.is_dir(),
+                is_dir: e.is_dir,
             })
             .collect();
 
+        let paths: Vec<PathBuf> = reg_entries.iter().map(|e| e.path.clone()).collect();
         let (tx, rx) = tokio::sync::mpsc::channel(64);
         ops::paste_in_background(paths, dst_dir.clone(), op, tx);
 
@@ -138,11 +140,13 @@ impl App {
 
     pub(super) fn undo(&mut self) {
         if let Some(records) = self.undo_stack.pop() {
-            match ops::undo(&records) {
-                Ok(msg) => self.status_message = msg,
-                Err(e) => self.status_message = format!("Undo error: {e}"),
-            }
-            self.refresh_panels();
+            let (tx, rx) = tokio::sync::oneshot::channel();
+            self.file_op_rx = Some(rx);
+            tokio::task::spawn_blocking(move || {
+                let result = ops::undo(&records)
+                    .map_err(|e| e.to_string());
+                let _ = tx.send(super::FileOpResult::Undo { result });
+            });
         } else {
             self.status_message = "Nothing to undo".into();
         }

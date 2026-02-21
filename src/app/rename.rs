@@ -20,15 +20,17 @@ impl App {
                         return;
                     }
                 };
-                match ops::rename_path(&path, &new_name) {
-                    Ok(rec) => {
-                        self.undo_stack.push(vec![rec]);
-                        self.refresh_panels();
-                        self.active_panel_mut().select_by_name(&new_name);
-                        self.status_message = format!("Renamed to: {new_name}");
-                    }
-                    Err(e) => self.status_message = format!("rename: {e}"),
-                }
+                let (tx, rx) = tokio::sync::oneshot::channel();
+                self.file_op_rx = Some(rx);
+                let new_name2 = new_name.clone();
+                tokio::task::spawn_blocking(move || {
+                    let result =
+                        ops::rename_path(&path, &new_name2).map_err(|e| e.to_string());
+                    let _ = tx.send(super::FileOpResult::Rename {
+                        new_name: new_name2,
+                        result,
+                    });
+                });
                 self.mode = Mode::Normal;
             }
             KeyCode::Esc => {
@@ -57,27 +59,26 @@ impl App {
                     return;
                 }
                 let dir = self.active_panel().path.clone();
+                let (tx, rx) = tokio::sync::oneshot::channel();
+                self.file_op_rx = Some(rx);
                 if name.ends_with('/') {
-                    let dir_name = name.trim_end_matches('/');
-                    match ops::mkdir(&dir, dir_name) {
-                        Ok(rec) => {
-                            self.undo_stack.push(vec![rec]);
-                            self.refresh_panels();
-                            self.active_panel_mut().select_by_name(dir_name);
-                            self.status_message = format!("Created directory: {dir_name}");
-                        }
-                        Err(e) => self.status_message = format!("mkdir: {e}"),
-                    }
+                    let dir_name = name.trim_end_matches('/').to_string();
+                    tokio::task::spawn_blocking(move || {
+                        let result = ops::mkdir(&dir, &dir_name).map_err(|e| e.to_string());
+                        let _ = tx.send(super::FileOpResult::Mkdir {
+                            name: dir_name,
+                            result,
+                        });
+                    });
                 } else {
-                    match ops::touch(&dir, &name) {
-                        Ok(rec) => {
-                            self.undo_stack.push(vec![rec]);
-                            self.refresh_panels();
-                            self.active_panel_mut().select_by_name(&name);
-                            self.status_message = format!("Created file: {name}");
-                        }
-                        Err(e) => self.status_message = format!("touch: {e}"),
-                    }
+                    let name2 = name.clone();
+                    tokio::task::spawn_blocking(move || {
+                        let result = ops::touch(&dir, &name2).map_err(|e| e.to_string());
+                        let _ = tx.send(super::FileOpResult::Touch {
+                            name: name2,
+                            result,
+                        });
+                    });
                 }
                 self.mode = Mode::Normal;
             }

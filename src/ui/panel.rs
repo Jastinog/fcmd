@@ -124,7 +124,7 @@ pub(super) fn render_panel(
 
             let is_cursor = i == panel.selected;
             let is_active_cursor = is_cursor && is_active;
-            let in_reg = ctx.register.is_some_and(|r| r.paths.contains(&entry.path));
+            let in_reg = ctx.register.is_some_and(|r| r.entries.iter().any(|e| e.path == entry.path));
             let reg_color = ctx.register.and_then(|r| {
                 if in_reg {
                     Some(match r.op {

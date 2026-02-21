@@ -167,6 +167,12 @@ async fn run(
             result = recv_or_pend(&mut app.chown_load_rx) => {
                 app.apply_chown_load(result);
             }
+            result = recv_or_pend(&mut app.nav_check_rx) => {
+                app.apply_nav_check(result);
+            }
+            result = recv_or_pend(&mut app.file_op_rx) => {
+                app.apply_file_op(result);
+            }
         }
 
         if let Some(path) = app.open_editor.take() {
