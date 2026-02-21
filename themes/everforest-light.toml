@@ -1,0 +1,24 @@
+# Everforest Light — comfortable and pleasant green forest
+# github.com/sainnhe/everforest
+
+bg = "#FDF6E3"
+bg_light = "#F3EAD3"
+fg = "#5C6A72"
+fg_dim = "#939F91"
+
+red = "#F85552"
+green = "#8DA101"
+yellow = "#DFA000"
+blue = "#3A94C5"
+magenta = "#DF69BA"
+cyan = "#35A77C"
+orange = "#F57D26"
+
+border_active = "blue"
+border_inactive = "#D8D3BA"
+status_bg = "#F3EAD3"
+cursor_line = "#EDEADA"
+
+dir_color = "blue"
+symlink_color = "orange"
+file_color = "fg"

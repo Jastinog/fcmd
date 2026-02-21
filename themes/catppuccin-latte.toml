@@ -1,0 +1,24 @@
+# Catppuccin Latte — light pastel theme
+# catppuccin.com
+
+bg = "#EFF1F5"
+bg_light = "#E6E9EF"
+fg = "#4C4F69"
+fg_dim = "#9CA0B0"
+
+red = "#D20F39"
+green = "#40A02B"
+yellow = "#DF8E1D"
+blue = "#1E66F5"
+magenta = "#8839EF"
+cyan = "#179299"
+orange = "#FE640B"
+
+border_active = "blue"
+border_inactive = "#CCD0DA"
+status_bg = "#E6E9EF"
+cursor_line = "#BCC0CC"
+
+dir_color = "blue"
+symlink_color = "orange"
+file_color = "fg"

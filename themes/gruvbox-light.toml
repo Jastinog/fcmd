@@ -1,0 +1,24 @@
+# Gruvbox Light — retro groove color scheme
+# github.com/morhetz/gruvbox
+
+bg = "#FBF1C7"
+bg_light = "#EBDBB2"
+fg = "#3C3836"
+fg_dim = "#928374"
+
+red = "#CC241D"
+green = "#98971A"
+yellow = "#D79921"
+blue = "#458588"
+magenta = "#B16286"
+cyan = "#689D6A"
+orange = "#D65D0E"
+
+border_active = "blue"
+border_inactive = "#A89984"
+status_bg = "#EBDBB2"
+cursor_line = "#EBDBB2"
+
+dir_color = "blue"
+symlink_color = "orange"
+file_color = "fg"

@@ -1,0 +1,24 @@
+# One Light — Atom editor light theme
+# atom.io
+
+bg = "#FAFAFA"
+bg_light = "#F0F0F0"
+fg = "#383A42"
+fg_dim = "#A0A1A7"
+
+red = "#E45649"
+green = "#50A14F"
+yellow = "#C18401"
+blue = "#4078F2"
+magenta = "#A626A4"
+cyan = "#0184BC"
+orange = "#D19A66"
+
+border_active = "blue"
+border_inactive = "#D4D4D4"
+status_bg = "#F0F0F0"
+cursor_line = "#F2F2F2"
+
+dir_color = "blue"
+symlink_color = "orange"
+file_color = "fg"

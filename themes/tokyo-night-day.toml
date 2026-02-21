@@ -1,0 +1,24 @@
+# Tokyo Night Day — light variant of Tokyo Night
+# github.com/folke/tokyonight.nvim
+
+bg = "#E1E2E7"
+bg_light = "#D5D6DB"
+fg = "#3760BF"
+fg_dim = "#848CB5"
+
+red = "#F52A65"
+green = "#587539"
+yellow = "#8C6C3E"
+blue = "#2E7DE9"
+magenta = "#9854F1"
+cyan = "#007197"
+orange = "#B15C00"
+
+border_active = "blue"
+border_inactive = "#A8AECB"
+status_bg = "#D5D6DB"
+cursor_line = "#C4C8DA"
+
+dir_color = "blue"
+symlink_color = "orange"
+file_color = "fg"

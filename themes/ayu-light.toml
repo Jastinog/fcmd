@@ -1,0 +1,24 @@
+# Ayu Light — simple, bright and elegant
+# github.com/ayu-theme
+
+bg = "#FAFAFA"
+bg_light = "#F0EEE4"
+fg = "#5C6166"
+fg_dim = "#ABB0B6"
+
+red = "#F07171"
+green = "#86B300"
+yellow = "#F2AE49"
+blue = "#399EE6"
+magenta = "#A37ACC"
+cyan = "#4CBF99"
+orange = "#FA8D3E"
+
+border_active = "blue"
+border_inactive = "#D9D8D7"
+status_bg = "#F0EEE4"
+cursor_line = "#F2F2F2"
+
+dir_color = "blue"
+symlink_color = "orange"
+file_color = "fg"

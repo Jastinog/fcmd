@@ -1,0 +1,24 @@
+# GitHub Light — clean and minimal
+# github.com
+
+bg = "#FFFFFF"
+bg_light = "#F6F8FA"
+fg = "#24292E"
+fg_dim = "#6A737D"
+
+red = "#D73A49"
+green = "#22863A"
+yellow = "#E36209"
+blue = "#0366D6"
+magenta = "#6F42C1"
+cyan = "#1B7C83"
+orange = "#E36209"
+
+border_active = "blue"
+border_inactive = "#E1E4E8"
+status_bg = "#F6F8FA"
+cursor_line = "#F1F8FF"
+
+dir_color = "blue"
+symlink_color = "orange"
+file_color = "fg"

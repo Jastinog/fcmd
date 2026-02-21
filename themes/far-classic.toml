@@ -1,0 +1,24 @@
+# FAR Manager Classic — the legendary Windows file manager
+# farmanager.com
+
+bg = "#0000AA"
+bg_light = "#000080"
+fg = "#55FFFF"
+fg_dim = "#00AAAA"
+
+red = "#FF5555"
+green = "#55FF55"
+yellow = "#FFFF55"
+blue = "#00AAAA"
+magenta = "#FF55FF"
+cyan = "#55FFFF"
+orange = "#AA5500"
+
+border_active = "#55FFFF"
+border_inactive = "#00AAAA"
+status_bg = "#000000"
+cursor_line = "#00AAAA"
+
+dir_color = "#FFFFFF"
+symlink_color = "#55FFFF"
+file_color = "fg"

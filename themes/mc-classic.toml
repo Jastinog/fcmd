@@ -1,0 +1,24 @@
+# Midnight Commander Classic — the iconic blue Norton Commander look
+# midnight-commander.org
+
+bg = "#0000AA"
+bg_light = "#000088"
+fg = "#55FFFF"
+fg_dim = "#00AAAA"
+
+red = "#FF5555"
+green = "#55FF55"
+yellow = "#FFFF55"
+blue = "#00AAAA"
+magenta = "#FF55FF"
+cyan = "#55FFFF"
+orange = "#AA5500"
+
+border_active = "#55FFFF"
+border_inactive = "#00AAAA"
+status_bg = "#000088"
+cursor_line = "#00AAAA"
+
+dir_color = "#FFFFFF"
+symlink_color = "#AAAAAA"
+file_color = "fg"

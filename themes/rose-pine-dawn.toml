@@ -1,0 +1,24 @@
+# Rose Pine Dawn — all natural pine, faux fur and a bit of soho vibes
+# rosepinetheme.com
+
+bg = "#FAF4ED"
+bg_light = "#F2E9E1"
+fg = "#575279"
+fg_dim = "#9893A5"
+
+red = "#B4637A"
+green = "#56949F"
+yellow = "#EA9D34"
+blue = "#286983"
+magenta = "#907AA9"
+cyan = "#56949F"
+orange = "#D7827E"
+
+border_active = "blue"
+border_inactive = "#DFDAD9"
+status_bg = "#F2E9E1"
+cursor_line = "#F2E9E1"
+
+dir_color = "blue"
+symlink_color = "orange"
+file_color = "fg"
