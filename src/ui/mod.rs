@@ -199,6 +199,14 @@ pub fn render(f: &mut Frame, app: &mut App) {
         overlays::render_info_popup(f, app, full_area);
     }
 
+    if app.mode == Mode::Command {
+        overlays::render_command_popup(f, app, full_area);
+    }
+
+    if app.mode == Mode::Search {
+        overlays::render_search_popup(f, app, full_area);
+    }
+
     if app.mode == Mode::Confirm {
         overlays::render_confirm_popup(f, app, full_area);
     }
@@ -283,7 +291,7 @@ fn render_tab_bar(f: &mut Frame, app: &App, area: Rect) {
         if is_active {
             spans.push(Span::styled(
                 format!("  {}: {dir_name} ", i + 1),
-                Style::default().fg(t.bg).bg(t.blue),
+                Style::default().fg(t.bg_text).bg(t.blue),
             ));
             spans.push(Span::styled(
                 SEP_RIGHT,

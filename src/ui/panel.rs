@@ -44,7 +44,8 @@ pub(super) fn render_panel(
         .borders(Borders::ALL)
         .border_style(Style::default().fg(border_color))
         .title(format!(" {title} "))
-        .title_style(Style::default().fg(if is_active { t.fg } else { t.fg_dim }));
+        .title_style(Style::default().fg(if is_active { t.fg } else { t.fg_dim }))
+        .style(Style::default().bg(t.bg));
 
     let inner = block.inner(area);
     f.render_widget(block, area);
@@ -127,13 +128,13 @@ pub(super) fn render_panel(
 
             // Determine styles per segment
             let (icon_style, name_style, meta_style) = if is_active_cursor {
-                let base = Style::default().bg(t.blue).fg(t.bg);
+                let base = Style::default().bg(t.blue).fg(t.bg_text);
                 (base, base, base)
             } else if in_visual && is_active {
-                let base = Style::default().bg(t.magenta).fg(t.bg);
+                let base = Style::default().bg(t.magenta).fg(t.bg_text);
                 (base, base, base)
             } else if is_marked && ctx.is_select_mode && is_active {
-                let base = Style::default().bg(t.orange).fg(t.bg);
+                let base = Style::default().bg(t.orange).fg(t.bg_text);
                 (base, base, base)
             } else if is_marked {
                 let base = Style::default().fg(t.green);
@@ -183,15 +184,15 @@ pub(super) fn render_panel(
 
             let git_raw = ctx.git_statuses.get(&entry.path).copied().unwrap_or(' ');
             let (git_icon, git_color) = match git_raw {
-                'M' => ("●", Some(t.yellow)),
-                'A' => ("●", Some(t.green)),
-                '?' => ("●", Some(t.cyan)),
-                'D' => ("●", Some(t.red)),
-                'R' => ("●", Some(t.magenta)),
+                'M' => ("\u{f03eb}", Some(t.yellow)),     // 󰏫 md-pencil
+                'A' => ("\u{f0415}", Some(t.green)),      // 󰐕 md-plus
+                '?' => ("\u{f0613}", Some(t.cyan)),       // 󰘓 md-file_hidden
+                'D' => ("\u{f0374}", Some(t.red)),        // 󰍴 md-minus
+                'R' => ("\u{f0455}", Some(t.magenta)),    // 󰑕 md-rename_box
                 _ => (" ", None),
             };
             let git_style = match (git_color, row_bg) {
-                (Some(c), Some(_)) => Style::default().fg(t.bg).bg(c),
+                (Some(c), Some(_)) => Style::default().fg(t.bg_text).bg(c),
                 (Some(c), None) => Style::default().fg(c),
                 (None, Some(bg)) => Style::default().fg(t.fg_dim).bg(bg),
                 (None, None) => Style::default().fg(t.fg_dim),
@@ -206,11 +207,11 @@ pub(super) fn render_panel(
                     _ => t.red,
                 };
                 let s = if row_bg.is_some() {
-                    Style::default().fg(t.bg).bg(vm_color)
+                    Style::default().fg(t.bg_text).bg(vm_color)
                 } else {
                     Style::default().fg(vm_color)
                 };
-                ("\u{258a}", s)
+                ("\u{f024}", s)
             } else {
                 let mut s = meta_style;
                 if let Some(bg) = row_bg {

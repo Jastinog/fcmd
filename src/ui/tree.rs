@@ -22,7 +22,8 @@ pub(super) fn render_tree(f: &mut Frame, app: &App, area: Rect) {
         .borders(Borders::ALL)
         .border_style(Style::default().fg(border_color))
         .title(" 󰙅 Tree ")
-        .title_style(Style::default().fg(if is_focused { t.fg } else { t.cyan }));
+        .title_style(Style::default().fg(if is_focused { t.fg } else { t.cyan }))
+        .style(Style::default().bg(t.bg));
 
     let inner = block.inner(area);
     f.render_widget(block, area);
@@ -68,7 +69,7 @@ pub(super) fn render_tree(f: &mut Frame, app: &App, area: Rect) {
                 };
                 return ListItem::new(Line::from(Span::styled(
                     text,
-                    Style::default().fg(t.bg).bg(t.blue),
+                    Style::default().fg(t.bg_text).bg(t.blue),
                 )));
             }
 

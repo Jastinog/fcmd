@@ -8,7 +8,6 @@ use ratatui::{
 
 use crate::app::{App, Mode};
 use crate::panel::SortMode;
-use crate::theme::Theme;
 
 use super::{SEP_LEFT, SEP_RIGHT};
 
@@ -21,20 +20,11 @@ pub(super) fn render_status(f: &mut Frame, app: &App, area: Rect) {
         area,
     );
 
-    // Input modes rendered in status bar
-    if app.mode == Mode::Command {
-        render_status_input(f, area, ":", &app.command_input, t.green, t);
-        return;
-    }
-    if app.mode == Mode::Search {
-        render_status_input(f, area, "/", &app.search_query, t.yellow, t);
-        return;
-    }
 
     // Confirm mode — overlay handles the popup, status bar shows mode
     if app.mode == Mode::Confirm {
         let mut spans = vec![
-            Span::styled(format!(" \u{f05e8} CONFIRM "), Style::default().fg(t.bg).bg(t.red)),
+            Span::styled(format!(" \u{f05e8} CONFIRM "), Style::default().fg(t.bg_text).bg(t.red)),
             Span::styled(SEP_RIGHT, Style::default().fg(t.red).bg(t.status_bg)),
         ];
 
@@ -113,6 +103,14 @@ pub(super) fn render_status(f: &mut Frame, app: &App, area: Rect) {
                 mode_str = format!("\u{f02fd} INFO");    // 󰋽
                 (mode_str.as_str(), t.cyan)
             }
+            Mode::Search => {
+                mode_str = format!("\u{f0349} SEARCH");  // 󰍉
+                (mode_str.as_str(), t.cyan)
+            }
+            Mode::Command => {
+                mode_str = format!("\u{f018d} CMD");     // 󰆍
+                (mode_str.as_str(), t.cyan)
+            }
             _ => {
                 mode_str = String::new();
                 (mode_str.as_str(), t.fg_dim)
@@ -123,7 +121,7 @@ pub(super) fn render_status(f: &mut Frame, app: &App, area: Rect) {
 
     let mode_span = Span::styled(
         format!(" {mode_str} "),
-        Style::default().fg(t.bg).bg(mode_bg),
+        Style::default().fg(t.bg_text).bg(mode_bg),
     );
     let mode_sep = Span::styled(SEP_RIGHT, Style::default().fg(mode_bg).bg(t.bg_light));
 
@@ -258,40 +256,4 @@ pub(super) fn render_status(f: &mut Frame, app: &App, area: Rect) {
     all_spans.extend(right_spans);
 
     f.render_widget(Paragraph::new(Line::from(all_spans)), area);
-}
-
-fn render_status_input(
-    f: &mut Frame,
-    area: Rect,
-    prefix: &str,
-    input: &str,
-    accent: Color,
-    t: &Theme,
-) {
-    let label = if prefix == "/" {
-        " \u{f0349} SEARCH "   // 󰍉
-    } else {
-        " \u{f018d} CMD "      // 󰆍
-    };
-
-    let mut spans = vec![
-        Span::styled(label, Style::default().fg(t.bg).bg(accent)),
-        Span::styled(SEP_RIGHT, Style::default().fg(accent).bg(t.bg_light)),
-        Span::styled(
-            format!(" {prefix}{input} "),
-            Style::default().fg(t.fg).bg(t.bg_light),
-        ),
-        Span::styled(SEP_RIGHT, Style::default().fg(t.bg_light).bg(t.status_bg)),
-    ];
-
-    let used: usize = spans.iter().map(|s| s.content.chars().count()).sum();
-    let remaining = (area.width as usize).saturating_sub(used);
-    if remaining > 0 {
-        spans.push(Span::styled(
-            " ".repeat(remaining),
-            Style::default().bg(t.status_bg),
-        ));
-    }
-
-    f.render_widget(Paragraph::new(Line::from(spans)), area);
 }

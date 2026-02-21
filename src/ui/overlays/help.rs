@@ -17,7 +17,8 @@ pub(in crate::ui) fn render_help(f: &mut Frame, t: &Theme, area: Rect) {
         .borders(Borders::ALL)
         .border_style(Style::default().fg(t.cyan))
         .title(" 󰋖 Help ")
-        .title_style(Style::default().fg(t.cyan));
+        .title_style(Style::default().fg(t.cyan))
+        .style(Style::default().bg(t.bg));
 
     let inner = block.inner(popup);
     f.render_widget(block, popup);

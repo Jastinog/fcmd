@@ -77,7 +77,8 @@ pub(super) fn render_preview(f: &mut Frame, preview: &Option<Preview>, area: Rec
         .borders(Borders::ALL)
         .border_style(Style::default().fg(t.cyan))
         .title(format!(" {title} [{info}] "))
-        .title_style(Style::default().fg(t.cyan));
+        .title_style(Style::default().fg(t.cyan))
+        .style(Style::default().bg(t.bg));
 
     let inner = block.inner(area);
     f.render_widget(block, area);

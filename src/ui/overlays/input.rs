@@ -49,7 +49,8 @@ pub(in crate::ui) fn render_input_popup(f: &mut Frame, app: &App, area: Rect) {
         .borders(Borders::ALL)
         .border_style(Style::default().fg(accent))
         .title(title)
-        .title_style(Style::default().fg(accent));
+        .title_style(Style::default().fg(accent))
+        .style(Style::default().bg(t.bg));
 
     let inner = block.inner(popup);
     f.render_widget(block, popup);

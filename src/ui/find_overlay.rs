@@ -42,7 +42,8 @@ pub(super) fn render_find(f: &mut Frame, fs: &FindState, t: &Theme, area: Rect) 
         .borders(Borders::ALL)
         .border_style(Style::default().fg(scope_color))
         .title(title)
-        .title_style(Style::default().fg(scope_color));
+        .title_style(Style::default().fg(scope_color))
+        .style(Style::default().bg(t.bg));
 
     let inner = block.inner(popup);
     f.render_widget(block, popup);
@@ -149,7 +150,7 @@ pub(super) fn render_find(f: &mut Frame, fs: &FindState, t: &Theme, area: Rect) 
                 };
 
                 let style = if is_selected {
-                    Style::default().fg(t.bg).bg(sel_bg)
+                    Style::default().fg(t.bg_text).bg(sel_bg)
                 } else if is_dir {
                     Style::default().fg(t.dir_color)
                 } else {

@@ -46,7 +46,8 @@ pub(in crate::ui) fn render_chmod_popup(f: &mut Frame, app: &App, area: Rect) {
         .borders(Borders::ALL)
         .border_style(Style::default().fg(accent))
         .title(" 󰌑 Permissions ")
-        .title_style(Style::default().fg(accent));
+        .title_style(Style::default().fg(accent))
+        .style(Style::default().bg(t.bg));
 
     let inner = block.inner(popup);
     f.render_widget(block, popup);

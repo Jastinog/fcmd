@@ -24,6 +24,7 @@ pub(in crate::ui) fn render_which_key(
         'c' => ("󰌑 ", "Change"),
         '\'' => (" ", "Mark"),
         'w' => ("󰕰 ", "Layout"),
+        'u' => ("󰔃 ", "UI"),
         _ => return,
     };
 
@@ -76,7 +77,8 @@ pub(in crate::ui) fn render_which_key(
         .borders(Borders::ALL)
         .border_style(Style::default().fg(t.orange))
         .title(format!(" {leader_icon}{leader_label} "))
-        .title_style(Style::default().fg(t.orange));
+        .title_style(Style::default().fg(t.orange))
+        .style(Style::default().bg(t.bg));
 
     let inner = block.inner(popup);
     f.render_widget(block, popup);
@@ -98,7 +100,7 @@ pub(in crate::ui) fn render_which_key(
                         let (key, desc) = items[idx];
                         spans.push(Span::styled(
                             format!(" {key} "),
-                            Style::default().fg(t.bg).bg(t.orange),
+                            Style::default().fg(t.bg_text).bg(t.orange),
                         ));
                         let desc_text = format!(" {desc}");
                         let entry_chars = key.chars().count() + 2 + desc_text.chars().count();
@@ -140,7 +142,7 @@ pub(in crate::ui) fn render_which_key(
                     let (key, desc) = all_items[idx];
                     spans.push(Span::styled(
                         format!(" {key} "),
-                        Style::default().fg(t.bg).bg(t.orange),
+                        Style::default().fg(t.bg_text).bg(t.orange),
                     ));
                     let desc_text = format!(" {desc}");
                     let entry_chars = key.chars().count() + 2 + desc_text.chars().count();

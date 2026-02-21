@@ -39,7 +39,8 @@ pub(in crate::ui) fn render_preview_popup(f: &mut Frame, app: &App, area: Rect) 
         .borders(Borders::ALL)
         .border_style(Style::default().fg(t.cyan))
         .title(title)
-        .title_style(Style::default().fg(t.cyan));
+        .title_style(Style::default().fg(t.cyan))
+        .style(Style::default().bg(t.bg));
 
     let inner = block.inner(popup);
     f.render_widget(block, popup);
@@ -161,9 +162,9 @@ pub(in crate::ui) fn render_preview_popup(f: &mut Frame, app: &App, area: Rect) 
                                 let end = (*m_end).min(display_len);
                                 let text: String = line_chars[pos..end].iter().collect();
                                 let style = if *is_cur {
-                                    Style::default().fg(t.bg).bg(t.orange)
+                                    Style::default().fg(t.bg_text).bg(t.orange)
                                 } else {
-                                    Style::default().fg(t.bg).bg(t.yellow)
+                                    Style::default().fg(t.bg_text).bg(t.yellow)
                                 };
                                 spans.push(Span::styled(text, style));
                                 pos = end;

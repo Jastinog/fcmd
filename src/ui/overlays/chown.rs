@@ -36,7 +36,8 @@ pub(in crate::ui) fn render_chown_picker(f: &mut Frame, app: &App, area: Rect) {
         .borders(Borders::ALL)
         .border_style(Style::default().fg(accent))
         .title(title)
-        .title_style(Style::default().fg(accent));
+        .title_style(Style::default().fg(accent))
+        .style(Style::default().bg(t.bg));
 
     let inner = block.inner(popup);
     f.render_widget(block, popup);
@@ -94,7 +95,7 @@ pub(in crate::ui) fn render_chown_picker(f: &mut Frame, app: &App, area: Rect) {
             col_w.saturating_sub(marker.chars().count() + name_display.chars().count() + uid_str.len() + 1);
 
         if is_cursor && is_user_active {
-            let s = Style::default().fg(t.bg).bg(t.blue);
+            let s = Style::default().fg(t.bg_text).bg(t.blue);
             user_items.push(ListItem::new(Line::from(vec![
                 Span::styled(marker, s),
                 Span::styled(name_display, s),
@@ -169,7 +170,7 @@ pub(in crate::ui) fn render_chown_picker(f: &mut Frame, app: &App, area: Rect) {
             .saturating_sub(marker.chars().count() + name_display.chars().count() + gid_str.len() + 1);
 
         if is_cursor && is_group_active {
-            let s = Style::default().fg(t.bg).bg(t.blue);
+            let s = Style::default().fg(t.bg_text).bg(t.blue);
             group_items.push(ListItem::new(Line::from(vec![
                 Span::styled(marker, s),
                 Span::styled(name_display, s),

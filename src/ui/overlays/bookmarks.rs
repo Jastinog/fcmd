@@ -32,7 +32,8 @@ pub(in crate::ui) fn render_bookmarks(f: &mut Frame, app: &App, area: Rect) {
         .borders(Borders::ALL)
         .border_style(Style::default().fg(accent))
         .title(title)
-        .title_style(Style::default().fg(accent));
+        .title_style(Style::default().fg(accent))
+        .style(Style::default().bg(t.bg));
 
     let inner = block.inner(popup);
     f.render_widget(block, popup);
@@ -72,7 +73,7 @@ pub(in crate::ui) fn render_bookmarks(f: &mut Frame, app: &App, area: Rect) {
         let pad = iw.saturating_sub(marker_w + name_w + path_display.chars().count());
 
         if is_cursor {
-            let cursor_style = Style::default().fg(t.bg).bg(t.blue);
+            let cursor_style = Style::default().fg(t.bg_text).bg(t.blue);
             let line = Line::from(vec![
                 Span::styled(marker, cursor_style),
                 Span::styled(name_col, cursor_style),
