@@ -1,3 +1,6 @@
+pub mod icons;
+pub mod natsort;
+
 use std::path::PathBuf;
 
 /// Returns `~/.config/fcmd` as the config directory (XDG-style, cross-platform).

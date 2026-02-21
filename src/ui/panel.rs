@@ -7,7 +7,7 @@ use ratatui::{
 };
 
 use crate::app::PhantomEntry;
-use crate::icons::file_icon;
+use crate::util::icons::file_icon;
 use crate::ops::RegisterOp;
 use crate::panel::Panel;
 use crate::util::format_bytes;

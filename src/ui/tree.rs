@@ -7,7 +7,7 @@ use ratatui::{
 };
 
 use crate::app::App;
-use crate::icons::file_icon;
+use crate::util::icons::file_icon;
 
 pub(super) fn render_tree(f: &mut Frame, app: &App, area: Rect) {
     let t = &app.theme;

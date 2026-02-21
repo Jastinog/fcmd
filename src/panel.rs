@@ -3,7 +3,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::time::SystemTime;
 
-use crate::natsort::natsort;
+use crate::util::natsort::natsort;
 
 pub struct FileEntry {
     pub name: String,

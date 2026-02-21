@@ -7,7 +7,7 @@ use ratatui::{
 };
 
 use crate::find::{FindScope, FindState};
-use crate::icons::file_icon;
+use crate::util::icons::file_icon;
 use crate::theme::Theme;
 
 use super::util::centered_rect;
