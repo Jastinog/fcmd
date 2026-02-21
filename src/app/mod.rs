@@ -515,6 +515,7 @@ impl App {
                     },
                 );
                 panel.apply_entries(entries, select_name.as_deref());
+                panel.loading = false;
             }
         }
     }

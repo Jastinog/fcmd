@@ -212,7 +212,13 @@ impl App {
                 roots,
                 checked_dirs,
             }) => {
-                self.git_statuses = statuses;
+                // Clear stale entries for repos we just re-fetched, then merge
+                // fresh data. Statuses from other repos are preserved so icons
+                // remain visible when navigating back.
+                for root in roots.iter().flatten() {
+                    self.git_statuses.retain(|path, _| !path.starts_with(root));
+                }
+                self.git_statuses.extend(statuses);
                 self.git_roots = roots;
                 self.git_checked_dirs = checked_dirs;
                 self.git_progress = None;

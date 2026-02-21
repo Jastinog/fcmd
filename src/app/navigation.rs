@@ -272,6 +272,7 @@ impl App {
         panel.selected = 0;
         panel.offset = 0;
         panel.marked.clear();
+        panel.loading = true;
 
         // Apply sort prefs for this directory
         let (sort_mode, sort_reverse) = self
@@ -295,6 +296,7 @@ impl App {
                 }
                 let panel = &mut self.tabs[self.active_tab].panels[panel_idx];
                 panel.apply_entries(entries, select_name.as_deref());
+                panel.loading = false;
             }
         }
 

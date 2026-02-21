@@ -111,7 +111,7 @@ pub(super) fn render_panel(
                 .unwrap_or(false);
             let is_marked = panel.marked.contains(&entry.path);
 
-            let is_cursor = i == panel.selected;
+            let is_cursor = i == panel.selected && !panel.loading;
             let is_active_cursor = is_cursor && is_active;
             let in_reg = ctx.register.is_some_and(|r| r.entries.iter().any(|e| e.path == entry.path));
             let reg_color = ctx.register.and_then(|r| {

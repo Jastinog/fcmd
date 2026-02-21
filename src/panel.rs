@@ -66,6 +66,8 @@ pub struct Panel {
     pub sort_mode: SortMode,
     pub sort_reverse: bool,
     pub show_hidden: bool,
+    /// When true, hide cursor highlight (waiting for async load to position cursor).
+    pub loading: bool,
 }
 
 impl Panel {
@@ -80,6 +82,7 @@ impl Panel {
             sort_mode: SortMode::Name,
             sort_reverse: false,
             show_hidden: false,
+            loading: false,
         };
         panel.load_dir()?;
         Ok(panel)
@@ -696,6 +699,7 @@ mod tests {
             sort_mode: SortMode::Name,
             sort_reverse: false,
             show_hidden: false,
+            loading: false,
         }
     }
 
