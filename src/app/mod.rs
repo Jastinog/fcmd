@@ -246,7 +246,7 @@ impl App {
     pub fn new() -> std::io::Result<Self> {
         let cwd = std::env::current_dir()?;
 
-        let (db, visual_marks, dir_sorts, bookmarks) = match crate::db::Db::init() {
+        let (db, visual_marks, dir_sorts, bookmarks, git_statuses) = match crate::db::Db::init() {
             Ok(db) => {
                 let marks = db.load_visual_marks().unwrap_or_default();
                 let raw_sorts = db.load_dir_sorts().unwrap_or_default();
@@ -257,11 +257,12 @@ impl App {
                     })
                     .collect();
                 let bookmarks = db.load_bookmarks().unwrap_or_default();
-                (Some(db), marks, dir_sorts, bookmarks)
+                let git_statuses = db.load_git_statuses().unwrap_or_default();
+                (Some(db), marks, dir_sorts, bookmarks, git_statuses)
             }
             Err(e) => {
                 eprintln!("Warning: DB init failed: {e}");
-                (None, HashMap::new(), HashMap::new(), Vec::new())
+                (None, HashMap::new(), HashMap::new(), Vec::new(), HashMap::new())
             }
         };
 
@@ -380,7 +381,7 @@ impl App {
             info_lines: Vec::new(),
             info_scroll: 0,
             info_du_rx: None,
-            git_statuses: HashMap::new(),
+            git_statuses,
             git_roots: [None, None, None],
             git_checked_dirs: [None, None, None],
             git_progress: None,

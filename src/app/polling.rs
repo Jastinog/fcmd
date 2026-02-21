@@ -216,6 +216,9 @@ impl App {
                 self.git_roots = roots;
                 self.git_checked_dirs = checked_dirs;
                 self.git_progress = None;
+                if let Some(ref db) = self.db {
+                    let _ = db.save_git_statuses(&self.git_statuses);
+                }
             }
             Err(tokio::sync::oneshot::error::TryRecvError::Closed) => {
                 self.git_progress = None;
@@ -282,9 +285,8 @@ impl App {
 
     fn ensure_dir_sizes_loaded(&mut self) {
         let Some(ref db) = self.db else { return };
-        let left = self.tab().left.path.clone();
-        let right = self.tab().right.path.clone();
-        for dir in [left, right] {
+        let dirs: Vec<PathBuf> = self.tab().panels.iter().map(|p| p.path.clone()).collect();
+        for dir in dirs {
             if !self.dir_sizes_loaded.contains(&dir) {
                 if let Ok(sizes) = db.load_dir_sizes(&dir) {
                     self.dir_sizes.extend(sizes);

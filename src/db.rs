@@ -4,11 +4,9 @@ use std::path::{Path, PathBuf};
 use rusqlite::{Connection, params};
 
 pub struct SavedTab {
-    pub left_path: PathBuf,
-    pub right_path: PathBuf,
-    pub active_side: String, // "left" or "right"
-    pub left_cursor: usize,
-    pub right_cursor: usize,
+    pub panel_paths: Vec<PathBuf>,   // up to 3 paths
+    pub panel_cursors: Vec<usize>,   // up to 3 cursors
+    pub active_panel: usize,         // 0, 1, or 2
 }
 
 pub struct Db {
@@ -45,6 +43,10 @@ impl Db {
              CREATE TABLE IF NOT EXISTS bookmarks (
                  name TEXT PRIMARY KEY,
                  path TEXT NOT NULL
+             );
+             CREATE TABLE IF NOT EXISTS git_statuses (
+                 path TEXT PRIMARY KEY,
+                 status TEXT NOT NULL
              );",
         )?;
         // Migrate: add level column if missing
@@ -65,6 +67,17 @@ impl Db {
             conn.execute_batch(
                 "ALTER TABLE session_tabs ADD COLUMN left_cursor INTEGER NOT NULL DEFAULT 0;
                  ALTER TABLE session_tabs ADD COLUMN right_cursor INTEGER NOT NULL DEFAULT 0;",
+            )
+            .ok();
+        }
+        // Migrate: add center panel columns to session_tabs
+        let has_center: bool = conn
+            .prepare("SELECT center_path FROM session_tabs LIMIT 0")
+            .is_ok();
+        if !has_center {
+            conn.execute_batch(
+                "ALTER TABLE session_tabs ADD COLUMN center_path TEXT NOT NULL DEFAULT '';
+                 ALTER TABLE session_tabs ADD COLUMN center_cursor INTEGER NOT NULL DEFAULT 0;",
             )
             .ok();
         }
@@ -107,29 +120,47 @@ impl Db {
         let tx = self.conn.unchecked_transaction()?;
 
         tx.execute("DELETE FROM session_tabs", [])?;
-        tx.execute("DELETE FROM session_meta WHERE key != 'theme'", [])?;
+        tx.execute("DELETE FROM session_meta WHERE key NOT IN ('theme', 'layout')", [])?;
 
         for (i, tab) in tabs.iter().enumerate() {
+            let left_path = tab.panel_paths.first().map(|p| p.to_string_lossy().into_owned()).unwrap_or_default();
+            let right_path = tab.panel_paths.get(1).map(|p| p.to_string_lossy().into_owned()).unwrap_or_default();
+            let center_path = tab.panel_paths.get(2).map(|p| p.to_string_lossy().into_owned()).unwrap_or_default();
+            let active_panel = tab.active_panel.to_string();
+            let left_cursor = tab.panel_cursors.first().copied().unwrap_or(0) as i64;
+            let right_cursor = tab.panel_cursors.get(1).copied().unwrap_or(0) as i64;
+            let center_cursor = tab.panel_cursors.get(2).copied().unwrap_or(0) as i64;
             tx.execute(
-                "INSERT INTO session_tabs (idx, left_path, right_path, active_side, left_cursor, right_cursor) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
-                params![
-                    i as i64,
-                    tab.left_path.to_string_lossy().as_ref(),
-                    tab.right_path.to_string_lossy().as_ref(),
-                    tab.active_side,
-                    tab.left_cursor as i64,
-                    tab.right_cursor as i64,
-                ],
+                "INSERT INTO session_tabs (idx, left_path, right_path, active_side, left_cursor, right_cursor, center_path, center_cursor) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+                params![i as i64, left_path, right_path, active_panel, left_cursor, right_cursor, center_path, center_cursor],
             )?;
         }
 
         tx.execute(
-            "INSERT INTO session_meta (key, value) VALUES ('active_tab', ?1)",
+            "INSERT OR REPLACE INTO session_meta (key, value) VALUES ('active_tab', ?1)",
             params![active_tab.to_string()],
         )?;
 
         tx.commit()?;
         Ok(())
+    }
+
+    pub fn save_layout(&self, layout: &str) -> rusqlite::Result<()> {
+        self.conn.execute(
+            "INSERT OR REPLACE INTO session_meta (key, value) VALUES ('layout', ?1)",
+            params![layout],
+        )?;
+        Ok(())
+    }
+
+    pub fn load_layout(&self) -> Option<String> {
+        self.conn
+            .query_row(
+                "SELECT value FROM session_meta WHERE key = 'layout'",
+                [],
+                |row| row.get::<_, String>(0),
+            )
+            .ok()
     }
 
     pub fn save_theme(&self, name: &str) -> rusqlite::Result<()> {
@@ -235,9 +266,11 @@ impl Db {
                  idx INTEGER PRIMARY KEY,
                  left_path TEXT NOT NULL,
                  right_path TEXT NOT NULL,
-                 active_side TEXT NOT NULL DEFAULT 'left',
+                 active_side TEXT NOT NULL DEFAULT '0',
                  left_cursor INTEGER NOT NULL DEFAULT 0,
-                 right_cursor INTEGER NOT NULL DEFAULT 0
+                 right_cursor INTEGER NOT NULL DEFAULT 0,
+                 center_path TEXT NOT NULL DEFAULT '',
+                 center_cursor INTEGER NOT NULL DEFAULT 0
              );
              CREATE TABLE IF NOT EXISTS session_meta (
                  key TEXT PRIMARY KEY,
@@ -255,6 +288,10 @@ impl Db {
              CREATE TABLE IF NOT EXISTS bookmarks (
                  name TEXT PRIMARY KEY,
                  path TEXT NOT NULL
+             );
+             CREATE TABLE IF NOT EXISTS git_statuses (
+                 path TEXT PRIMARY KEY,
+                 status TEXT NOT NULL
              );",
         )?;
         Ok(Db { conn })
@@ -304,18 +341,71 @@ impl Db {
         Ok(())
     }
 
+    // --- Git statuses cache ---
+
+    pub fn save_git_statuses(&self, statuses: &HashMap<PathBuf, char>) -> rusqlite::Result<()> {
+        let tx = self.conn.unchecked_transaction()?;
+        tx.execute("DELETE FROM git_statuses", [])?;
+        for (path, status) in statuses {
+            tx.execute(
+                "INSERT INTO git_statuses (path, status) VALUES (?1, ?2)",
+                params![path.to_string_lossy().as_ref(), status.to_string()],
+            )?;
+        }
+        tx.commit()?;
+        Ok(())
+    }
+
+    pub fn load_git_statuses(&self) -> rusqlite::Result<HashMap<PathBuf, char>> {
+        let mut stmt = self.conn.prepare("SELECT path, status FROM git_statuses")?;
+        let rows = stmt.query_map([], |row| {
+            let p: String = row.get(0)?;
+            let s: String = row.get(1)?;
+            Ok((PathBuf::from(p), s.chars().next().unwrap_or('?')))
+        })?;
+        let mut map = HashMap::new();
+        for (p, s) in rows.flatten() {
+            map.insert(p, s);
+        }
+        Ok(map)
+    }
+
     pub fn load_session(&self) -> rusqlite::Result<(Vec<SavedTab>, usize)> {
         let mut stmt = self.conn.prepare(
-            "SELECT left_path, right_path, active_side, left_cursor, right_cursor FROM session_tabs ORDER BY idx",
+            "SELECT left_path, right_path, active_side, left_cursor, right_cursor, center_path, center_cursor FROM session_tabs ORDER BY idx",
         )?;
         let tabs: Vec<SavedTab> = stmt
             .query_map([], |row| {
+                let left_path: String = row.get(0)?;
+                let right_path: String = row.get(1)?;
+                let active_str: String = row.get(2)?;
+                let left_cursor = row.get::<_, i64>(3).unwrap_or(0) as usize;
+                let right_cursor = row.get::<_, i64>(4).unwrap_or(0) as usize;
+                let center_path: String = row.get::<_, String>(5).unwrap_or_default();
+                let center_cursor = row.get::<_, i64>(6).unwrap_or(0) as usize;
+
+                // Backward compat: "left" → 0, "right" → 1, else parse as number
+                let active_panel = match active_str.as_str() {
+                    "left" => 0,
+                    "right" => 1,
+                    s => s.parse().unwrap_or(0),
+                };
+
+                // Use left_path as fallback for center if empty
+                let center = if center_path.is_empty() {
+                    PathBuf::from(&left_path)
+                } else {
+                    PathBuf::from(&center_path)
+                };
+
                 Ok(SavedTab {
-                    left_path: PathBuf::from(row.get::<_, String>(0)?),
-                    right_path: PathBuf::from(row.get::<_, String>(1)?),
-                    active_side: row.get(2)?,
-                    left_cursor: row.get::<_, i64>(3).unwrap_or(0) as usize,
-                    right_cursor: row.get::<_, i64>(4).unwrap_or(0) as usize,
+                    panel_paths: vec![
+                        PathBuf::from(left_path),
+                        PathBuf::from(right_path),
+                        center,
+                    ],
+                    panel_cursors: vec![left_cursor, right_cursor, center_cursor],
+                    active_panel,
                 })
             })?
             .filter_map(|r| r.ok())
@@ -387,18 +477,22 @@ mod tests {
 
         let tabs = vec![
             SavedTab {
-                left_path: PathBuf::from("/home"),
-                right_path: PathBuf::from("/tmp"),
-                active_side: "left".into(),
-                left_cursor: 5,
-                right_cursor: 10,
+                panel_paths: vec![
+                    PathBuf::from("/home"),
+                    PathBuf::from("/tmp"),
+                    PathBuf::from("/var"),
+                ],
+                panel_cursors: vec![5, 10, 0],
+                active_panel: 0,
             },
             SavedTab {
-                left_path: PathBuf::from("/usr"),
-                right_path: PathBuf::from("/var"),
-                active_side: "right".into(),
-                left_cursor: 0,
-                right_cursor: 3,
+                panel_paths: vec![
+                    PathBuf::from("/usr"),
+                    PathBuf::from("/var"),
+                    PathBuf::from("/opt"),
+                ],
+                panel_cursors: vec![0, 3, 1],
+                active_panel: 1,
             },
         ];
 
@@ -407,11 +501,25 @@ mod tests {
 
         assert_eq!(active, 1);
         assert_eq!(loaded.len(), 2);
-        assert_eq!(loaded[0].left_path, PathBuf::from("/home"));
-        assert_eq!(loaded[0].right_path, PathBuf::from("/tmp"));
-        assert_eq!(loaded[0].active_side, "left");
-        assert_eq!(loaded[0].left_cursor, 5);
-        assert_eq!(loaded[1].right_cursor, 3);
+        assert_eq!(loaded[0].panel_paths[0], PathBuf::from("/home"));
+        assert_eq!(loaded[0].panel_paths[1], PathBuf::from("/tmp"));
+        assert_eq!(loaded[0].panel_paths[2], PathBuf::from("/var"));
+        assert_eq!(loaded[0].active_panel, 0);
+        assert_eq!(loaded[0].panel_cursors[0], 5);
+        assert_eq!(loaded[1].panel_cursors[1], 3);
+    }
+
+    #[test]
+    fn layout_save_load() {
+        let db = Db::init_in_memory().unwrap();
+
+        assert_eq!(db.load_layout(), None);
+
+        db.save_layout("triple").unwrap();
+        assert_eq!(db.load_layout(), Some("triple".into()));
+
+        db.save_layout("single").unwrap();
+        assert_eq!(db.load_layout(), Some("single".into()));
     }
 
     #[test]
