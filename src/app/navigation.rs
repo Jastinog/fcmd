@@ -4,13 +4,13 @@ use crate::util::copy_to_clipboard;
 impl App {
     pub(super) fn focus_next(&mut self) {
         if self.tree_focused && self.show_tree {
-            // Tree → active panel
+            // Tree → first panel
             self.tree_focused = false;
         } else {
+            let max = self.layout.count().saturating_sub(1);
             let tab = self.tab_mut();
-            match tab.active {
-                PanelSide::Left => tab.active = PanelSide::Right,
-                PanelSide::Right => {} // already rightmost
+            if tab.active < max {
+                tab.active += 1;
             }
         }
     }
@@ -19,16 +19,11 @@ impl App {
         if self.tree_focused {
             return; // already leftmost
         }
-        let current_side = self.tab().active;
-        match current_side {
-            PanelSide::Right => {
-                self.tab_mut().active = PanelSide::Left;
-            }
-            PanelSide::Left => {
-                if self.show_tree {
-                    self.tree_focused = true;
-                }
-            }
+        let active = self.tab().active;
+        if active > 0 {
+            self.tab_mut().active = active - 1;
+        } else if self.show_tree {
+            self.tree_focused = true;
         }
     }
 
@@ -94,12 +89,14 @@ impl App {
         let hidden = !self.active_panel().show_hidden;
         {
             let tab = &mut self.tabs[self.active_tab];
-            tab.left.show_hidden = hidden;
-            tab.right.show_hidden = hidden;
+            for panel in tab.panels.iter_mut() {
+                panel.show_hidden = hidden;
+            }
         }
-        // Load both panels async
-        self.spawn_dir_load(PanelSide::Left, None);
-        self.spawn_dir_load(PanelSide::Right, None);
+        // Load all panels async
+        for i in 0..3 {
+            self.spawn_dir_load(i, None);
+        }
         self.tree_dirty = true;
         self.status_message = if hidden {
             "Hidden files: shown".into()
@@ -110,7 +107,9 @@ impl App {
 
     pub(super) fn toggle_tree(&mut self) {
         self.show_tree = !self.show_tree;
-        if !self.show_tree {
+        if self.show_tree {
+            self.tree_focused = true;
+        } else {
             self.tree_focused = false;
         }
     }
@@ -147,10 +146,10 @@ impl App {
     }
 
     pub(super) fn refresh_current_panel(&mut self) {
-        let side = self.tab().active;
-        self.spawn_dir_load(side, None);
+        let idx = self.tab().active;
+        self.spawn_dir_load(idx, None);
         self.tree_dirty = true;
-        self.git_checked_dirs = [None, None]; // force re-fetch
+        self.git_checked_dirs = [None, None, None]; // force re-fetch
         self.refresh_git_status();
     }
 
@@ -218,10 +217,10 @@ impl App {
             _ => return,
         };
         let new_path = entry.path.clone();
-        let side = self.tab().active;
+        let idx = self.tab().active;
         self.active_panel_mut().navigate_to(new_path);
         self.apply_dir_sort_no_reload();
-        self.spawn_dir_load(side, None);
+        self.spawn_dir_load(idx, None);
     }
 
     /// Go to parent directory on the active panel (async).
@@ -235,10 +234,10 @@ impl App {
             .path
             .file_name()
             .map(|n| n.to_string_lossy().into_owned());
-        let side = self.tab().active;
+        let idx = self.tab().active;
         self.active_panel_mut().navigate_to(parent);
         self.apply_dir_sort_no_reload();
-        self.spawn_dir_load(side, old_name);
+        self.spawn_dir_load(idx, old_name);
     }
 
     /// Go to home directory on the active panel (async).
@@ -246,10 +245,10 @@ impl App {
         let Some(home) = dirs::home_dir() else {
             return;
         };
-        let side = self.tab().active;
+        let idx = self.tab().active;
         self.active_panel_mut().navigate_to(home);
         self.apply_dir_sort_no_reload();
-        self.spawn_dir_load(side, None);
+        self.spawn_dir_load(idx, None);
     }
 
     /// Apply dir sort preference without reloading entries (used before async load).
@@ -303,6 +302,12 @@ impl App {
         });
     }
 
+    pub(super) fn set_layout(&mut self, layout: PanelLayout) {
+        self.layout = layout;
+        self.tab_mut().clamp_active(layout);
+        self.status_message = format!("Layout: {}", layout.label());
+    }
+
     pub fn which_key_hints(&self) -> Option<&[(&str, &str)]> {
         const LEADER_HINTS: &[(&str, &str)] = &[
             ("", "Toggle"),
@@ -312,6 +317,7 @@ impl App {
             ("", "Actions"),
             ("s", "sort"),
             ("d", "dir sizes"),
+            ("w", "layout"),
             ("", "Select"),
             ("a", "select all"),
             ("n", "unselect"),
@@ -335,6 +341,11 @@ impl App {
         const DELETE_HINTS: &[(&str, &str)] = &[("d", "trash"), ("D", "permanent")];
         const CHANGE_HINTS: &[(&str, &str)] = &[("p", "permissions"), ("o", "owner")];
         const MARK_HINTS: &[(&str, &str)] = &[("a-z", "go to mark")];
+        const LAYOUT_HINTS: &[(&str, &str)] = &[
+            ("1", "single"),
+            ("2", "dual"),
+            ("3", "triple"),
+        ];
         let pending = self.pending_key?;
         let time = self.pending_key_time?;
         if time.elapsed() < std::time::Duration::from_millis(400) {
@@ -348,6 +359,7 @@ impl App {
             'd' => Some(DELETE_HINTS),
             'c' => Some(CHANGE_HINTS),
             '\'' => Some(MARK_HINTS),
+            'w' => Some(LAYOUT_HINTS),
             _ => None,
         }
     }
