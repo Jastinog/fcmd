@@ -50,14 +50,31 @@ impl App {
                 }
             }
 
-            // Enter directory in active panel
-            KeyCode::Enter | KeyCode::Char('l') | KeyCode::Right => {
+            // Enter: always navigate panel
+            KeyCode::Enter => {
                 self.tree_enter_selected();
             }
 
-            // Go to parent node in tree
+            // l/Right: expand collapsed dir, otherwise navigate panel
+            KeyCode::Char('l') | KeyCode::Right => {
+                if let Some(line) = self.tree_data.get(self.tree_selected) {
+                    if line.is_dir && !line.is_expanded {
+                        self.tree_toggle_expand(&line.path.clone());
+                    } else {
+                        self.tree_enter_selected();
+                    }
+                }
+            }
+
+            // h/Left: collapse expanded dir, otherwise go to parent node
             KeyCode::Char('h') | KeyCode::Left => {
-                self.tree_go_parent();
+                if let Some(line) = self.tree_data.get(self.tree_selected) {
+                    if line.is_dir && line.is_expanded && line.depth > 0 {
+                        self.tree_toggle_collapse(&line.path.clone());
+                    } else {
+                        self.tree_go_parent();
+                    }
+                }
             }
 
             // Exit tree focus
@@ -91,6 +108,8 @@ impl App {
                 if self.active_panel().path == path {
                     return;
                 }
+                // Ensure navigated dir is not collapsed so its contents show
+                self.tree_collapsed.remove(&path);
                 self.active_panel_mut().navigate_to(path);
                 self.apply_dir_sort_no_reload();
                 self.spawn_dir_load(side, None);
@@ -103,6 +122,18 @@ impl App {
                 self.spawn_rebuild_tree();
             }
         }
+    }
+
+    fn tree_toggle_expand(&mut self, path: &std::path::Path) {
+        self.tree_collapsed.remove(path);
+        self.tree_expanded.insert(path.to_path_buf());
+        self.spawn_rebuild_tree();
+    }
+
+    fn tree_toggle_collapse(&mut self, path: &std::path::Path) {
+        self.tree_expanded.remove(path);
+        self.tree_collapsed.insert(path.to_path_buf());
+        self.spawn_rebuild_tree();
     }
 
     fn tree_go_parent(&mut self) {
@@ -139,11 +170,19 @@ impl App {
             }
         }
         let start_dir = self.start_dir.clone();
+        let collapsed = self.tree_collapsed.clone();
+        let expanded = self.tree_expanded.clone();
         let (tx, rx) = tokio::sync::oneshot::channel();
         self.tree_load_rx = Some(rx);
 
         tokio::task::spawn_blocking(move || {
-            let data = crate::tree::build_tree(&start_dir, &current, show_hidden);
+            let data = crate::tree::build_tree(
+                &start_dir,
+                &current,
+                show_hidden,
+                &collapsed,
+                &expanded,
+            );
             let _ = tx.send(super::TreeLoadResult {
                 start_dir,
                 current_path: current,

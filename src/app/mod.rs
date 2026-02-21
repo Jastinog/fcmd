@@ -56,52 +56,78 @@ pub enum Mode {
 }
 
 #[derive(PartialEq, Eq, Clone, Copy)]
-pub enum PanelSide {
-    Left,
-    Right,
+pub enum PanelLayout {
+    Single,
+    Dual,
+    Triple,
+}
+
+impl PanelLayout {
+    pub fn count(self) -> usize {
+        match self {
+            PanelLayout::Single => 1,
+            PanelLayout::Dual => 2,
+            PanelLayout::Triple => 3,
+        }
+    }
+
+    pub fn label(self) -> &'static str {
+        match self {
+            PanelLayout::Single => "single",
+            PanelLayout::Dual => "dual",
+            PanelLayout::Triple => "triple",
+        }
+    }
+
+    pub fn from_label(s: &str) -> Option<PanelLayout> {
+        match s {
+            "single" => Some(PanelLayout::Single),
+            "dual" => Some(PanelLayout::Dual),
+            "triple" => Some(PanelLayout::Triple),
+            _ => None,
+        }
+    }
 }
 
 pub struct Tab {
-    pub left: Panel,
-    pub right: Panel,
-    pub active: PanelSide,
+    pub panels: Vec<Panel>,
+    pub active: usize,
 }
 
 impl Tab {
     pub fn new(path: PathBuf) -> std::io::Result<Self> {
         Ok(Tab {
-            left: Panel::new(path.clone())?,
-            right: Panel::new(path)?,
-            active: PanelSide::Left,
+            panels: vec![
+                Panel::new(path.clone())?,
+                Panel::new(path.clone())?,
+                Panel::new(path)?,
+            ],
+            active: 0,
         })
     }
 
     pub fn active_panel(&self) -> &Panel {
-        match self.active {
-            PanelSide::Left => &self.left,
-            PanelSide::Right => &self.right,
-        }
+        &self.panels[self.active]
     }
 
     pub fn active_panel_mut(&mut self) -> &mut Panel {
-        match self.active {
-            PanelSide::Left => &mut self.left,
-            PanelSide::Right => &mut self.right,
-        }
+        &mut self.panels[self.active]
     }
 
-    pub fn inactive_panel_path(&self) -> PathBuf {
-        match self.active {
-            PanelSide::Left => self.right.path.clone(),
-            PanelSide::Right => self.left.path.clone(),
-        }
+    pub fn inactive_panel_path(&self, layout: PanelLayout) -> PathBuf {
+        let next = (self.active + 1) % layout.count();
+        self.panels[next].path.clone()
     }
 
-    pub fn switch_panel(&mut self) {
-        self.active = match self.active {
-            PanelSide::Left => PanelSide::Right,
-            PanelSide::Right => PanelSide::Left,
-        };
+    pub fn cycle_panel(&mut self, layout: PanelLayout) {
+        let count = layout.count();
+        self.active = (self.active + 1) % count;
+    }
+
+    pub fn clamp_active(&mut self, layout: PanelLayout) {
+        if self.active >= layout.count() {
+            self.active = 0;
+        }
     }
 }
 
@@ -129,6 +155,8 @@ pub struct App {
     pub marks: HashMap<char, PathBuf>,
     // Find
     pub find_state: Option<FindState>,
+    // Layout
+    pub layout: PanelLayout,
     // Preview
     pub preview_mode: bool,
     pub preview: Option<Preview>,
@@ -147,6 +175,8 @@ pub struct App {
     pub tree_scroll: usize,
     pub start_dir: PathBuf,
     pub tree_data: Vec<crate::tree::TreeLine>,
+    pub tree_collapsed: HashSet<PathBuf>,
+    pub tree_expanded: HashSet<PathBuf>,
     // Visual marks (persistent colored dots, level 1-3)
     pub visual_marks: HashMap<PathBuf, u8>,
     // Database
@@ -186,10 +216,10 @@ pub struct App {
     pub info_lines: Vec<(String, String)>,
     pub info_scroll: usize,
     pub(super) info_du_rx: Option<tokio::sync::oneshot::Receiver<(u64, usize, usize)>>,
-    // Git status (tracked for both panels)
+    // Git status (tracked for panels)
     pub git_statuses: HashMap<PathBuf, char>,
-    pub(super) git_roots: [Option<PathBuf>; 2],
-    pub(super) git_checked_dirs: [Option<PathBuf>; 2],
+    pub(super) git_roots: [Option<PathBuf>; 3],
+    pub(super) git_checked_dirs: [Option<PathBuf>; 3],
     pub(super) git_progress: Option<GitProgress>,
     // Delete progress
     pub delete_progress: Option<DeleteProgress>,
@@ -237,47 +267,41 @@ impl App {
         };
 
         // Restore session from DB
-        let (tabs, active_tab) = if let Some(ref db) = db {
+        let (tabs, active_tab, saved_layout) = if let Some(ref db) = db {
+            let layout = db.load_layout();
             match db.load_session() {
                 Ok((saved, at)) if !saved.is_empty() => {
                     let mut tabs = Vec::new();
                     for st in &saved {
-                        let left_path = if st.left_path.is_dir() {
-                            st.left_path.clone()
-                        } else {
-                            cwd.clone()
-                        };
-                        let right_path = if st.right_path.is_dir() {
-                            st.right_path.clone()
-                        } else {
-                            cwd.clone()
-                        };
+                        let paths: Vec<PathBuf> = st.panel_paths.iter().map(|p| {
+                            if p.is_dir() { p.clone() } else { cwd.clone() }
+                        }).collect();
                         let mut tab = Tab {
-                            left: Panel::new(left_path)?,
-                            right: Panel::new(right_path)?,
-                            active: if st.active_side == "right" {
-                                PanelSide::Right
-                            } else {
-                                PanelSide::Left
-                            },
+                            panels: vec![
+                                Panel::new(paths.first().cloned().unwrap_or_else(|| cwd.clone()))?,
+                                Panel::new(paths.get(1).cloned().unwrap_or_else(|| cwd.clone()))?,
+                                Panel::new(paths.get(2).cloned().unwrap_or_else(|| cwd.clone()))?,
+                            ],
+                            active: st.active_panel.min(2),
                         };
-                        let _ = tab.left.load_dir();
-                        let _ = tab.right.load_dir();
-                        tab.left.selected =
-                            st.left_cursor.min(tab.left.entries.len().saturating_sub(1));
-                        tab.right.selected = st
-                            .right_cursor
-                            .min(tab.right.entries.len().saturating_sub(1));
+                        for (i, panel) in tab.panels.iter_mut().enumerate() {
+                            let _ = panel.load_dir();
+                            let cursor = st.panel_cursors.get(i).copied().unwrap_or(0);
+                            panel.selected = cursor.min(panel.entries.len().saturating_sub(1));
+                        }
                         tabs.push(tab);
                     }
                     let at = at.min(tabs.len().saturating_sub(1));
-                    (tabs, at)
+                    (tabs, at, layout)
                 }
-                _ => (vec![Tab::new(cwd.clone())?], 0),
+                _ => (vec![Tab::new(cwd.clone())?], 0, layout),
             }
         } else {
-            (vec![Tab::new(cwd.clone())?], 0)
+            (vec![Tab::new(cwd.clone())?], 0, None)
         };
+        let layout = saved_layout
+            .and_then(|s| PanelLayout::from_label(&s))
+            .unwrap_or(PanelLayout::Dual);
 
         Theme::ensure_builtin_themes();
         let saved_theme_name = db.as_ref().and_then(|d| d.load_theme());
@@ -313,6 +337,7 @@ impl App {
             search_saved_cursor: 0,
             marks: HashMap::new(),
             find_state: None,
+            layout,
             preview_mode: false,
             preview: None,
             preview_path: None,
@@ -327,6 +352,8 @@ impl App {
             tree_scroll: 0,
             start_dir: cwd,
             tree_data: Vec::new(),
+            tree_collapsed: HashSet::new(),
+            tree_expanded: HashSet::new(),
             visual_marks,
             dir_sorts,
             db,
@@ -356,8 +383,8 @@ impl App {
             info_scroll: 0,
             info_du_rx: None,
             git_statuses: HashMap::new(),
-            git_roots: [None, None],
-            git_checked_dirs: [None, None],
+            git_roots: [None, None, None],
+            git_checked_dirs: [None, None, None],
             git_progress: None,
             delete_progress: None,
             dir_load_tx,
@@ -374,7 +401,7 @@ impl App {
         app.refresh_git_status();
         // Apply saved sort preferences to restored panels
         for tab in &mut app.tabs {
-            for panel in [&mut tab.left, &mut tab.right] {
+            for panel in tab.panels.iter_mut() {
                 if let Some(&(mode, rev)) = app.dir_sorts.get(&panel.path)
                     && (panel.sort_mode != mode || panel.sort_reverse != rev)
                 {
@@ -393,30 +420,25 @@ impl App {
             .tabs
             .iter()
             .map(|t| crate::db::SavedTab {
-                left_path: t.left.path.clone(),
-                right_path: t.right.path.clone(),
-                active_side: match t.active {
-                    PanelSide::Left => "left".into(),
-                    PanelSide::Right => "right".into(),
-                },
-                left_cursor: t.left.selected,
-                right_cursor: t.right.selected,
+                panel_paths: t.panels.iter().map(|p| p.path.clone()).collect(),
+                panel_cursors: t.panels.iter().map(|p| p.selected).collect(),
+                active_panel: t.active,
             })
             .collect();
         if let Err(e) = db.save_session(&tabs, self.active_tab) {
             eprintln!("Warning: failed to save session: {e}");
         }
+        if let Err(e) = db.save_layout(self.layout.label()) {
+            eprintln!("Warning: failed to save layout: {e}");
+        }
     }
 
-    /// Spawn an async directory load for the given panel side.
+    /// Spawn an async directory load for the given panel index.
     /// Entries stream in batches, then a sorted final result is sent.
     /// `select_name` optionally re-selects an entry by name after loading.
-    pub fn spawn_dir_load(&mut self, side: PanelSide, select_name: Option<String>) {
+    pub fn spawn_dir_load(&mut self, panel_idx: usize, select_name: Option<String>) {
         let tab = &mut self.tabs[self.active_tab];
-        let panel = match side {
-            PanelSide::Left => &mut tab.left,
-            PanelSide::Right => &mut tab.right,
-        };
+        let panel = &mut tab.panels[panel_idx];
         let path = panel.path.clone();
         let show_hidden = panel.show_hidden;
         let sort_mode = panel.sort_mode;
@@ -434,7 +456,7 @@ impl App {
                     sort_mode,
                     sort_reverse,
                     dir_sizes,
-                    panel_side: side,
+                    panel_idx,
                     tab_index,
                     select_name,
                 },
@@ -447,7 +469,7 @@ impl App {
     pub fn handle_dir_load_msg(&mut self, msg: DirLoadMsg) {
         match msg {
             DirLoadMsg::Batch {
-                panel_side,
+                panel_idx,
                 tab_index,
                 path,
                 entries,
@@ -456,17 +478,17 @@ impl App {
                     return;
                 }
                 let tab = &mut self.tabs[tab_index];
-                let panel = match panel_side {
-                    PanelSide::Left => &mut tab.left,
-                    PanelSide::Right => &mut tab.right,
-                };
+                if panel_idx >= tab.panels.len() {
+                    return;
+                }
+                let panel = &mut tab.panels[panel_idx];
                 if panel.path != path {
                     return;
                 }
                 panel.append_entries(entries);
             }
             DirLoadMsg::Finished {
-                panel_side,
+                panel_idx,
                 tab_index,
                 path,
                 entries,
@@ -476,10 +498,10 @@ impl App {
                     return;
                 }
                 let tab = &mut self.tabs[tab_index];
-                let panel = match panel_side {
-                    PanelSide::Left => &mut tab.left,
-                    PanelSide::Right => &mut tab.right,
-                };
+                if panel_idx >= tab.panels.len() {
+                    return;
+                }
+                let panel = &mut tab.panels[panel_idx];
                 if panel.path != path {
                     return;
                 }
@@ -686,7 +708,7 @@ impl App {
     }
 
     fn inactive_panel_path(&self) -> PathBuf {
-        self.tab().inactive_panel_path()
+        self.tab().inactive_panel_path(self.layout)
     }
 
     pub fn handle_key(&mut self, key: KeyEvent) {

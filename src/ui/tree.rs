@@ -44,7 +44,7 @@ pub(super) fn render_tree(f: &mut Frame, app: &App, area: Rect) {
             let icon = if line.depth == 0 {
                 " "
             } else if line.is_dir {
-                if line.is_current || line.is_on_path {
+                if line.is_expanded {
                     "󰝰 "
                 } else {
                     "\u{f07b} "

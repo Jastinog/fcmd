@@ -1,3 +1,4 @@
+use std::collections::HashSet;
 use std::fs;
 use std::path::{Component, Path, PathBuf};
 
@@ -8,12 +9,19 @@ pub struct TreeLine {
     pub is_dir: bool,
     pub is_current: bool,
     pub is_on_path: bool,
+    pub is_expanded: bool,
     pub depth: usize,
 }
 
 /// Build a flat list of tree lines from `root` down to `current`,
-/// expanding only directories along the path.
-pub fn build_tree(root: &Path, current: &Path, show_hidden: bool) -> Vec<TreeLine> {
+/// expanding directories along the path and any manually expanded dirs.
+pub fn build_tree(
+    root: &Path,
+    current: &Path,
+    show_hidden: bool,
+    collapsed: &HashSet<PathBuf>,
+    expanded: &HashSet<PathBuf>,
+) -> Vec<TreeLine> {
     let mut lines = Vec::new();
 
     let root_name = root
@@ -30,6 +38,7 @@ pub fn build_tree(root: &Path, current: &Path, show_hidden: bool) -> Vec<TreeLin
         is_dir: true,
         is_current: is_root_current,
         is_on_path: true,
+        is_expanded: true,
         depth: 0,
     });
 
@@ -47,7 +56,15 @@ pub fn build_tree(root: &Path, current: &Path, show_hidden: bool) -> Vec<TreeLin
         Err(_) => return lines,
     };
 
-    expand_dir(root, &rel_components, &mut lines, &[], show_hidden);
+    expand_dir(
+        root,
+        &rel_components,
+        &mut lines,
+        &[],
+        show_hidden,
+        collapsed,
+        expanded,
+    );
 
     lines
 }
@@ -58,6 +75,8 @@ fn expand_dir(
     lines: &mut Vec<TreeLine>,
     connector_state: &[bool],
     show_hidden: bool,
+    collapsed: &HashSet<PathBuf>,
+    expanded: &HashSet<PathBuf>,
 ) {
     let mut subdirs: Vec<(String, PathBuf, bool)> = Vec::new(); // (name, path, is_symlink)
     let mut files: Vec<(String, PathBuf)> = Vec::new();
@@ -98,6 +117,9 @@ fn expand_dir(
         let is_last = idx == total;
         let on_path = target.map(|t| t == name).unwrap_or(false);
         let is_cur = on_path && path_ahead.len() == 1;
+        let manually_expanded = expanded.contains(path.as_path());
+        let is_collapsed = collapsed.contains(path.as_path());
+        let should_expand = !is_collapsed && (on_path || manually_expanded);
 
         let prefix = make_prefix(connector_state, is_last);
 
@@ -108,17 +130,34 @@ fn expand_dir(
             is_dir: true,
             is_current: is_cur,
             is_on_path: on_path,
+            is_expanded: should_expand,
             depth: connector_state.len() + 1,
         });
 
-        // Expand on-path dirs, but skip symlinks to prevent cycles
-        if on_path && !is_symlink {
+        // Expand dirs that should be expanded, but skip symlinks to prevent cycles
+        if should_expand && !is_symlink {
             let mut next_connectors = connector_state.to_vec();
             next_connectors.push(!is_last);
-            if path_ahead.len() > 1 {
-                expand_dir(path, &path_ahead[1..], lines, &next_connectors, show_hidden);
+            if on_path && path_ahead.len() > 1 {
+                expand_dir(
+                    path,
+                    &path_ahead[1..],
+                    lines,
+                    &next_connectors,
+                    show_hidden,
+                    collapsed,
+                    expanded,
+                );
             } else {
-                expand_dir(path, &[], lines, &next_connectors, show_hidden);
+                expand_dir(
+                    path,
+                    &[],
+                    lines,
+                    &next_connectors,
+                    show_hidden,
+                    collapsed,
+                    expanded,
+                );
             }
         }
     }
@@ -135,6 +174,7 @@ fn expand_dir(
             is_dir: false,
             is_current: false,
             is_on_path: false,
+            is_expanded: false,
             depth: connector_state.len() + 1,
         });
     }
