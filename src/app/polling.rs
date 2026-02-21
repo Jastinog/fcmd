@@ -5,7 +5,7 @@ impl App {
     pub fn poll_find(&mut self) {
         if let Some(ref mut fs) = self.find_state {
             fs.poll_entries();
-            fs.update_find_preview();
+            fs.update_find_preview(self.visible_height);
             fs.poll_find_preview();
         }
     }

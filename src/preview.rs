@@ -231,7 +231,7 @@ impl Preview {
         (first, total, pct)
     }
 
-    pub fn apply_highlighting(&mut self, path: &Path) {
+    pub fn apply_highlighting(&mut self, path: &Path, visible_lines: usize) {
         if self.is_binary || self.lines.is_empty() || self.lines.len() > HIGHLIGHT_MAX_LINES {
             return;
         }
@@ -245,9 +245,10 @@ impl Preview {
                 }
             }
         };
+        let limit = visible_lines.max(40);
         let mut h = syntect::easy::HighlightLines::new(syntax, &HIGHLIGHT_THEME);
-        let mut result = Vec::with_capacity(self.lines.len());
-        for line in &self.lines {
+        let mut result = Vec::with_capacity(limit.min(self.lines.len()));
+        for line in self.lines.iter().take(limit) {
             let regions = match h.highlight_line(line, &SYNTAX_SET) {
                 Ok(r) => r,
                 Err(_) => {

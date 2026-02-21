@@ -297,7 +297,7 @@ impl FindState {
         self.scroll = 0;
     }
 
-    pub fn update_find_preview(&mut self) {
+    pub fn update_find_preview(&mut self, visible_height: usize) {
         let current = self.selected_path().map(|p| p.to_path_buf());
         if current == self.find_preview_path {
             return;
@@ -308,9 +308,10 @@ impl FindState {
             let (tx, rx) = tokio::sync::oneshot::channel();
             self.find_preview_rx = Some(rx);
             let path = p.clone();
+            let vis = visible_height;
             tokio::task::spawn_blocking(move || {
                 let mut prev = crate::preview::Preview::load(&path);
-                prev.apply_highlighting(&path);
+                prev.apply_highlighting(&path, vis);
                 let _ = tx.send((path, prev));
             });
         } else {
