@@ -123,10 +123,6 @@ async fn run(
     let mut tick = tokio::time::interval(Duration::from_millis(50));
 
     loop {
-        if app.force_redraw {
-            terminal.clear()?;
-            app.force_redraw = false;
-        }
         terminal.draw(|f| ui::render(f, app))?;
 
         tokio::select! {

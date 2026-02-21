@@ -55,13 +55,6 @@ pub enum Mode {
     Info,
 }
 
-impl Mode {
-    /// Returns true for modes that render a popup overlay on top of the panels.
-    pub fn is_overlay(self) -> bool {
-        !matches!(self, Mode::Normal | Mode::Visual | Mode::Select | Mode::Command)
-    }
-}
-
 #[derive(PartialEq, Eq, Clone, Copy)]
 pub enum PanelSide {
     Left,
@@ -119,7 +112,6 @@ pub struct App {
     pub command_input: String,
     pub rename_input: String,
     pub should_quit: bool,
-    pub force_redraw: bool,
     pub open_editor: Option<PathBuf>,
     pub status_message: String,
     pub pending_key: Option<char>,
@@ -307,7 +299,6 @@ impl App {
             command_input: String::new(),
             rename_input: String::new(),
             should_quit: false,
-            force_redraw: false,
             open_editor: None,
             status_message: String::new(),
             pending_key: None,
@@ -702,7 +693,6 @@ impl App {
 
     pub fn handle_key(&mut self, key: KeyEvent) {
         self.status_message.clear();
-        let was_overlay = self.mode.is_overlay();
 
         match self.mode {
             Mode::Normal => self.handle_normal(key),
@@ -725,11 +715,6 @@ impl App {
             Mode::Chmod => self.handle_chmod(key),
             Mode::Chown => self.handle_chown(key),
             Mode::Info => self.handle_info(key),
-        }
-
-        // Force full terminal redraw when leaving an overlay popup
-        if was_overlay && !self.mode.is_overlay() {
-            self.force_redraw = true;
         }
 
         self.update_preview();
