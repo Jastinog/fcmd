@@ -96,13 +96,10 @@ impl App {
             let tab = &mut self.tabs[self.active_tab];
             tab.left.show_hidden = hidden;
             tab.right.show_hidden = hidden;
-            // Load inactive panel synchronously
-            let _ = tab.right.load_dir_with_sizes(&self.dir_sizes);
-            let _ = tab.left.load_dir_with_sizes(&self.dir_sizes);
         }
-        // Load active panel async (overwrites sync load above for the active side)
-        let side = self.tab().active;
-        self.spawn_dir_load(side, None);
+        // Load both panels async
+        self.spawn_dir_load(PanelSide::Left, None);
+        self.spawn_dir_load(PanelSide::Right, None);
         self.tree_dirty = true;
         self.status_message = if hidden {
             "Hidden files: shown".into()

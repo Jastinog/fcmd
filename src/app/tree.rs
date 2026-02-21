@@ -90,19 +90,13 @@ impl App {
                 self.active_panel_mut().navigate_to(path);
                 self.apply_dir_sort_no_reload();
                 self.spawn_dir_load(side, None);
-                self.rebuild_tree();
-                if let Some(idx) = self.tree_data.iter().position(|l| l.is_current) {
-                    self.tree_selected = idx;
-                }
+                self.spawn_rebuild_tree();
             } else if let Some(parent) = path.parent() {
                 let file_name = path.file_name().map(|n| n.to_string_lossy().into_owned());
                 self.active_panel_mut().navigate_to(parent.to_path_buf());
                 self.apply_dir_sort_no_reload();
                 self.spawn_dir_load(side, file_name);
-                self.rebuild_tree();
-                if let Some(idx) = self.tree_data.iter().position(|l| l.is_current) {
-                    self.tree_selected = idx;
-                }
+                self.spawn_rebuild_tree();
             }
         }
     }
@@ -114,11 +108,8 @@ impl App {
                 if let Some(parent) = self.start_dir.parent().map(|p| p.to_path_buf()) {
                     let old_root = self.start_dir.clone();
                     self.start_dir = parent;
-                    self.rebuild_tree();
-                    // Position cursor on the old root node
-                    if let Some(idx) = self.tree_data.iter().position(|l| l.path == old_root) {
-                        self.tree_selected = idx;
-                    }
+                    self.tree_select_path = Some(old_root);
+                    self.spawn_rebuild_tree();
                 }
                 return;
             }
@@ -132,7 +123,7 @@ impl App {
         }
     }
 
-    pub fn rebuild_tree(&mut self) {
+    pub fn spawn_rebuild_tree(&mut self) {
         let current = self.active_panel().path.clone();
         let show_hidden = self.active_panel().show_hidden;
         // Auto-expand root upward if panel navigated above start_dir
@@ -143,8 +134,40 @@ impl App {
                 break;
             }
         }
-        self.tree_data = crate::tree::build_tree(&self.start_dir, &current, show_hidden);
-        if self.tree_data.is_empty() {
+        let start_dir = self.start_dir.clone();
+        let (tx, rx) = tokio::sync::oneshot::channel();
+        self.tree_load_rx = Some(rx);
+
+        tokio::task::spawn_blocking(move || {
+            let data = crate::tree::build_tree(&start_dir, &current, show_hidden);
+            let _ = tx.send(super::TreeLoadResult {
+                start_dir,
+                current_path: current,
+                data,
+            });
+        });
+    }
+
+    pub fn apply_tree_data(&mut self, result: super::TreeLoadResult) {
+        // Discard stale results if we've navigated away
+        if result.start_dir != self.start_dir {
+            return;
+        }
+        self.tree_data = result.data;
+        self.tree_dirty = false;
+        self.tree_last_path = Some(result.current_path);
+        self.tree_last_hidden = self.active_panel().show_hidden;
+
+        // Position cursor: use pending select path, then is_current, then clamp
+        if let Some(target) = self.tree_select_path.take()
+            && let Some(idx) = self.tree_data.iter().position(|l| l.path == target)
+        {
+            self.tree_selected = idx;
+            return;
+        }
+        if let Some(idx) = self.tree_data.iter().position(|l| l.is_current) {
+            self.tree_selected = idx;
+        } else if self.tree_data.is_empty() {
             self.tree_selected = 0;
         } else if self.tree_selected >= self.tree_data.len() {
             self.tree_selected = self.tree_data.len() - 1;

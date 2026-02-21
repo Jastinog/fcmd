@@ -104,18 +104,15 @@ pub fn render(f: &mut Frame, app: &mut App) {
         fs.adjust_scroll(results_h);
     }
 
-    // Rebuild tree data only when needed
+    // Trigger async tree rebuild when needed
     if app.show_tree {
         let current_path = app.tab().active_panel().path.clone();
         let current_hidden = app.tab().active_panel().show_hidden;
         let needs_rebuild = app.tree_dirty
             || app.tree_last_path.as_ref() != Some(&current_path)
             || app.tree_last_hidden != current_hidden;
-        if needs_rebuild {
-            app.rebuild_tree();
-            app.tree_last_path = Some(current_path);
-            app.tree_last_hidden = current_hidden;
-            app.tree_dirty = false;
+        if needs_rebuild && app.tree_load_rx.is_none() {
+            app.spawn_rebuild_tree();
         }
         // If not focused, auto-position cursor on current dir
         if !app.tree_focused

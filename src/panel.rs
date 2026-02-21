@@ -230,37 +230,6 @@ impl Panel {
         }
     }
 
-    pub fn enter_selected(&mut self) -> std::io::Result<bool> {
-        if let Some(entry) = self.entries.get(self.selected)
-            && entry.is_dir
-        {
-            let new_path = entry.path.clone();
-            self.navigate_to(new_path);
-            self.load_dir()?;
-            return Ok(true);
-        }
-        Ok(false)
-    }
-
-    pub fn go_parent(&mut self) -> std::io::Result<bool> {
-        if let Some(parent) = self.path.parent().map(|p| p.to_path_buf()) {
-            let old_name = self
-                .path
-                .file_name()
-                .map(|n| n.to_string_lossy().into_owned());
-            self.navigate_to(parent);
-            self.load_dir()?;
-
-            if let Some(name) = old_name
-                && let Some(pos) = self.entries.iter().position(|e| e.name == name)
-            {
-                self.selected = pos;
-            }
-            return Ok(true);
-        }
-        Ok(false)
-    }
-
     pub fn selected_entry(&self) -> Option<&FileEntry> {
         self.entries.get(self.selected)
     }

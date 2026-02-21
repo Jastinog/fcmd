@@ -148,21 +148,15 @@ impl App {
         }
     }
 
-    pub(super) fn reload_active_panel(&mut self) {
+    pub fn reload_active_panel(&mut self) {
         let side = self.tab().active;
         self.spawn_dir_load(side, None);
     }
 
     pub(super) fn refresh_panels(&mut self) {
-        // Load active panel async, inactive panel sync
-        let side = self.tab().active;
-        self.spawn_dir_load(side, None);
-        let tab = &mut self.tabs[self.active_tab];
-        let inactive = match side {
-            PanelSide::Left => &mut tab.right,
-            PanelSide::Right => &mut tab.left,
-        };
-        let _ = inactive.load_dir_with_sizes(&self.dir_sizes);
+        // Load both panels async
+        self.spawn_dir_load(PanelSide::Left, None);
+        self.spawn_dir_load(PanelSide::Right, None);
         self.tree_dirty = true;
         self.git_checked_dirs = [None, None]; // force re-fetch
         self.refresh_git_status();

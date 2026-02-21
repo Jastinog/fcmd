@@ -99,6 +99,20 @@ pub struct PreviewLoadResult {
     pub preview: Preview,
 }
 
+pub struct TreeLoadResult {
+    pub start_dir: PathBuf,
+    pub current_path: PathBuf,
+    pub data: Vec<crate::tree::TreeLine>,
+}
+
+pub struct ChownLoadResult {
+    pub users: Vec<(String, u32)>,
+    pub groups: Vec<(String, u32)>,
+    pub current_uid: u32,
+    pub current_gid: u32,
+    pub paths: Vec<PathBuf>,
+}
+
 #[derive(PartialEq, Eq, Clone, Copy)]
 pub enum Mode {
     Normal,
@@ -237,6 +251,7 @@ pub struct App {
     pub tree_dirty: bool,
     pub tree_last_path: Option<PathBuf>,
     pub tree_last_hidden: bool,
+    pub(super) tree_select_path: Option<PathBuf>,
     // Theme
     pub theme: Theme,
     pub theme_list: Vec<String>,
@@ -269,10 +284,17 @@ pub struct App {
     // Delete progress
     pub delete_progress: Option<DeleteProgress>,
     // Async dir loading (streaming batches + sorted final result)
-    pub dir_load_rx: Option<tokio::sync::mpsc::Receiver<DirLoadMsg>>,
+    pub(super) dir_load_tx: tokio::sync::mpsc::Sender<DirLoadMsg>,
+    pub dir_load_rx: tokio::sync::mpsc::Receiver<DirLoadMsg>,
     // Async preview loading
     pub preview_load_rx: Option<tokio::sync::oneshot::Receiver<PreviewLoadResult>>,
     pub file_preview_rx: Option<tokio::sync::oneshot::Receiver<PreviewLoadResult>>,
+    // Async tree loading
+    pub tree_load_rx: Option<tokio::sync::oneshot::Receiver<TreeLoadResult>>,
+    // Async info metadata loading
+    pub info_load_rx: Option<tokio::sync::oneshot::Receiver<Vec<(String, String)>>>,
+    // Async chown picker loading
+    pub chown_load_rx: Option<tokio::sync::oneshot::Receiver<ChownLoadResult>>,
 }
 
 impl App {
@@ -352,6 +374,8 @@ impl App {
             list.iter().position(|n| n == &name)
         });
 
+        let (dir_load_tx, dir_load_rx) = tokio::sync::mpsc::channel(64);
+
         let mut app = App {
             tabs,
             active_tab,
@@ -398,6 +422,7 @@ impl App {
             tree_dirty: true,
             tree_last_path: None,
             tree_last_hidden: false,
+            tree_select_path: None,
             theme,
             theme_list: Vec::new(),
             theme_index,
@@ -420,9 +445,13 @@ impl App {
             git_checked_dirs: [None, None],
             git_progress: None,
             delete_progress: None,
-            dir_load_rx: None,
+            dir_load_tx,
+            dir_load_rx,
             preview_load_rx: None,
             file_preview_rx: None,
+            tree_load_rx: None,
+            info_load_rx: None,
+            chown_load_rx: None,
         };
         app.refresh_git_status();
         // Apply saved sort preferences to restored panels
@@ -479,9 +508,7 @@ impl App {
         let dir_sizes = self.dir_sizes.clone();
         let tab_index = self.active_tab;
 
-        let (tx, rx) = tokio::sync::mpsc::channel(16);
-        // Drop old receiver (cancels stale load)
-        self.dir_load_rx = Some(rx);
+        let tx = self.dir_load_tx.clone();
 
         tokio::task::spawn_blocking(move || {
             panel::stream_dir_entries(

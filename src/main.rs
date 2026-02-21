@@ -91,7 +91,7 @@ fn open_in_editor(
     match result {
         Ok(status) if status.success() => {
             // Refresh panel in case the file was modified
-            let _ = app.active_panel_mut().load_dir();
+            app.reload_active_panel();
         }
         Ok(status) => {
             app.status_message = format!("{editor} exited with {status}");
@@ -112,21 +112,6 @@ async fn recv_or_pend<T>(rx: &mut Option<tokio::sync::oneshot::Receiver<T>>) -> 
             *rx = None;
             val
         }
-        None => std::future::pending().await,
-    }
-}
-
-/// Helper: await a value from an Option<mpsc::Receiver>, or pend forever if None.
-async fn recv_mpsc_or_pend<T>(rx: &mut Option<tokio::sync::mpsc::Receiver<T>>) -> T {
-    match rx {
-        Some(r) => match r.recv().await {
-            Some(val) => val,
-            None => {
-                // Channel closed
-                *rx = None;
-                std::future::pending().await
-            }
-        },
         None => std::future::pending().await,
     }
 }
@@ -164,7 +149,7 @@ async fn run(
                 app.poll_git();
                 app.poll_delete();
             }
-            msg = recv_mpsc_or_pend(&mut app.dir_load_rx) => {
+            Some(msg) = app.dir_load_rx.recv() => {
                 app.handle_dir_load_msg(msg);
             }
             result = recv_or_pend(&mut app.preview_load_rx) => {
@@ -172,6 +157,15 @@ async fn run(
             }
             result = recv_or_pend(&mut app.file_preview_rx) => {
                 app.apply_file_preview_load(result);
+            }
+            result = recv_or_pend(&mut app.tree_load_rx) => {
+                app.apply_tree_data(result);
+            }
+            result = recv_or_pend(&mut app.info_load_rx) => {
+                app.apply_info_load(result);
+            }
+            result = recv_or_pend(&mut app.chown_load_rx) => {
+                app.apply_chown_load(result);
             }
         }
 

@@ -47,30 +47,67 @@ impl App {
             return;
         }
 
-        let (current_uid, current_gid) = read_uid_gid(&paths[0]).unwrap_or((0, 0));
-
-        let mut users = list_system_users();
-        let mut groups = list_system_groups();
-
-        // Sort: regular users first (no _ prefix), then system users
-        users.sort_by(|a, b| {
-            let a_sys = a.0.starts_with('_');
-            let b_sys = b.0.starts_with('_');
-            a_sys.cmp(&b_sys).then(a.0.cmp(&b.0))
+        // Show picker immediately with empty lists (loading state)
+        self.chown_picker = Some(ChownPicker {
+            users: Vec::new(),
+            groups: Vec::new(),
+            user_cursor: 0,
+            group_cursor: 0,
+            user_scroll: 0,
+            group_scroll: 0,
+            column: 0,
+            paths: paths.clone(),
+            current_uid: None,
+            current_gid: None,
         });
-        groups.sort_by(|a, b| {
-            let a_sys = a.0.starts_with('_');
-            let b_sys = b.0.starts_with('_');
-            a_sys.cmp(&b_sys).then(a.0.cmp(&b.0))
-        });
+        self.mode = Mode::Chown;
 
-        let user_cursor = users
+        // Spawn user/group enumeration in background
+        let first_path = paths[0].clone();
+        let (tx, rx) = tokio::sync::oneshot::channel();
+        self.chown_load_rx = Some(rx);
+
+        tokio::task::spawn_blocking(move || {
+            let (current_uid, current_gid) = read_uid_gid(&first_path).unwrap_or((0, 0));
+
+            let mut users = list_system_users();
+            let mut groups = list_system_groups();
+
+            // Sort: regular users first (no _ prefix), then system users
+            users.sort_by(|a, b| {
+                let a_sys = a.0.starts_with('_');
+                let b_sys = b.0.starts_with('_');
+                a_sys.cmp(&b_sys).then(a.0.cmp(&b.0))
+            });
+            groups.sort_by(|a, b| {
+                let a_sys = a.0.starts_with('_');
+                let b_sys = b.0.starts_with('_');
+                a_sys.cmp(&b_sys).then(a.0.cmp(&b.0))
+            });
+
+            let _ = tx.send(super::ChownLoadResult {
+                users,
+                groups,
+                current_uid,
+                current_gid,
+                paths,
+            });
+        });
+    }
+
+    pub fn apply_chown_load(&mut self, result: super::ChownLoadResult) {
+        if self.mode != Mode::Chown {
+            return;
+        }
+        let user_cursor = result
+            .users
             .iter()
-            .position(|(_, uid)| *uid == current_uid)
+            .position(|(_, uid)| *uid == result.current_uid)
             .unwrap_or(0);
-        let group_cursor = groups
+        let group_cursor = result
+            .groups
             .iter()
-            .position(|(_, gid)| *gid == current_gid)
+            .position(|(_, gid)| *gid == result.current_gid)
             .unwrap_or(0);
 
         let list_h = ChownPicker::list_height(self.visible_height);
@@ -78,18 +115,17 @@ impl App {
         let group_scroll = group_cursor.saturating_sub(list_h / 2);
 
         self.chown_picker = Some(ChownPicker {
-            users,
-            groups,
+            users: result.users,
+            groups: result.groups,
             user_cursor,
             group_cursor,
             user_scroll,
             group_scroll,
             column: 0,
-            paths,
-            current_uid: Some(current_uid),
-            current_gid: Some(current_gid),
+            paths: result.paths,
+            current_uid: Some(result.current_uid),
+            current_gid: Some(result.current_gid),
         });
-        self.mode = Mode::Chown;
     }
 
     pub(super) fn handle_chmod(&mut self, key: KeyEvent) {

@@ -75,16 +75,12 @@ impl App {
 
             KeyCode::Char('l') | KeyCode::Right | KeyCode::Enter => {
                 self.exit_visual();
-                if let Err(e) = self.active_panel_mut().enter_selected() {
-                    self.status_message = format!("Error: {e}");
-                }
+                self.enter_dir_async();
             }
 
             KeyCode::Char('h') | KeyCode::Left | KeyCode::Backspace => {
                 self.exit_visual();
-                if let Err(e) = self.active_panel_mut().go_parent() {
-                    self.status_message = format!("Error: {e}");
-                }
+                self.go_parent_async();
             }
 
             KeyCode::Char('v') | KeyCode::Char('V') | KeyCode::Esc => self.exit_visual(),
