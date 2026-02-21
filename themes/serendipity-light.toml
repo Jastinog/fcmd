@@ -1,0 +1,24 @@
+# Serendipity Light — soft purple-accented light theme
+# github.com/wicked-labs/wicked-backgrounds
+
+bg = "#FDFDFE"
+bg_light = "#F2F1F4"
+fg = "#575279"
+fg_dim = "#9893A5"
+
+red = "#D0679D"
+green = "#6AAEAA"
+yellow = "#CEA253"
+blue = "#6C6FD4"
+magenta = "#D0679D"
+cyan = "#6AAEAA"
+orange = "#C18B55"
+
+border_active = "blue"
+border_inactive = "#D4D2DA"
+status_bg = "#E8E6EE"
+cursor_line = "#EEECF2"
+
+dir_color = "blue"
+symlink_color = "cyan"
+file_color = "fg"

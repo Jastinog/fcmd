@@ -1,0 +1,24 @@
+# Melange Light — warm earthy light theme
+# github.com/savq/melange-nvim
+
+bg = "#F4F0ED"
+bg_light = "#E9E1DB"
+fg = "#54433A"
+fg_dim = "#A18E7A"
+
+red = "#B65C60"
+green = "#857E4B"
+yellow = "#A06D00"
+blue = "#567B94"
+magenta = "#906287"
+cyan = "#588B7E"
+orange = "#B25A1E"
+
+border_active = "blue"
+border_inactive = "#C8BFB5"
+status_bg = "#DDD5CD"
+cursor_line = "#ECE6E0"
+
+dir_color = "blue"
+symlink_color = "cyan"
+file_color = "fg"

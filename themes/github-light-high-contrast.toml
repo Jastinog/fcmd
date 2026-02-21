@@ -1,0 +1,24 @@
+# GitHub Light High Contrast — maximum readability
+# primer.style
+
+bg = "#FFFFFF"
+bg_light = "#F0F0F0"
+fg = "#0E1116"
+fg_dim = "#66707B"
+
+red = "#A0111F"
+green = "#024C1A"
+yellow = "#3D2E00"
+blue = "#0349B4"
+magenta = "#622CBC"
+cyan = "#1B7C83"
+orange = "#953800"
+
+border_active = "blue"
+border_inactive = "#B0B8C1"
+status_bg = "#D8DDE3"
+cursor_line = "#DBE9F5"
+
+dir_color = "blue"
+symlink_color = "cyan"
+file_color = "fg"

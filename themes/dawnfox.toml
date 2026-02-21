@@ -1,0 +1,24 @@
+# Dawnfox — nightfox family warm light theme
+# github.com/EdenEast/nightfox.nvim
+
+bg = "#EBE5DF"
+bg_light = "#DED6CE"
+fg = "#575279"
+fg_dim = "#A8A3B3"
+
+red = "#B4637A"
+green = "#618774"
+yellow = "#EA9D34"
+blue = "#286983"
+magenta = "#907AA9"
+cyan = "#56949F"
+orange = "#D7827E"
+
+border_active = "blue"
+border_inactive = "#C8C0B8"
+status_bg = "#D8D0C8"
+cursor_line = "#E0DAD3"
+
+dir_color = "blue"
+symlink_color = "cyan"
+file_color = "fg"

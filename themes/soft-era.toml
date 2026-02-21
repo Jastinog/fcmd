@@ -1,0 +1,24 @@
+# Soft Era — dreamy pastel light theme
+# github.com/soft-aesthetic/soft-era-vs-code
+
+bg = "#F9F5F5"
+bg_light = "#EDECEC"
+fg = "#585C7B"
+fg_dim = "#A4A3B0"
+
+red = "#B45BCF"
+green = "#59B59F"
+yellow = "#D48B6A"
+blue = "#7A90D4"
+magenta = "#C47FD5"
+cyan = "#67B8C4"
+orange = "#CC8B6A"
+
+border_active = "magenta"
+border_inactive = "#D8D4D4"
+status_bg = "#EAEAEA"
+cursor_line = "#F0ECEC"
+
+dir_color = "blue"
+symlink_color = "cyan"
+file_color = "fg"

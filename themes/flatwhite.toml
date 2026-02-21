@@ -1,0 +1,24 @@
+# Flatwhite — warm cream light theme
+# github.com/biletskyy/flatwhite-syntax
+
+bg = "#F7F3EE"
+bg_light = "#EBE6DF"
+fg = "#605A52"
+fg_dim = "#B9B0A5"
+
+red = "#D73737"
+green = "#60AC39"
+yellow = "#AE9513"
+blue = "#3B8BBA"
+magenta = "#A660D1"
+cyan = "#3DBAA2"
+orange = "#D4762E"
+
+border_active = "blue"
+border_inactive = "#CCC6BF"
+status_bg = "#E0DAD3"
+cursor_line = "#EDEBE6"
+
+dir_color = "blue"
+symlink_color = "cyan"
+file_color = "fg"

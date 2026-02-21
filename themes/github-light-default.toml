@@ -1,0 +1,24 @@
+# GitHub Light Default — GitHub's modern default light
+# primer.style
+
+bg = "#FFFFFF"
+bg_light = "#F6F8FA"
+fg = "#1F2328"
+fg_dim = "#656D76"
+
+red = "#CF222E"
+green = "#1A7F37"
+yellow = "#9A6700"
+blue = "#0969DA"
+magenta = "#8250DF"
+cyan = "#1B7C83"
+orange = "#BC4C00"
+
+border_active = "blue"
+border_inactive = "#D0D7DE"
+status_bg = "#E8ECF0"
+cursor_line = "#DDF4FF"
+
+dir_color = "blue"
+symlink_color = "cyan"
+file_color = "fg"

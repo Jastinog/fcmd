@@ -1,0 +1,24 @@
+# Base16 Default Light — Chris Kempson's base16 light palette
+# github.com/chriskempson/base16
+
+bg = "#F8F8F8"
+bg_light = "#E8E8E8"
+fg = "#181818"
+fg_dim = "#B8B8B8"
+
+red = "#AB4642"
+green = "#A1B56C"
+yellow = "#F7CA88"
+blue = "#7CAFC2"
+magenta = "#BA8BAF"
+cyan = "#86C1B9"
+orange = "#DC9656"
+
+border_active = "blue"
+border_inactive = "#C8C8C8"
+status_bg = "#D8D8D8"
+cursor_line = "#E8E8E8"
+
+dir_color = "blue"
+symlink_color = "cyan"
+file_color = "fg"

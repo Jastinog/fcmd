@@ -1,0 +1,24 @@
+# Cosmic Latte — the color of the universe
+# Named after the average color of the universe (#FFF8E7)
+
+bg = "#FFF8E7"
+bg_light = "#F0EADB"
+fg = "#3B3228"
+fg_dim = "#9C9481"
+
+red = "#CB4B16"
+green = "#718C00"
+yellow = "#B58900"
+blue = "#268BD2"
+magenta = "#D33682"
+cyan = "#2AA198"
+orange = "#CB6500"
+
+border_active = "blue"
+border_inactive = "#CEC6B5"
+status_bg = "#E5DDD0"
+cursor_line = "#F0EAD8"
+
+dir_color = "blue"
+symlink_color = "cyan"
+file_color = "fg"

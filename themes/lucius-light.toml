@@ -1,0 +1,24 @@
+# Lucius Light — classic Vim light colorscheme
+# github.com/jonathanfilip/vim-lucius
+
+bg = "#EEEEEE"
+bg_light = "#D7D7D7"
+fg = "#444444"
+fg_dim = "#808080"
+
+red = "#AF0000"
+green = "#008700"
+yellow = "#875F00"
+blue = "#005FAF"
+magenta = "#AF00AF"
+cyan = "#008787"
+orange = "#D75F00"
+
+border_active = "blue"
+border_inactive = "#B8B8B8"
+status_bg = "#CCCCCC"
+cursor_line = "#DFDFDF"
+
+dir_color = "blue"
+symlink_color = "cyan"
+file_color = "fg"

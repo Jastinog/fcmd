@@ -1,0 +1,24 @@
+# Dayfox — nightfox family crisp light theme
+# github.com/EdenEast/nightfox.nvim
+
+bg = "#F6F2EE"
+bg_light = "#E8E0D8"
+fg = "#3D2B5A"
+fg_dim = "#A098A0"
+
+red = "#A5222F"
+green = "#396847"
+yellow = "#AC5402"
+blue = "#2848A9"
+magenta = "#6E33CE"
+cyan = "#287980"
+orange = "#B86E28"
+
+border_active = "blue"
+border_inactive = "#CCC4BC"
+status_bg = "#DED6CE"
+cursor_line = "#ECE6DF"
+
+dir_color = "blue"
+symlink_color = "cyan"
+file_color = "fg"

@@ -1,0 +1,24 @@
+# Oxocarbon Light — IBM Carbon Design light variant
+# github.com/nyoom-engineering/oxocarbon.nvim
+
+bg = "#FFFFFF"
+bg_light = "#F2F4F8"
+fg = "#161616"
+fg_dim = "#8D8D8D"
+
+red = "#DA1E28"
+green = "#198038"
+yellow = "#F1C21B"
+blue = "#0F62FE"
+magenta = "#8A3FFC"
+cyan = "#1192E8"
+orange = "#FF832B"
+
+border_active = "blue"
+border_inactive = "#D0D0D0"
+status_bg = "#E0E0E0"
+cursor_line = "#E8ECF4"
+
+dir_color = "blue"
+symlink_color = "cyan"
+file_color = "fg"

@@ -1,0 +1,24 @@
+# Summerfruit Light — vibrant Base16 light theme
+# chriskempson/base16
+
+bg = "#FFFFFF"
+bg_light = "#E0E0E0"
+fg = "#151515"
+fg_dim = "#B8B8B8"
+
+red = "#FF0086"
+green = "#00C918"
+yellow = "#ABA800"
+blue = "#3777E6"
+magenta = "#AD00A1"
+cyan = "#1FAAAA"
+orange = "#FD8900"
+
+border_active = "blue"
+border_inactive = "#C8C8C8"
+status_bg = "#D0D0D0"
+cursor_line = "#E8E8E8"
+
+dir_color = "blue"
+symlink_color = "cyan"
+file_color = "fg"

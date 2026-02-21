@@ -1,0 +1,24 @@
+# Spacemacs Light — Emacs Spacemacs light theme
+# github.com/nashamri/spacemacs-theme
+
+bg = "#FAF7EE"
+bg_light = "#EFEAE1"
+fg = "#655370"
+fg_dim = "#A49DA5"
+
+red = "#F2241F"
+green = "#67B11D"
+yellow = "#B1951D"
+blue = "#4F97D7"
+magenta = "#A31DB1"
+cyan = "#2D9574"
+orange = "#E18500"
+
+border_active = "blue"
+border_inactive = "#D3CFC6"
+status_bg = "#E5E1D8"
+cursor_line = "#F0EDE4"
+
+dir_color = "blue"
+symlink_color = "cyan"
+file_color = "fg"

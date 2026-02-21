@@ -1,0 +1,24 @@
+# Edge Light — clean modern light theme
+# github.com/sainnhe/edge
+
+bg = "#FAFAFA"
+bg_light = "#EAEAEA"
+fg = "#4B4B4B"
+fg_dim = "#9E9E9E"
+
+red = "#DB7070"
+green = "#7DA869"
+yellow = "#D69822"
+blue = "#6587BF"
+magenta = "#B870CE"
+cyan = "#509C93"
+orange = "#D48D52"
+
+border_active = "blue"
+border_inactive = "#D4D4D4"
+status_bg = "#E8E8E8"
+cursor_line = "#EFEFEF"
+
+dir_color = "blue"
+symlink_color = "cyan"
+file_color = "fg"
