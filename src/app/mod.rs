@@ -417,9 +417,6 @@ impl App {
             PanelSide::Left => &mut tab.left,
             PanelSide::Right => &mut tab.right,
         };
-        panel.loading = true;
-        panel.loading_since = Some(Instant::now());
-
         let path = panel.path.clone();
         let show_hidden = panel.show_hidden;
         let sort_mode = panel.sort_mode;

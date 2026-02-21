@@ -30,29 +30,14 @@ pub(super) fn render_panel(
     };
 
     let path_str = panel.path.to_string_lossy();
-    let show_loading = panel.loading
-        && panel
-            .loading_since
-            .is_some_and(|t| t.elapsed() >= std::time::Duration::from_millis(150));
-    let loading_suffix = if show_loading {
-        let count = panel.entries.len();
-        if count > 0 {
-            format!(" [Loading... {count}]")
-        } else {
-            " [Loading...]".to_string()
-        }
-    } else {
-        String::new()
-    };
-    let full_title = format!("{path_str}{loading_suffix}");
     let max_title = area.width.saturating_sub(4) as usize;
-    let title_chars: Vec<char> = full_title.chars().collect();
+    let title_chars: Vec<char> = path_str.chars().collect();
     let title = if title_chars.len() > max_title {
         let start = title_chars.len() - max_title + 1;
         let tail: String = title_chars[start..].iter().collect();
         format!("\u{2026}{tail}")
     } else {
-        full_title
+        path_str.into_owned()
     };
 
     let block = Block::default()
