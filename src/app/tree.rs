@@ -127,12 +127,14 @@ impl App {
     fn tree_toggle_expand(&mut self, path: &std::path::Path) {
         self.tree_collapsed.remove(path);
         self.tree_expanded.insert(path.to_path_buf());
+        self.tree_select_path = Some(path.to_path_buf());
         self.spawn_rebuild_tree();
     }
 
     fn tree_toggle_collapse(&mut self, path: &std::path::Path) {
         self.tree_expanded.remove(path);
         self.tree_collapsed.insert(path.to_path_buf());
+        self.tree_select_path = Some(path.to_path_buf());
         self.spawn_rebuild_tree();
     }
 
