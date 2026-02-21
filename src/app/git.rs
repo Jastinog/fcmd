@@ -1,5 +1,6 @@
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
+use std::time::Duration;
 
 use super::*;
 
@@ -37,8 +38,8 @@ impl App {
         self.git_checked_dirs = [Some(dirs[0].clone()), Some(dirs[1].clone())];
 
         let (tx, rx) = tokio::sync::oneshot::channel();
-        tokio::task::spawn_blocking(move || {
-            let (statuses, roots, checked_dirs) = compute_git_status(dirs);
+        tokio::spawn(async move {
+            let (statuses, roots, checked_dirs) = compute_git_status(dirs).await;
             let _ = tx.send(GitMsg::Finished {
                 statuses,
                 roots,
@@ -52,8 +53,10 @@ impl App {
 
 type GitResult = (HashMap<PathBuf, char>, [Option<PathBuf>; 2], [Option<PathBuf>; 2]);
 
-/// Compute git status for both panel directories (runs on any thread).
-fn compute_git_status(dirs: [PathBuf; 2]) -> GitResult {
+const GIT_TIMEOUT: Duration = Duration::from_secs(5);
+
+/// Compute git status for both panel directories.
+async fn compute_git_status(dirs: [PathBuf; 2]) -> GitResult {
     let mut statuses = HashMap::new();
     let mut roots: [Option<PathBuf>; 2] = [None, None];
     let checked_dirs = [Some(dirs[0].clone()), Some(dirs[1].clone())];
@@ -66,7 +69,8 @@ fn compute_git_status(dirs: [PathBuf; 2]) -> GitResult {
             &dir.to_string_lossy(),
             "rev-parse",
             "--show-toplevel",
-        ]);
+        ])
+        .await;
         let root = match root_output {
             Ok(o) if o.status.success() => {
                 PathBuf::from(String::from_utf8_lossy(&o.stdout).trim())
@@ -87,7 +91,8 @@ fn compute_git_status(dirs: [PathBuf; 2]) -> GitResult {
             "status",
             "--porcelain=v1",
             "-unormal",
-        ]);
+        ])
+        .await;
         let output = match status_output {
             Ok(o) if o.status.success() => o,
             _ => continue,
@@ -141,49 +146,20 @@ fn compute_git_status(dirs: [PathBuf; 2]) -> GitResult {
     (statuses, roots, checked_dirs)
 }
 
-use std::time::{Duration, Instant};
-
-const GIT_TIMEOUT: Duration = Duration::from_secs(5);
-
-fn run_git_command(args: &[&str]) -> std::io::Result<std::process::Output> {
-    let mut child = std::process::Command::new("git")
+async fn run_git_command(args: &[&str]) -> std::io::Result<std::process::Output> {
+    let child = tokio::process::Command::new("git")
         .args(args)
         .stdout(std::process::Stdio::piped())
         .stderr(std::process::Stdio::null())
+        .kill_on_drop(true)
         .spawn()?;
 
-    // Read stdout in a background thread to avoid pipe deadlock
-    let stdout_pipe = child.stdout.take();
-    let reader = std::thread::spawn(move || {
-        let mut buf = Vec::new();
-        if let Some(mut out) = stdout_pipe {
-            let _ = std::io::Read::read_to_end(&mut out, &mut buf);
-        }
-        buf
-    });
-
-    // Poll for completion with timeout
-    let deadline = Instant::now() + GIT_TIMEOUT;
-    loop {
-        match child.try_wait()? {
-            Some(status) => {
-                let stdout = reader.join().unwrap_or_default();
-                return Ok(std::process::Output {
-                    status,
-                    stdout,
-                    stderr: Vec::new(),
-                });
-            }
-            None if Instant::now() >= deadline => {
-                let _ = child.kill();
-                let _ = child.wait();
-                return Err(std::io::Error::new(
-                    std::io::ErrorKind::TimedOut,
-                    "git command timed out",
-                ));
-            }
-            None => std::thread::sleep(Duration::from_millis(50)),
-        }
+    match tokio::time::timeout(GIT_TIMEOUT, child.wait_with_output()).await {
+        Ok(result) => result,
+        Err(_) => Err(std::io::Error::new(
+            std::io::ErrorKind::TimedOut,
+            "git command timed out",
+        )),
     }
 }
 

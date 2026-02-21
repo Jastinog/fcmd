@@ -134,39 +134,36 @@ mod tests {
     }
 }
 
-pub fn copy_to_clipboard(text: &str) -> std::io::Result<()> {
-    use std::io::Write;
+pub async fn copy_to_clipboard(text: &str) -> std::io::Result<()> {
+    use tokio::io::AsyncWriteExt;
     let mut child = if cfg!(target_os = "macos") {
-        std::process::Command::new("pbcopy")
+        tokio::process::Command::new("pbcopy")
             .stdin(std::process::Stdio::piped())
+            .kill_on_drop(true)
             .spawn()?
     } else if std::env::var("WAYLAND_DISPLAY").is_ok() {
-        std::process::Command::new("wl-copy")
+        tokio::process::Command::new("wl-copy")
             .stdin(std::process::Stdio::piped())
+            .kill_on_drop(true)
             .spawn()?
     } else {
-        std::process::Command::new("xclip")
+        tokio::process::Command::new("xclip")
             .args(["-selection", "clipboard"])
             .stdin(std::process::Stdio::piped())
+            .kill_on_drop(true)
             .spawn()?
     };
     if let Some(ref mut stdin) = child.stdin.take() {
-        stdin.write_all(text.as_bytes())?;
+        stdin.write_all(text.as_bytes()).await?;
     }
-    // Poll with timeout to avoid hanging if clipboard tool is stuck
-    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(3);
-    loop {
-        match child.try_wait()? {
-            Some(_) => return Ok(()),
-            None if std::time::Instant::now() >= deadline => {
-                let _ = child.kill();
-                let _ = child.wait();
-                return Err(std::io::Error::new(
-                    std::io::ErrorKind::TimedOut,
-                    "clipboard command timed out",
-                ));
-            }
-            None => std::thread::sleep(std::time::Duration::from_millis(10)),
+    match tokio::time::timeout(std::time::Duration::from_secs(3), child.wait()).await {
+        Ok(result) => {
+            result?;
+            Ok(())
         }
+        Err(_) => Err(std::io::Error::new(
+            std::io::ErrorKind::TimedOut,
+            "clipboard command timed out",
+        )),
     }
 }

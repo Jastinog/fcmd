@@ -20,7 +20,7 @@ serde = { version = "1", features = ["derive"] }
 trash = "5"
 syntect = { version = "5", default-features = false, features = ["default-themes", "parsing", "regex-onig"] }
 two-face = { version = "0.4", default-features = false, features = ["syntect-onig"] }
-tokio = { version = "1", features = ["rt-multi-thread", "macros", "time", "sync"] }
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "time", "sync", "process", "io-util"] }
 futures = "0.3"
 
 [target.'cfg(unix)'.dependencies]

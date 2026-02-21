@@ -1,7 +1,6 @@
 use std::fs;
-use std::io::BufRead;
 use std::path::{Path, PathBuf};
-use std::process::{Command, Stdio};
+use std::process::Stdio;
 use std::time::Instant;
 
 const MAX_ENTRIES: usize = 5000;
@@ -44,7 +43,7 @@ pub struct FindState {
     pub loading: bool,
     pub scope: FindScope,
     base_dir: PathBuf,
-    search_child: Option<std::process::Child>,
+    search_task: Option<tokio::task::JoinHandle<()>>,
     pub find_preview: Option<crate::preview::Preview>,
     find_preview_path: Option<PathBuf>,
     find_preview_rx: Option<tokio::sync::oneshot::Receiver<(PathBuf, crate::preview::Preview)>>,
@@ -54,9 +53,8 @@ pub struct FindState {
 
 impl Drop for FindState {
     fn drop(&mut self) {
-        if let Some(ref mut child) = self.search_child {
-            let _ = child.kill();
-            let _ = child.wait();
+        if let Some(handle) = self.search_task.take() {
+            handle.abort();
         }
     }
 }
@@ -78,7 +76,7 @@ impl FindState {
             loading: true,
             scope: FindScope::Local,
             base_dir: base_dir.to_path_buf(),
-            search_child: None,
+            search_task: None,
             find_preview: None,
             find_preview_path: None,
             find_preview_rx: None,
@@ -98,7 +96,7 @@ impl FindState {
             loading: false,
             scope: FindScope::Global,
             base_dir: base_dir.to_path_buf(),
-            search_child: None,
+            search_task: None,
             find_preview: None,
             find_preview_path: None,
             find_preview_rx: None,
@@ -126,12 +124,10 @@ impl FindState {
             return;
         }
 
-        // Kill old search process
-        if let Some(ref mut child) = self.search_child {
-            let _ = child.kill();
-            let _ = child.wait();
+        // Abort old search task (kills child processes via kill_on_drop)
+        if let Some(handle) = self.search_task.take() {
+            handle.abort();
         }
-        self.search_child = None;
 
         // Clear state
         self.entries.clear();
@@ -154,27 +150,28 @@ impl FindState {
         let sanitized_pattern = format!("*{sanitized_query}*");
 
         // Try mdfind first (Spotlight), fall back to find from $HOME
-        let child_result = Command::new("mdfind")
+        let child_result = tokio::process::Command::new("mdfind")
             .args(["-name", &sanitized_query])
             .stdout(Stdio::piped())
             .stderr(Stdio::null())
+            .kill_on_drop(true)
             .spawn();
 
         let child_result = match child_result {
             Ok(child) => {
                 // If Spotlight is disabled, mdfind exits with empty output.
-                // The reader thread will detect 0 results and retry with find.
+                // The reader task will detect 0 results and retry with find.
                 Ok(child)
             }
             Err(_) => {
                 // mdfind not available, use find from $HOME.
-                // Use -- to prevent path from being interpreted as an option.
                 let home = std::env::var("HOME").unwrap_or_else(|_| "/".to_string());
-                Command::new("find")
+                tokio::process::Command::new("find")
                     .arg("--")
                     .args([&home, "-maxdepth", "6", "-iname", &sanitized_pattern])
                     .stdout(Stdio::piped())
                     .stderr(Stdio::null())
+                    .kill_on_drop(true)
                     .spawn()
             }
         };
@@ -184,30 +181,32 @@ impl FindState {
                 let Some(stdout) = child.stdout.take() else {
                     return;
                 };
-                self.search_child = Some(child);
                 self.rx = Some(rx);
                 self.loading = true;
                 self.search_started = Some(Instant::now());
 
-                tokio::task::spawn_blocking(move || {
-                    let count = global_search_read(stdout, &tx);
+                let handle = tokio::spawn(async move {
+                    let count = global_search_read(stdout, &tx).await;
+                    let _ = child.wait().await;
                     // If mdfind returned 0 results (Spotlight disabled), retry with find
                     if count == 0 {
                         let home = std::env::var("HOME").unwrap_or_else(|_| "/".to_string());
-                        if let Ok(mut child) = Command::new("find")
+                        if let Ok(mut find_child) = tokio::process::Command::new("find")
+                            .kill_on_drop(true)
                             .arg("--")
                             .args([&home, "-maxdepth", "6", "-iname", &sanitized_pattern])
                             .stdout(Stdio::piped())
                             .stderr(Stdio::null())
                             .spawn()
                         {
-                            if let Some(stdout) = child.stdout.take() {
-                                global_search_read(stdout, &tx);
+                            if let Some(stdout) = find_child.stdout.take() {
+                                global_search_read(stdout, &tx).await;
                             }
-                            let _ = child.wait();
+                            let _ = find_child.wait().await;
                         }
                     }
                 });
+                self.search_task = Some(handle);
             }
             Err(_) => {
                 self.loading = false;
@@ -399,10 +398,12 @@ fn abbreviate_home(path: &str) -> String {
     path.to_string()
 }
 
-fn global_search_read(stdout: std::process::ChildStdout, tx: &tokio::sync::mpsc::Sender<Entry>) -> usize {
-    let reader = std::io::BufReader::new(stdout);
+async fn global_search_read(stdout: tokio::process::ChildStdout, tx: &tokio::sync::mpsc::Sender<Entry>) -> usize {
+    use tokio::io::{AsyncBufReadExt, BufReader};
+    let reader = BufReader::new(stdout);
+    let mut lines = reader.lines();
     let mut count = 0;
-    for line in reader.lines().map_while(Result::ok) {
+    while let Ok(Some(line)) = lines.next_line().await {
         if count >= MDFIND_LIMIT {
             break;
         }
@@ -411,12 +412,13 @@ fn global_search_read(stdout: std::process::ChildStdout, tx: &tokio::sync::mpsc:
         let display = abbreviate_home(&line);
         let display_lower = display.to_lowercase();
         if tx
-            .blocking_send(Entry {
+            .send(Entry {
                 rel_path: display,
                 rel_path_lower: display_lower,
                 full_path: path,
                 is_dir,
             })
+            .await
             .is_err()
         {
             break;

@@ -281,8 +281,8 @@ impl App {
         let label = format!("Path: {path_str}");
         let (tx, rx) = tokio::sync::oneshot::channel();
         self.file_op_rx = Some(rx);
-        tokio::task::spawn_blocking(move || {
-            let ok = copy_to_clipboard(&path_str).is_ok();
+        tokio::spawn(async move {
+            let ok = copy_to_clipboard(&path_str).await.is_ok();
             let _ = tx.send(super::FileOpResult::Clipboard { label, ok });
         });
     }
@@ -295,8 +295,8 @@ impl App {
         let label = format!("Name: {name}");
         let (tx, rx) = tokio::sync::oneshot::channel();
         self.file_op_rx = Some(rx);
-        tokio::task::spawn_blocking(move || {
-            let ok = copy_to_clipboard(&name).is_ok();
+        tokio::spawn(async move {
+            let ok = copy_to_clipboard(&name).await.is_ok();
             let _ = tx.send(super::FileOpResult::Clipboard { label, ok });
         });
     }
