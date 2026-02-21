@@ -92,11 +92,17 @@ impl App {
 
     pub(super) fn toggle_hidden(&mut self) {
         let hidden = !self.active_panel().show_hidden;
-        let tab = &mut self.tabs[self.active_tab];
-        tab.left.show_hidden = hidden;
-        tab.right.show_hidden = hidden;
-        let _ = tab.left.load_dir_with_sizes(&self.dir_sizes);
-        let _ = tab.right.load_dir_with_sizes(&self.dir_sizes);
+        {
+            let tab = &mut self.tabs[self.active_tab];
+            tab.left.show_hidden = hidden;
+            tab.right.show_hidden = hidden;
+            // Load inactive panel synchronously
+            let _ = tab.right.load_dir_with_sizes(&self.dir_sizes);
+            let _ = tab.left.load_dir_with_sizes(&self.dir_sizes);
+        }
+        // Load active panel async (overwrites sync load above for the active side)
+        let side = self.tab().active;
+        self.spawn_dir_load(side, None);
         self.tree_dirty = true;
         self.status_message = if hidden {
             "Hidden files: shown".into()
@@ -143,33 +149,9 @@ impl App {
         }
     }
 
-    pub(super) fn apply_dir_sort(&mut self) {
-        let tab = &mut self.tabs[self.active_tab];
-        let panel = match tab.active {
-            PanelSide::Left => &mut tab.left,
-            PanelSide::Right => &mut tab.right,
-        };
-        let (new_mode, new_rev) = self
-            .dir_sorts
-            .get(&panel.path)
-            .copied()
-            .unwrap_or((SortMode::Name, false));
-        if panel.sort_mode != new_mode || panel.sort_reverse != new_rev {
-            panel.sort_mode = new_mode;
-            panel.sort_reverse = new_rev;
-            let _ = panel.load_dir_with_sizes(&self.dir_sizes);
-        }
-    }
-
     pub(super) fn refresh_current_panel(&mut self) {
-        let tab = &mut self.tabs[self.active_tab];
-        let panel = match tab.active {
-            PanelSide::Left => &mut tab.left,
-            PanelSide::Right => &mut tab.right,
-        };
-        if let Err(e) = panel.load_dir_with_sizes(&self.dir_sizes) {
-            self.status_message = format!("Refresh error: {e}");
-        }
+        let side = self.tab().active;
+        self.spawn_dir_load(side, None);
         self.tree_dirty = true;
         self.git_checked_dirs = [None, None]; // force re-fetch
         self.refresh_git_status();
@@ -189,11 +171,99 @@ impl App {
         }
 
         self.preview_path = current_path.clone();
-        self.preview = current_path.map(|p| {
-            let mut prev = Preview::load(&p);
-            prev.apply_highlighting(&p);
-            prev
+        if let Some(p) = current_path {
+            self.preview = Some(Preview::loading_placeholder(&p));
+            self.spawn_preview_load(p);
+        } else {
+            self.preview = None;
+        }
+    }
+
+    /// Spawn async preview load for the side panel preview.
+    fn spawn_preview_load(&mut self, path: PathBuf) {
+        let (tx, rx) = tokio::sync::oneshot::channel();
+        // Drop old receiver (cancels stale load)
+        self.preview_load_rx = Some(rx);
+
+        tokio::task::spawn_blocking(move || {
+            let mut preview = Preview::load(&path);
+            preview.apply_highlighting(&path);
+            let _ = tx.send(super::PreviewLoadResult {
+                path,
+                preview,
+            });
         });
+    }
+
+    /// Spawn async preview load for the file preview popup.
+    pub(super) fn spawn_file_preview_load(&mut self, path: PathBuf) {
+        let (tx, rx) = tokio::sync::oneshot::channel();
+        // Drop old receiver (cancels stale load)
+        self.file_preview_rx = Some(rx);
+
+        tokio::task::spawn_blocking(move || {
+            let mut preview = Preview::load(&path);
+            preview.apply_highlighting(&path);
+            let _ = tx.send(super::PreviewLoadResult {
+                path,
+                preview,
+            });
+        });
+    }
+
+    /// Enter selected directory on the active panel (async).
+    pub(super) fn enter_dir_async(&mut self) {
+        let panel = self.active_panel();
+        let entry = match panel.entries.get(panel.selected) {
+            Some(e) if e.is_dir => e,
+            _ => return,
+        };
+        let new_path = entry.path.clone();
+        let side = self.tab().active;
+        self.active_panel_mut().navigate_to(new_path);
+        self.apply_dir_sort_no_reload();
+        self.spawn_dir_load(side, None);
+    }
+
+    /// Go to parent directory on the active panel (async).
+    pub(super) fn go_parent_async(&mut self) {
+        let parent = match self.active_panel().path.parent().map(|p| p.to_path_buf()) {
+            Some(p) => p,
+            None => return,
+        };
+        let old_name = self
+            .active_panel()
+            .path
+            .file_name()
+            .map(|n| n.to_string_lossy().into_owned());
+        let side = self.tab().active;
+        self.active_panel_mut().navigate_to(parent);
+        self.apply_dir_sort_no_reload();
+        self.spawn_dir_load(side, old_name);
+    }
+
+    /// Go to home directory on the active panel (async).
+    pub(super) fn go_home_async(&mut self) {
+        let Some(home) = dirs::home_dir() else {
+            return;
+        };
+        let side = self.tab().active;
+        self.active_panel_mut().navigate_to(home);
+        self.apply_dir_sort_no_reload();
+        self.spawn_dir_load(side, None);
+    }
+
+    /// Apply dir sort preference without reloading entries (used before async load).
+    pub(super) fn apply_dir_sort_no_reload(&mut self) {
+        let path = self.active_panel().path.clone();
+        let (new_mode, new_rev) = self
+            .dir_sorts
+            .get(&path)
+            .copied()
+            .unwrap_or((SortMode::Name, false));
+        let panel = self.active_panel_mut();
+        panel.sort_mode = new_mode;
+        panel.sort_reverse = new_rev;
     }
 
     pub(super) fn request_open_editor(&mut self, path: PathBuf) {

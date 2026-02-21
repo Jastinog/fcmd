@@ -63,6 +63,7 @@ pub struct Panel {
     pub sort_mode: SortMode,
     pub sort_reverse: bool,
     pub show_hidden: bool,
+    pub loading: bool,
 }
 
 impl Panel {
@@ -77,6 +78,7 @@ impl Panel {
             sort_mode: SortMode::Name,
             sort_reverse: false,
             show_hidden: false,
+            loading: false,
         };
         panel.load_dir()?;
         Ok(panel)
@@ -259,14 +261,6 @@ impl Panel {
         Ok(false)
     }
 
-    pub fn go_home(&mut self) -> std::io::Result<()> {
-        if let Some(home) = home_dir() {
-            self.navigate_to(home);
-            self.load_dir()?;
-        }
-        Ok(())
-    }
-
     pub fn selected_entry(&self) -> Option<&FileEntry> {
         self.entries.get(self.selected)
     }
@@ -369,10 +363,128 @@ impl Panel {
             self.selected = self.entries.len() - 1;
         }
     }
+
+    /// Swap in entries loaded asynchronously, optionally re-selecting a named entry.
+    pub fn apply_entries(&mut self, entries: Vec<FileEntry>, select_name: Option<&str>) {
+        self.entries = entries;
+        self.loading = false;
+        if let Some(name) = select_name {
+            if let Some(pos) = self.entries.iter().position(|e| e.name == name) {
+                self.selected = pos;
+            } else {
+                self.clamp_selected();
+            }
+        } else {
+            self.clamp_selected();
+        }
+    }
 }
 
-fn home_dir() -> Option<PathBuf> {
-    dirs::home_dir()
+/// Load directory entries as a pure function (can run on any thread).
+pub fn load_dir_entries(
+    path: &Path,
+    show_hidden: bool,
+    sort_mode: SortMode,
+    sort_reverse: bool,
+    dir_sizes: &HashMap<PathBuf, u64>,
+) -> std::io::Result<Vec<FileEntry>> {
+    let mut entries = Vec::new();
+
+    if let Some(parent) = path.parent() {
+        entries.push(FileEntry {
+            name: "..".into(),
+            path: parent.to_path_buf(),
+            is_dir: true,
+            size: 0,
+            modified: None,
+            created: None,
+            is_symlink: false,
+        });
+    }
+
+    let mut dirs = Vec::new();
+    let mut files = Vec::new();
+
+    let read_dir = fs::read_dir(path)?;
+
+    for entry in read_dir.flatten() {
+        let metadata = match entry.metadata() {
+            Ok(m) => m,
+            Err(_) => continue,
+        };
+        let symlink_meta = entry.path().symlink_metadata().ok();
+        let is_symlink = symlink_meta.map(|m| m.is_symlink()).unwrap_or(false);
+
+        let file_entry = FileEntry {
+            name: entry.file_name().to_string_lossy().into(),
+            path: entry.path(),
+            is_dir: metadata.is_dir(),
+            size: metadata.len(),
+            modified: metadata.modified().ok(),
+            created: metadata.created().ok(),
+            is_symlink,
+        };
+
+        if !show_hidden && file_entry.name.starts_with('.') {
+            continue;
+        }
+
+        if file_entry.is_dir {
+            dirs.push(file_entry);
+        } else {
+            files.push(file_entry);
+        }
+    }
+
+    let sort_name = |v: &mut Vec<FileEntry>| {
+        v.sort_by_cached_key(|e| e.name.to_lowercase());
+    };
+    match sort_mode {
+        SortMode::Name => {
+            sort_name(&mut dirs);
+            sort_name(&mut files);
+        }
+        SortMode::Size => {
+            dirs.sort_by(|a, b| {
+                let sa = dir_sizes.get(&a.path).copied();
+                let sb = dir_sizes.get(&b.path).copied();
+                match (sa, sb) {
+                    (Some(sa), Some(sb)) => sa.cmp(&sb),
+                    (Some(_), None) => std::cmp::Ordering::Greater,
+                    (None, Some(_)) => std::cmp::Ordering::Less,
+                    (None, None) => std::cmp::Ordering::Equal,
+                }
+            });
+            files.sort_by(|a, b| a.size.cmp(&b.size));
+        }
+        SortMode::Modified => {
+            dirs.sort_by(|a, b| a.modified.cmp(&b.modified));
+            files.sort_by(|a, b| a.modified.cmp(&b.modified));
+        }
+        SortMode::Created => {
+            dirs.sort_by(|a, b| a.created.cmp(&b.created));
+            files.sort_by(|a, b| a.created.cmp(&b.created));
+        }
+        SortMode::Extension => {
+            sort_name(&mut dirs);
+            files.sort_by_cached_key(|e| {
+                let ext = Path::new(&e.name)
+                    .extension()
+                    .map(|x| x.to_string_lossy().to_lowercase())
+                    .unwrap_or_default();
+                (ext, e.name.to_lowercase())
+            });
+        }
+    }
+
+    if sort_reverse {
+        dirs.reverse();
+        files.reverse();
+    }
+
+    entries.extend(dirs);
+    entries.extend(files);
+    Ok(entries)
 }
 
 #[cfg(test)]
@@ -415,6 +527,7 @@ mod tests {
             sort_mode: SortMode::Name,
             sort_reverse: false,
             show_hidden: false,
+            loading: false,
         }
     }
 

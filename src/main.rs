@@ -2,12 +2,13 @@ use std::io;
 use std::time::Duration;
 
 use crossterm::{
-    event::{self, Event, KeyEventKind},
+    event::{Event, EventStream, KeyEventKind},
     execute,
     terminal::{
         self, EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode,
     },
 };
+use futures::StreamExt;
 use ratatui::{Terminal, backend::CrosstermBackend};
 
 mod app;
@@ -22,7 +23,8 @@ mod tree;
 mod ui;
 mod util;
 
-fn main() -> io::Result<()> {
+#[tokio::main]
+async fn main() -> io::Result<()> {
     // Restore terminal on panic
     let default_hook = std::panic::take_hook();
     std::panic::set_hook(Box::new(move |info| {
@@ -40,7 +42,7 @@ fn main() -> io::Result<()> {
 
     // Run app
     let mut app = app::App::new()?;
-    let result = run(&mut terminal, &mut app);
+    let result = run(&mut terminal, &mut app).await;
 
     // Restore terminal
     disable_raw_mode()?;
@@ -102,27 +104,60 @@ fn open_in_editor(
     Ok(())
 }
 
-fn run(
+/// Helper: await a value from an Option<oneshot::Receiver>, or pend forever if None.
+async fn recv_or_pend<T>(rx: &mut Option<tokio::sync::oneshot::Receiver<T>>) -> T {
+    match rx {
+        Some(r) => {
+            let val = r.await.unwrap();
+            *rx = None;
+            val
+        }
+        None => std::future::pending().await,
+    }
+}
+
+async fn run(
     terminal: &mut Terminal<CrosstermBackend<io::Stdout>>,
     app: &mut app::App,
 ) -> io::Result<()> {
+    let mut reader = EventStream::new();
+    let mut tick = tokio::time::interval(Duration::from_millis(50));
+
     loop {
+        if app.force_redraw {
+            terminal.clear()?;
+            app.force_redraw = false;
+        }
         terminal.draw(|f| ui::render(f, app))?;
 
-        if event::poll(Duration::from_millis(250))? {
-            match event::read()? {
-                Event::Key(key) if key.kind == KeyEventKind::Press => {
-                    app.handle_key(key);
+        tokio::select! {
+            maybe_event = reader.next() => {
+                match maybe_event {
+                    Some(Ok(Event::Key(key))) if key.kind == KeyEventKind::Press => {
+                        app.handle_key(key);
+                    }
+                    Some(Ok(_)) => {}
+                    Some(Err(_)) => {}
+                    None => break,
                 }
-                _ => {}
+            }
+            _ = tick.tick() => {
+                app.poll_progress();
+                app.poll_du();
+                app.poll_find();
+                app.poll_info_du();
+                app.poll_git();
+            }
+            result = recv_or_pend(&mut app.dir_load_rx) => {
+                app.apply_dir_load(result);
+            }
+            result = recv_or_pend(&mut app.preview_load_rx) => {
+                app.apply_preview_load(result);
+            }
+            result = recv_or_pend(&mut app.file_preview_rx) => {
+                app.apply_file_preview_load(result);
             }
         }
-
-        app.poll_progress();
-        app.poll_du();
-        app.poll_find();
-        app.poll_info_du();
-        app.poll_git();
 
         if let Some(path) = app.open_editor.take() {
             open_in_editor(terminal, app, &path)?;
@@ -133,4 +168,5 @@ fn run(
             return Ok(());
         }
     }
+    Ok(())
 }

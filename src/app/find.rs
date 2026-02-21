@@ -86,20 +86,16 @@ impl App {
 
         let Some(path) = target else { return };
 
+        let side = self.tab().active;
         if path.is_dir() {
-            let panel = self.active_panel_mut();
-            panel.navigate_to(path);
-            let _ = panel.load_dir();
-            self.apply_dir_sort();
+            self.active_panel_mut().navigate_to(path);
+            self.apply_dir_sort_no_reload();
+            self.spawn_dir_load(side, None);
         } else if let Some(parent) = path.parent() {
             let name = path.file_name().map(|n| n.to_string_lossy().into_owned());
-            let panel = self.active_panel_mut();
-            panel.navigate_to(parent.to_path_buf());
-            let _ = panel.load_dir();
-            self.apply_dir_sort();
-            if let Some(name) = name {
-                self.active_panel_mut().select_by_name(&name);
-            }
+            self.active_panel_mut().navigate_to(parent.to_path_buf());
+            self.apply_dir_sort_no_reload();
+            self.spawn_dir_load(side, name);
         }
     }
 }

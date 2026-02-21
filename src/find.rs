@@ -48,6 +48,7 @@ pub struct FindState {
     search_child: Option<std::process::Child>,
     pub find_preview: Option<crate::preview::Preview>,
     find_preview_path: Option<PathBuf>,
+    find_preview_rx: Option<mpsc::Receiver<(PathBuf, crate::preview::Preview)>>,
     pub search_started: Option<Instant>,
     pub tick: usize,
 }
@@ -81,6 +82,7 @@ impl FindState {
             search_child: None,
             find_preview: None,
             find_preview_path: None,
+            find_preview_rx: None,
             search_started: Some(Instant::now()),
             tick: 0,
         }
@@ -100,6 +102,7 @@ impl FindState {
             search_child: None,
             find_preview: None,
             find_preview_path: None,
+            find_preview_rx: None,
             search_started: None,
             tick: 0,
         }
@@ -302,11 +305,38 @@ impl FindState {
             return;
         }
         self.find_preview_path = current.clone();
-        self.find_preview = current.map(|p| {
-            let mut prev = crate::preview::Preview::load(&p);
-            prev.apply_highlighting(&p);
-            prev
-        });
+        if let Some(p) = current {
+            self.find_preview = Some(crate::preview::Preview::loading_placeholder(&p));
+            let (tx, rx) = std::sync::mpsc::channel();
+            self.find_preview_rx = Some(rx);
+            let path = p.clone();
+            std::thread::spawn(move || {
+                let mut prev = crate::preview::Preview::load(&path);
+                prev.apply_highlighting(&path);
+                let _ = tx.send((path, prev));
+            });
+        } else {
+            self.find_preview = None;
+        }
+    }
+
+    pub fn poll_find_preview(&mut self) {
+        let rx = match self.find_preview_rx.as_ref() {
+            Some(rx) => rx,
+            None => return,
+        };
+        match rx.try_recv() {
+            Ok((path, preview)) => {
+                if self.find_preview_path.as_ref() == Some(&path) {
+                    self.find_preview = Some(preview);
+                }
+                self.find_preview_rx = None;
+            }
+            Err(std::sync::mpsc::TryRecvError::Disconnected) => {
+                self.find_preview_rx = None;
+            }
+            Err(std::sync::mpsc::TryRecvError::Empty) => {}
+        }
     }
 
     pub fn move_up(&mut self) {

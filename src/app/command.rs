@@ -128,13 +128,10 @@ impl App {
                     self.active_panel().path.join(path_str)
                 };
                 if target.is_dir() {
-                    let panel = self.active_panel_mut();
-                    panel.navigate_to(target);
-                    if let Err(e) = panel.load_dir() {
-                        self.status_message = format!("cd: {e}");
-                    } else {
-                        self.apply_dir_sort();
-                    }
+                    let side = self.tab().active;
+                    self.active_panel_mut().navigate_to(target);
+                    self.apply_dir_sort_no_reload();
+                    self.spawn_dir_load(side, None);
                 } else {
                     self.status_message = format!("Not a directory: {path_str}");
                 }

@@ -7,7 +7,7 @@ pub(crate) use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
 pub(crate) use crate::find::{FindScope, FindState};
 pub(crate) use crate::ops::{self, DuMsg, ProgressMsg, Register, RegisterOp, UndoStack};
-pub(crate) use crate::panel::{Panel, SortMode};
+pub(crate) use crate::panel::{self, FileEntry, Panel, SortMode};
 pub(crate) use crate::preview::Preview;
 pub(crate) use crate::theme::Theme;
 
@@ -59,7 +59,20 @@ pub struct GitProgress {
     pub rx: mpsc::Receiver<GitMsg>,
 }
 
-#[derive(PartialEq, Eq)]
+pub struct DirLoadResult {
+    pub panel_side: PanelSide,
+    pub tab_index: usize,
+    pub path: PathBuf,
+    pub entries: Vec<FileEntry>,
+    pub select_name: Option<String>,
+}
+
+pub struct PreviewLoadResult {
+    pub path: PathBuf,
+    pub preview: Preview,
+}
+
+#[derive(PartialEq, Eq, Clone, Copy)]
 pub enum Mode {
     Normal,
     Visual,
@@ -81,6 +94,13 @@ pub enum Mode {
     Chmod,
     Chown,
     Info,
+}
+
+impl Mode {
+    /// Returns true for modes that render a popup overlay on top of the panels.
+    pub fn is_overlay(self) -> bool {
+        !matches!(self, Mode::Normal | Mode::Visual | Mode::Select | Mode::Command)
+    }
 }
 
 #[derive(PartialEq, Eq, Clone, Copy)]
@@ -140,6 +160,7 @@ pub struct App {
     pub command_input: String,
     pub rename_input: String,
     pub should_quit: bool,
+    pub force_redraw: bool,
     pub open_editor: Option<PathBuf>,
     pub status_message: String,
     pub pending_key: Option<char>,
@@ -218,6 +239,11 @@ pub struct App {
     pub(super) git_roots: [Option<PathBuf>; 2],
     pub(super) git_checked_dirs: [Option<PathBuf>; 2],
     pub(super) git_progress: Option<GitProgress>,
+    // Async dir loading
+    pub dir_load_rx: Option<tokio::sync::oneshot::Receiver<DirLoadResult>>,
+    // Async preview loading
+    pub preview_load_rx: Option<tokio::sync::oneshot::Receiver<PreviewLoadResult>>,
+    pub file_preview_rx: Option<tokio::sync::oneshot::Receiver<PreviewLoadResult>>,
 }
 
 impl App {
@@ -304,6 +330,7 @@ impl App {
             command_input: String::new(),
             rename_input: String::new(),
             should_quit: false,
+            force_redraw: false,
             open_editor: None,
             status_message: String::new(),
             pending_key: None,
@@ -363,6 +390,9 @@ impl App {
             git_roots: [None, None],
             git_checked_dirs: [None, None],
             git_progress: None,
+            dir_load_rx: None,
+            preview_load_rx: None,
+            file_preview_rx: None,
         };
         app.refresh_git_status();
         // Apply saved sort preferences to restored panels
@@ -401,6 +431,72 @@ impl App {
         }
     }
 
+    /// Spawn an async directory load for the given panel side.
+    /// `select_name` optionally re-selects an entry by name after loading.
+    pub fn spawn_dir_load(&mut self, side: PanelSide, select_name: Option<String>) {
+        let tab = &mut self.tabs[self.active_tab];
+        let panel = match side {
+            PanelSide::Left => &mut tab.left,
+            PanelSide::Right => &mut tab.right,
+        };
+        panel.loading = true;
+
+        let path = panel.path.clone();
+        let show_hidden = panel.show_hidden;
+        let sort_mode = panel.sort_mode;
+        let sort_reverse = panel.sort_reverse;
+        let dir_sizes = self.dir_sizes.clone();
+        let tab_index = self.active_tab;
+
+        let (tx, rx) = tokio::sync::oneshot::channel();
+        // Drop old receiver (cancels stale load)
+        self.dir_load_rx = Some(rx);
+
+        tokio::task::spawn_blocking(move || {
+            let entries = panel::load_dir_entries(&path, show_hidden, sort_mode, sort_reverse, &dir_sizes)
+                .unwrap_or_default();
+            let _ = tx.send(DirLoadResult {
+                panel_side: side,
+                tab_index,
+                path,
+                entries,
+                select_name,
+            });
+        });
+    }
+
+    /// Apply the results of an async directory load.
+    pub fn apply_dir_load(&mut self, result: DirLoadResult) {
+        if result.tab_index >= self.tabs.len() {
+            return;
+        }
+        let tab = &mut self.tabs[result.tab_index];
+        let panel = match result.panel_side {
+            PanelSide::Left => &mut tab.left,
+            PanelSide::Right => &mut tab.right,
+        };
+        // Only apply if the panel is still at the same path
+        if panel.path != result.path {
+            return;
+        }
+        panel.apply_entries(result.entries, result.select_name.as_deref());
+    }
+
+    /// Apply preview loaded asynchronously (side panel preview).
+    pub fn apply_preview_load(&mut self, result: PreviewLoadResult) {
+        // Only apply if still looking at the same path
+        if self.preview_path.as_ref() == Some(&result.path) {
+            self.preview = Some(result.preview);
+        }
+    }
+
+    /// Apply file preview loaded asynchronously (popup preview).
+    pub fn apply_file_preview_load(&mut self, result: PreviewLoadResult) {
+        if self.file_preview_path.as_ref() == Some(&result.path) {
+            self.file_preview = Some(result.preview);
+        }
+    }
+
     pub fn phantoms_for(&self, dir: &std::path::Path) -> &[PhantomEntry] {
         match &self.paste_progress {
             Some(p) if p.dst_dir == dir => &p.phantoms,
@@ -430,6 +526,7 @@ impl App {
 
     pub fn handle_key(&mut self, key: KeyEvent) {
         self.status_message.clear();
+        let was_overlay = self.mode.is_overlay();
 
         match self.mode {
             Mode::Normal => self.handle_normal(key),
@@ -452,6 +549,11 @@ impl App {
             Mode::Chmod => self.handle_chmod(key),
             Mode::Chown => self.handle_chown(key),
             Mode::Info => self.handle_info(key),
+        }
+
+        // Force full terminal redraw when leaving an overlay popup
+        if was_overlay && !self.mode.is_overlay() {
+            self.force_redraw = true;
         }
 
         self.update_preview();

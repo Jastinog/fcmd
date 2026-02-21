@@ -13,7 +13,7 @@ pub const HEX_DUMP_MAX: usize = 262_144; // 256 KB
 /// Skip syntax highlighting for files above this size (lines)
 const HIGHLIGHT_MAX_LINES: usize = 5_000;
 
-static SYNTAX_SET: LazyLock<SyntaxSet> = LazyLock::new(SyntaxSet::load_defaults_newlines);
+static SYNTAX_SET: LazyLock<SyntaxSet> = LazyLock::new(two_face::syntax::extra_newlines);
 static HIGHLIGHT_THEME: LazyLock<syntect::highlighting::Theme> = LazyLock::new(|| {
     let ts = ThemeSet::load_defaults();
     ts.themes["base16-ocean.dark"].clone()
@@ -35,6 +35,22 @@ pub struct Preview {
 }
 
 impl Preview {
+    pub fn loading_placeholder(path: &Path) -> Self {
+        let title = path
+            .file_name()
+            .map(|n| n.to_string_lossy().into_owned())
+            .unwrap_or_else(|| path.to_string_lossy().into_owned());
+        Preview {
+            lines: vec!["[Loading...]".into()],
+            scroll: 0,
+            title,
+            info: "loading".into(),
+            is_binary: false,
+            binary_size: 0,
+            styled_lines: None,
+        }
+    }
+
     pub fn load(path: &Path) -> Self {
         let title = path
             .file_name()
@@ -203,13 +219,31 @@ impl Preview {
         }
     }
 
+    /// For text previews: returns (first_visible_line, total_lines, percentage).
+    pub fn text_position(&self, visible: usize) -> (usize, usize, u8) {
+        if self.is_binary || self.lines.is_empty() {
+            return (0, 0, 0);
+        }
+        let first = self.scroll + 1;
+        let total = self.lines.len();
+        let last = (self.scroll + visible).min(total);
+        let pct = ((last as u64 * 100) / total as u64) as u8;
+        (first, total, pct)
+    }
+
     pub fn apply_highlighting(&mut self, path: &Path) {
         if self.is_binary || self.lines.is_empty() || self.lines.len() > HIGHLIGHT_MAX_LINES {
             return;
         }
         let syntax = match SYNTAX_SET.find_syntax_for_file(path) {
             Ok(Some(s)) => s,
-            _ => return,
+            _ => {
+                // Fallback: detect by first line content (shebangs, modelines, etc.)
+                match SYNTAX_SET.find_syntax_by_first_line(&self.lines[0]) {
+                    Some(s) => s,
+                    None => return,
+                }
+            }
         };
         let mut h = syntect::easy::HighlightLines::new(syntax, &HIGHLIGHT_THEME);
         let mut result = Vec::with_capacity(self.lines.len());

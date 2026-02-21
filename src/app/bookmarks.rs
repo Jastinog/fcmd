@@ -59,13 +59,10 @@ impl App {
         };
         self.mode = Mode::Normal;
         if path.is_dir() {
-            let panel = self.active_panel_mut();
-            panel.navigate_to(path);
-            if let Err(e) = panel.load_dir() {
-                self.status_message = format!("Bookmark error: {e}");
-            } else {
-                self.apply_dir_sort();
-            }
+            let side = self.tab().active;
+            self.active_panel_mut().navigate_to(path);
+            self.apply_dir_sort_no_reload();
+            self.spawn_dir_load(side, None);
         } else {
             self.status_message = "Bookmark directory no longer exists".into();
         }

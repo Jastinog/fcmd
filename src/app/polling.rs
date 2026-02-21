@@ -6,6 +6,7 @@ impl App {
         if let Some(ref mut fs) = self.find_state {
             fs.poll_entries();
             fs.update_find_preview();
+            fs.poll_find_preview();
         }
     }
 

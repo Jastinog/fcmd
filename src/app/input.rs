@@ -53,31 +53,20 @@ impl App {
                 if is_file && key.code == KeyCode::Enter {
                     if let Some(entry) = self.active_panel().selected_entry() {
                         let path = entry.path.clone();
-                        let mut p = Preview::load(&path);
-                        p.apply_highlighting(&path);
-                        self.file_preview = Some(p);
-                        self.file_preview_path = Some(path);
+                        self.file_preview_path = Some(path.clone());
+                        self.file_preview = Some(Preview::loading_placeholder(&path));
                         self.mode = Mode::Preview;
+                        self.spawn_file_preview_load(path);
                     }
-                } else if let Err(e) = self.active_panel_mut().enter_selected() {
-                    self.status_message = format!("Error: {e}");
                 } else {
-                    self.apply_dir_sort();
+                    self.enter_dir_async();
                 }
             }
             KeyCode::Char('h') | KeyCode::Left | KeyCode::Backspace | KeyCode::Char('-') => {
-                if let Err(e) = self.active_panel_mut().go_parent() {
-                    self.status_message = format!("Error: {e}");
-                } else {
-                    self.apply_dir_sort();
-                }
+                self.go_parent_async();
             }
             KeyCode::Char('~') => {
-                if let Err(e) = self.active_panel_mut().go_home() {
-                    self.status_message = format!("Error: {e}");
-                } else {
-                    self.apply_dir_sort();
-                }
+                self.go_home_async();
             }
             KeyCode::Tab => self.tab_mut().switch_panel(),
             KeyCode::Char('t') if ctrl => self.new_tab(),
