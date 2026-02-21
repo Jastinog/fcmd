@@ -178,18 +178,15 @@ impl App {
             }
 
             "theme" => match arg.filter(|a| !a.is_empty()) {
-                Some(name) => match Theme::load_by_name(name) {
-                    Some(t) => {
-                        self.theme = t;
-                        self.theme_list = Theme::list_available();
-                        self.theme_index = self.theme_list.iter().position(|n| n == name);
-                        if let Some(ref db) = self.db {
-                            let _ = db.save_theme(name);
-                        }
-                        self.status_message = format!("Theme: {name}");
-                    }
-                    None => self.status_message = format!("Theme not found: {name}"),
-                },
+                Some(name) => {
+                    let name = name.to_string();
+                    let (tx, rx) = tokio::sync::oneshot::channel();
+                    self.file_op_rx = Some(rx);
+                    tokio::task::spawn_blocking(move || {
+                        let theme = Theme::load_by_name(&name);
+                        let _ = tx.send(super::FileOpResult::ThemeLoad { name, theme });
+                    });
+                }
                 None => {
                     let themes = Theme::list_available();
                     if themes.is_empty() {

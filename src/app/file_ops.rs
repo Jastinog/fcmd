@@ -16,36 +16,45 @@ impl App {
     }
 
     pub(super) fn request_delete(&mut self) {
-        let paths = self.active_panel().targeted_paths();
+        let items = self.targeted_path_types();
         self.confirm_permanent = false;
-        self.request_delete_paths(paths);
+        self.request_delete_paths(items);
     }
 
     pub(super) fn request_permanent_delete(&mut self) {
-        let paths = self.active_panel().targeted_paths();
+        let items = self.targeted_path_types();
         self.confirm_permanent = true;
-        self.request_delete_paths(paths);
+        self.request_delete_paths(items);
     }
 
-    pub(super) fn request_delete_paths(&mut self, paths: Vec<std::path::PathBuf>) {
-        if paths.is_empty() {
+    pub(super) fn request_delete_paths(&mut self, items: Vec<(std::path::PathBuf, bool)>) {
+        if items.is_empty() {
             self.status_message = "Nothing to delete".into();
             return;
         }
-        self.confirm_paths = paths;
+        self.confirm_paths = items;
         self.confirm_scroll = 0;
         self.mode = Mode::Confirm;
     }
 
-    pub(super) fn request_permanent_delete_paths(&mut self, paths: Vec<std::path::PathBuf>) {
+    pub(super) fn request_permanent_delete_paths(&mut self, items: Vec<(std::path::PathBuf, bool)>) {
         self.confirm_permanent = true;
-        self.request_delete_paths(paths);
+        self.request_delete_paths(items);
+    }
+
+    pub(super) fn targeted_path_types(&self) -> Vec<(std::path::PathBuf, bool)> {
+        self.active_panel()
+            .targeted_register_entries()
+            .into_iter()
+            .map(|e| (e.path, e.is_dir))
+            .collect()
     }
 
     pub(super) fn execute_delete(&mut self) {
-        let paths = std::mem::take(&mut self.confirm_paths);
+        let items = std::mem::take(&mut self.confirm_paths);
         let permanent = self.confirm_permanent;
-        let total = paths.len();
+        let total = items.len();
+        let paths: Vec<PathBuf> = items.into_iter().map(|(p, _)| p).collect();
         let (tx, rx) = tokio::sync::mpsc::channel(64);
 
         tokio::task::spawn_blocking(move || {

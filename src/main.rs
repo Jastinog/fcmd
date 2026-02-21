@@ -173,6 +173,9 @@ async fn run(
             result = recv_or_pend(&mut app.file_op_rx) => {
                 app.apply_file_op(result);
             }
+            result = recv_or_pend(&mut app.theme_load_rx) => {
+                app.apply_theme_preview(result);
+            }
         }
 
         if let Some(path) = app.open_editor.take() {

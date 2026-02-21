@@ -650,12 +650,12 @@ pub(super) fn render_confirm_popup(f: &mut Frame, app: &App, area: Rect) {
     let scroll = app.confirm_scroll.min(n.saturating_sub(list_height.max(1)));
 
     let mut items: Vec<ListItem> = Vec::new();
-    for (i, path) in paths.iter().enumerate().skip(scroll).take(list_height) {
+    for (i, (path, is_dir)) in paths.iter().enumerate().skip(scroll).take(list_height) {
         let name = path
             .file_name()
             .map(|n| n.to_string_lossy().into_owned())
             .unwrap_or_default();
-        let is_dir = path.is_dir();
+        let is_dir = *is_dir;
         let icon = if is_dir { " " } else { " 󰈔 " };
         let icon_color = if is_dir { t.blue } else { t.fg_dim };
 

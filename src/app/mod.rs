@@ -161,6 +161,10 @@ pub enum FileOpResult {
         prefill: String,
         paths: Vec<PathBuf>,
     },
+    ThemeLoad {
+        name: String,
+        theme: Option<Theme>,
+    },
 }
 
 #[derive(PartialEq, Eq, Clone, Copy)]
@@ -259,7 +263,7 @@ pub struct App {
     pub visible_height: usize,
     pub register: Option<Register>,
     pub undo_stack: UndoStack,
-    pub confirm_paths: Vec<PathBuf>,
+    pub confirm_paths: Vec<(PathBuf, bool)>, // (path, is_dir)
     pub confirm_scroll: usize,
     pub confirm_permanent: bool,
     // Search
@@ -349,6 +353,8 @@ pub struct App {
     pub nav_check_rx: Option<tokio::sync::oneshot::Receiver<NavCheckResult>>,
     // Async file operations (mkdir, touch, rename, chmod, chown, undo)
     pub file_op_rx: Option<tokio::sync::oneshot::Receiver<FileOpResult>>,
+    // Async theme loading (for theme picker preview)
+    pub theme_load_rx: Option<tokio::sync::oneshot::Receiver<Option<Theme>>>,
 }
 
 impl App {
@@ -508,6 +514,7 @@ impl App {
             chown_load_rx: None,
             nav_check_rx: None,
             file_op_rx: None,
+            theme_load_rx: None,
         };
         app.refresh_git_status();
         // Apply saved sort preferences to restored panels
@@ -752,6 +759,25 @@ impl App {
                     self.mode = Mode::Chmod;
                 }
             }
+            FileOpResult::ThemeLoad { name, theme } => match theme {
+                Some(t) => {
+                    self.theme = t;
+                    self.theme_list = Theme::list_available();
+                    self.theme_index = self.theme_list.iter().position(|n| n == &name);
+                    if let Some(ref db) = self.db {
+                        let _ = db.save_theme(&name);
+                    }
+                    self.status_message = format!("Theme: {name}");
+                }
+                None => self.status_message = format!("Theme not found: {name}"),
+            },
+        }
+    }
+
+    /// Apply async theme preview load (for theme picker).
+    pub fn apply_theme_preview(&mut self, theme: Option<Theme>) {
+        if self.mode == Mode::ThemePicker {
+            self.theme_preview = theme;
         }
     }
 

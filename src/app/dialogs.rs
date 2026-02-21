@@ -83,7 +83,8 @@ impl App {
         }
         self.theme_cursor = self.theme_index.unwrap_or(0).min(self.theme_list.len() - 1);
         self.theme_scroll = self.theme_cursor.saturating_sub(5);
-        self.theme_preview = self.theme_list.get(self.theme_cursor).and_then(|n| Theme::load_by_name(n));
+        self.theme_preview = None;
+        self.spawn_theme_load();
         self.mode = Mode::ThemePicker;
     }
 
@@ -97,12 +98,12 @@ impl App {
             KeyCode::Char('j') | KeyCode::Down => {
                 self.theme_cursor = (self.theme_cursor + 1).min(len - 1);
                 self.adjust_theme_scroll();
-                self.theme_preview = self.theme_list.get(self.theme_cursor).and_then(|n| Theme::load_by_name(n));
+                self.spawn_theme_load();
             }
             KeyCode::Char('k') | KeyCode::Up => {
                 self.theme_cursor = self.theme_cursor.saturating_sub(1);
                 self.adjust_theme_scroll();
-                self.theme_preview = self.theme_list.get(self.theme_cursor).and_then(|n| Theme::load_by_name(n));
+                self.spawn_theme_load();
             }
             KeyCode::Enter => {
                 let Some(name) = self.theme_list.get(self.theme_cursor).cloned() else {
@@ -123,6 +124,16 @@ impl App {
                 self.mode = Mode::Normal;
             }
             _ => {}
+        }
+    }
+
+    fn spawn_theme_load(&mut self) {
+        if let Some(name) = self.theme_list.get(self.theme_cursor).cloned() {
+            let (tx, rx) = tokio::sync::oneshot::channel();
+            self.theme_load_rx = Some(rx);
+            tokio::task::spawn_blocking(move || {
+                let _ = tx.send(Theme::load_by_name(&name));
+            });
         }
     }
 

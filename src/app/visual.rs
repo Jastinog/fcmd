@@ -57,15 +57,15 @@ impl App {
                 }
             }
             KeyCode::Char('d') => {
-                let paths = self.active_panel().targeted_paths();
+                let items = self.targeted_path_types();
                 self.exit_visual();
                 self.confirm_permanent = false;
-                self.request_delete_paths(paths);
+                self.request_delete_paths(items);
             }
             KeyCode::Char('D') => {
-                let paths = self.active_panel().targeted_paths();
+                let items = self.targeted_path_types();
                 self.exit_visual();
-                self.request_permanent_delete_paths(paths);
+                self.request_permanent_delete_paths(items);
             }
 
             KeyCode::Char('p') => {
@@ -177,13 +177,13 @@ impl App {
                 }
             }
             KeyCode::Char('d') => {
-                let paths = self.active_panel().targeted_paths();
+                let items = self.targeted_path_types();
                 self.confirm_permanent = false;
-                self.request_delete_paths(paths);
+                self.request_delete_paths(items);
             }
             KeyCode::Char('D') => {
-                let paths = self.active_panel().targeted_paths();
-                self.request_permanent_delete_paths(paths);
+                let items = self.targeted_path_types();
+                self.request_permanent_delete_paths(items);
             }
 
             KeyCode::Char('p') => {
