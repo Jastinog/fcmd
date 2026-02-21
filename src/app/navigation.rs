@@ -184,7 +184,7 @@ impl App {
         let vis = self.visible_height;
 
         tokio::task::spawn_blocking(move || {
-            let mut preview = Preview::load(&path);
+            let mut preview = Preview::load(&path, vis);
             preview.apply_highlighting(&path, vis);
             let _ = tx.send(super::PreviewLoadResult {
                 path,
@@ -201,7 +201,7 @@ impl App {
         let vis = self.visible_height;
 
         tokio::task::spawn_blocking(move || {
-            let mut preview = Preview::load(&path);
+            let mut preview = Preview::load(&path, crate::preview::MAX_LINES);
             preview.apply_highlighting(&path, vis);
             let _ = tx.send(super::PreviewLoadResult {
                 path,

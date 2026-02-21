@@ -1,4 +1,5 @@
 use std::fs;
+use std::io::{BufRead, BufReader, Read, Seek, SeekFrom};
 use std::path::Path;
 use std::sync::LazyLock;
 
@@ -6,7 +7,7 @@ use ratatui::style::Color;
 use syntect::highlighting::ThemeSet;
 use syntect::parsing::SyntaxSet;
 
-const MAX_LINES: usize = 50_000;
+pub const MAX_LINES: usize = 50_000;
 const MAX_FILE_SIZE: u64 = 50 * 1_048_576; // 50 MB
 pub const HEX_DUMP_MAX: usize = 262_144; // 256 KB
 
@@ -51,7 +52,7 @@ impl Preview {
         }
     }
 
-    pub fn load(path: &Path) -> Self {
+    pub fn load(path: &Path, max_lines: usize) -> Self {
         let title = path
             .file_name()
             .map(|n| n.to_string_lossy().into_owned())
@@ -88,20 +89,32 @@ impl Preview {
             };
         }
 
+        let file_size = meta.len() as usize;
+
+        // Full read path (popup preview — needs all lines for scrolling)
+        if max_lines >= MAX_LINES {
+            return Self::load_full(path, title, file_size);
+        }
+
+        // Partial read path (side panel — only visible lines)
+        Self::load_partial(path, title, file_size, max_lines)
+    }
+
+    fn load_full(path: &Path, title: String, file_size: usize) -> Self {
         match fs::read(path) {
             Ok(bytes) => {
                 // Check sample for binary content: NUL bytes or high ratio of control chars
                 let sample = &bytes[..bytes.len().min(8192)];
                 let nul_count = sample.iter().filter(|&&b| b == 0).count();
                 if nul_count > 0 {
-                    return Preview::load_binary(&bytes, title);
+                    return Preview::load_binary(&bytes, title, file_size);
                 }
                 let non_text = sample
                     .iter()
                     .filter(|&&b| b < 0x08 || b == 0x7f)
                     .count();
                 if !sample.is_empty() && non_text * 100 / sample.len() > 10 {
-                    return Preview::load_binary(&bytes, title);
+                    return Preview::load_binary(&bytes, title, file_size);
                 }
 
                 let text = String::from_utf8_lossy(&bytes);
@@ -126,6 +139,71 @@ impl Preview {
                 binary_size: 0,
                 styled_lines: None,
             },
+        }
+    }
+
+    fn load_partial(path: &Path, title: String, file_size: usize, max_lines: usize) -> Self {
+        let mut file = match fs::File::open(path) {
+            Ok(f) => f,
+            Err(_) => {
+                return Preview {
+                    lines: vec!["[Cannot read]".into()],
+                    scroll: 0,
+                    title,
+                    info: "error".into(),
+                    is_binary: false,
+                    binary_size: 0,
+                    styled_lines: None,
+                };
+            }
+        };
+
+        // Read sample for binary detection
+        let mut sample_buf = [0u8; 8192];
+        let sample_len = file.read(&mut sample_buf).unwrap_or(0);
+        let sample = &sample_buf[..sample_len];
+
+        let nul_count = sample.iter().filter(|&&b| b == 0).count();
+        if nul_count > 0 {
+            let _ = file.seek(SeekFrom::Start(0));
+            let limit = file_size.min(HEX_DUMP_MAX);
+            let mut bytes = Vec::with_capacity(limit);
+            let _ = file.take(limit as u64).read_to_end(&mut bytes);
+            return Self::load_binary(&bytes, title, file_size);
+        }
+        let non_text = sample.iter().filter(|&&b| b < 0x08 || b == 0x7f).count();
+        if sample_len > 0 && non_text * 100 / sample_len > 10 {
+            let _ = file.seek(SeekFrom::Start(0));
+            let limit = file_size.min(HEX_DUMP_MAX);
+            let mut bytes = Vec::with_capacity(limit);
+            let _ = file.take(limit as u64).read_to_end(&mut bytes);
+            return Self::load_binary(&bytes, title, file_size);
+        }
+
+        // Text: seek back, read only max_lines via BufReader
+        let _ = file.seek(SeekFrom::Start(0));
+        let reader = BufReader::new(file);
+        let mut lines = Vec::with_capacity(max_lines);
+        for line_result in reader.lines().take(max_lines) {
+            match line_result {
+                Ok(line) => lines.push(line),
+                Err(_) => break,
+            }
+        }
+
+        let info = if lines.len() >= max_lines {
+            format!("{}+ lines", lines.len())
+        } else {
+            format!("{} lines", lines.len())
+        };
+        Preview {
+            lines,
+            scroll: 0,
+            title,
+            info,
+            is_binary: false,
+            binary_size: 0,
+            styled_lines: None,
         }
     }
 
@@ -167,7 +245,7 @@ impl Preview {
         }
     }
 
-    fn load_binary(bytes: &[u8], title: String) -> Self {
+    fn load_binary(bytes: &[u8], title: String, total_size: usize) -> Self {
         let dump_bytes = &bytes[..bytes.len().min(HEX_DUMP_MAX)];
         let mut lines = Vec::new();
         for chunk_offset in (0..dump_bytes.len()).step_by(16) {
@@ -204,17 +282,17 @@ impl Preview {
                 "{chunk_offset:08x}  {hex_left} {hex_right} |{ascii}|"
             ));
         }
-        if bytes.len() > HEX_DUMP_MAX {
-            lines.push(format!("... truncated ({} total bytes)", bytes.len()));
+        if total_size > HEX_DUMP_MAX {
+            lines.push(format!("... truncated ({total_size} total bytes)"));
         }
-        let info = format!("binary, {} bytes", bytes.len());
+        let info = format!("binary, {total_size} bytes");
         Preview {
             lines,
             scroll: 0,
             title,
             info,
             is_binary: true,
-            binary_size: bytes.len(),
+            binary_size: total_size,
             styled_lines: None,
         }
     }
