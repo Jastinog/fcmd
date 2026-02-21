@@ -1,7 +1,7 @@
 use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::time::SystemTime;
+use std::time::{Instant, SystemTime};
 
 use crate::util::natsort::natsort;
 
@@ -66,6 +66,7 @@ pub struct Panel {
     pub sort_reverse: bool,
     pub show_hidden: bool,
     pub loading: bool,
+    pub loading_since: Option<Instant>,
 }
 
 impl Panel {
@@ -81,6 +82,7 @@ impl Panel {
             sort_reverse: false,
             show_hidden: false,
             loading: false,
+            loading_since: None,
         };
         panel.load_dir()?;
         Ok(panel)
@@ -377,6 +379,7 @@ impl Panel {
     pub fn apply_entries(&mut self, entries: Vec<FileEntry>, select_name: Option<&str>) {
         self.entries = entries;
         self.loading = false;
+        self.loading_since = None;
         if let Some(name) = select_name {
             if let Some(pos) = self.entries.iter().position(|e| e.name == name) {
                 self.selected = pos;

@@ -30,7 +30,11 @@ pub(super) fn render_panel(
     };
 
     let path_str = panel.path.to_string_lossy();
-    let loading_suffix = if panel.loading {
+    let show_loading = panel.loading
+        && panel
+            .loading_since
+            .is_some_and(|t| t.elapsed() >= std::time::Duration::from_millis(150));
+    let loading_suffix = if show_loading {
         let count = panel.entries.len();
         if count > 0 {
             format!(" [Loading... {count}]")
