@@ -1,0 +1,24 @@
+# Vitesse Light — Anthony Fu's elegant light theme
+# github.com/antfu/vscode-theme-vitesse
+
+bg = "#FFFFFF"
+bg_light = "#F1F1F1"
+fg = "#393A34"
+fg_dim = "#999999"
+
+red = "#AB5959"
+green = "#1E754F"
+yellow = "#B07D48"
+blue = "#296AA3"
+magenta = "#A13865"
+cyan = "#2E8F82"
+orange = "#B07D48"
+
+border_active = "blue"
+border_inactive = "#CFCFCF"
+status_bg = "#E5E5E5"
+cursor_line = "#E8E8E8"
+
+dir_color = "blue"
+symlink_color = "cyan"
+file_color = "fg"

@@ -1,0 +1,24 @@
+# Horizon Light — warm pastel light theme
+# horizontheme.com
+
+bg = "#FDF0ED"
+bg_light = "#FADAD1"
+fg = "#403C3D"
+fg_dim = "#BDB3B1"
+
+red = "#E95678"
+green = "#29D398"
+yellow = "#FAB795"
+blue = "#26BBD9"
+magenta = "#EE64AC"
+cyan = "#59E3E3"
+orange = "#F09483"
+
+border_active = "magenta"
+border_inactive = "#DFC8C2"
+status_bg = "#F5D6CC"
+cursor_line = "#F5D4CB"
+
+dir_color = "blue"
+symlink_color = "cyan"
+file_color = "fg"

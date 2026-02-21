@@ -1,0 +1,24 @@
+# Noctis Lux — warm cream light theme
+# github.com/liviuschera/noctis
+
+bg = "#FEF8EC"
+bg_light = "#F3EDD5"
+fg = "#005661"
+fg_dim = "#B2C3C4"
+
+red = "#E34E1C"
+green = "#00B368"
+yellow = "#E69533"
+blue = "#0094F0"
+magenta = "#E02889"
+cyan = "#00BDD6"
+orange = "#D67E5C"
+
+border_active = "blue"
+border_inactive = "#D5CEB6"
+status_bg = "#EDE7CF"
+cursor_line = "#F0E8D0"
+
+dir_color = "blue"
+symlink_color = "cyan"
+file_color = "fg"

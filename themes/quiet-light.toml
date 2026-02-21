@@ -1,0 +1,23 @@
+# Quiet Light — clean minimal VS Code light theme
+
+bg = "#F5F5F5"
+bg_light = "#E8E8E8"
+fg = "#333333"
+fg_dim = "#AAAAAA"
+
+red = "#AA3731"
+green = "#448C27"
+yellow = "#CB9000"
+blue = "#325CC0"
+magenta = "#7A3E9D"
+cyan = "#0083B2"
+orange = "#A35F00"
+
+border_active = "blue"
+border_inactive = "#CBCBCB"
+status_bg = "#E0E0E0"
+cursor_line = "#D9D9D9"
+
+dir_color = "blue"
+symlink_color = "cyan"
+file_color = "fg"

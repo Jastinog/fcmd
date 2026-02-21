@@ -1,0 +1,24 @@
+# Pencil Light — iA Writer inspired clean theme
+# github.com/preservim/vim-pencil
+
+bg = "#F1F1F1"
+bg_light = "#E5E6E6"
+fg = "#424242"
+fg_dim = "#B2B2B2"
+
+red = "#C30771"
+green = "#10A778"
+yellow = "#A89C14"
+blue = "#008EC4"
+magenta = "#523C79"
+cyan = "#20A5BA"
+orange = "#E8590C"
+
+border_active = "blue"
+border_inactive = "#C6C6C6"
+status_bg = "#DCDCDC"
+cursor_line = "#D5D5D5"
+
+dir_color = "blue"
+symlink_color = "cyan"
+file_color = "fg"

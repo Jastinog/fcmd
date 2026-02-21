@@ -1,0 +1,24 @@
+# Material Light — Google Material Design light variant
+# material-theme.site
+
+bg = "#FAFAFA"
+bg_light = "#EEEEEE"
+fg = "#212121"
+fg_dim = "#90A4AE"
+
+red = "#FF5370"
+green = "#91B859"
+yellow = "#FFB62C"
+blue = "#6182B8"
+magenta = "#7C4DFF"
+cyan = "#39ADB5"
+orange = "#F76D47"
+
+border_active = "blue"
+border_inactive = "#D6D6D6"
+status_bg = "#EEEEEE"
+cursor_line = "#E7E7E8"
+
+dir_color = "blue"
+symlink_color = "cyan"
+file_color = "fg"

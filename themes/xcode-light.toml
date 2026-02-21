@@ -1,0 +1,23 @@
+# Xcode Light — Apple's default Xcode theme
+
+bg = "#FFFFFF"
+bg_light = "#F4F4F4"
+fg = "#000000"
+fg_dim = "#8E8E93"
+
+red = "#D12F1B"
+green = "#3E8087"
+yellow = "#78492A"
+blue = "#0F68A0"
+magenta = "#AD3DA4"
+cyan = "#2B839F"
+orange = "#D12F1B"
+
+border_active = "blue"
+border_inactive = "#D2D2D7"
+status_bg = "#E8E8ED"
+cursor_line = "#E8F0FE"
+
+dir_color = "blue"
+symlink_color = "cyan"
+file_color = "fg"

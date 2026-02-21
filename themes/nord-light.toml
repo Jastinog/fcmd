@@ -1,0 +1,24 @@
+# Nord Light (Snow Storm) — arctic light palette
+# nordtheme.com
+
+bg = "#ECEFF4"
+bg_light = "#E5E9F0"
+fg = "#2E3440"
+fg_dim = "#4C566A"
+
+red = "#BF616A"
+green = "#A3BE8C"
+yellow = "#EBCB8B"
+blue = "#5E81AC"
+magenta = "#B48EAD"
+cyan = "#88C0D0"
+orange = "#D08770"
+
+border_active = "blue"
+border_inactive = "#D8DEE9"
+status_bg = "#E5E9F0"
+cursor_line = "#D8DEE9"
+
+dir_color = "blue"
+symlink_color = "cyan"
+file_color = "fg"

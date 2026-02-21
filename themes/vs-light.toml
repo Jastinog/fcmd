@@ -1,0 +1,23 @@
+# VS Light — Visual Studio default light theme
+
+bg = "#FFFFFF"
+bg_light = "#F3F3F3"
+fg = "#1E1E1E"
+fg_dim = "#A6A6A6"
+
+red = "#CD3131"
+green = "#008000"
+yellow = "#795E26"
+blue = "#0000FF"
+magenta = "#AF00DB"
+cyan = "#267F99"
+orange = "#A31515"
+
+border_active = "blue"
+border_inactive = "#D4D4D4"
+status_bg = "#E8E8E8"
+cursor_line = "#E2E6F0"
+
+dir_color = "blue"
+symlink_color = "cyan"
+file_color = "fg"

@@ -1,0 +1,24 @@
+# Tomorrow — Chris Kempson's classic light theme
+# github.com/chriskempson/tomorrow-theme
+
+bg = "#FFFFFF"
+bg_light = "#EFEFEF"
+fg = "#4D4D4C"
+fg_dim = "#8E908C"
+
+red = "#C82829"
+green = "#718C00"
+yellow = "#EAB700"
+blue = "#4271AE"
+magenta = "#8959A8"
+cyan = "#3E999F"
+orange = "#F5871F"
+
+border_active = "blue"
+border_inactive = "#D6D6D6"
+status_bg = "#E0E0E0"
+cursor_line = "#E8E8E8"
+
+dir_color = "blue"
+symlink_color = "cyan"
+file_color = "fg"

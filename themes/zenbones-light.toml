@@ -1,0 +1,24 @@
+# Zenbones Light — calming warm light theme
+# github.com/mcchrish/zenbones.nvim
+
+bg = "#F0EDEC"
+bg_light = "#E0DCD8"
+fg = "#2C363C"
+fg_dim = "#A8A4A0"
+
+red = "#A8334C"
+green = "#4F6C31"
+yellow = "#944927"
+blue = "#286486"
+magenta = "#88507D"
+cyan = "#3B8992"
+orange = "#BC5C00"
+
+border_active = "blue"
+border_inactive = "#C4C0BC"
+status_bg = "#DAD6D2"
+cursor_line = "#E4E0DC"
+
+dir_color = "blue"
+symlink_color = "cyan"
+file_color = "fg"

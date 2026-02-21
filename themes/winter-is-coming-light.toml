@@ -1,0 +1,24 @@
+# Winter is Coming Light — crisp seasonal light theme
+# github.com/johnpapa/vscode-winteriscoming
+
+bg = "#FFFFFF"
+bg_light = "#EDEDED"
+fg = "#1B2B34"
+fg_dim = "#999999"
+
+red = "#E44649"
+green = "#29A143"
+yellow = "#BDA834"
+blue = "#0451A5"
+magenta = "#A626A4"
+cyan = "#0990B8"
+orange = "#CE9178"
+
+border_active = "blue"
+border_inactive = "#D4D4D4"
+status_bg = "#E8E8E8"
+cursor_line = "#DBE6F0"
+
+dir_color = "blue"
+symlink_color = "cyan"
+file_color = "fg"

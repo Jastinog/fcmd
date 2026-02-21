@@ -1,0 +1,24 @@
+# Flexoki Light — modern ink-inspired theme
+# stephango.com/flexoki
+
+bg = "#FFFCF0"
+bg_light = "#F2F0E5"
+fg = "#100F0F"
+fg_dim = "#B7B5AC"
+
+red = "#AF3029"
+green = "#66800B"
+yellow = "#AD8301"
+blue = "#205EA6"
+magenta = "#A02F6F"
+cyan = "#24837B"
+orange = "#BC5215"
+
+border_active = "blue"
+border_inactive = "#CECDC3"
+status_bg = "#E6E4D9"
+cursor_line = "#E8E4D5"
+
+dir_color = "blue"
+symlink_color = "cyan"
+file_color = "fg"

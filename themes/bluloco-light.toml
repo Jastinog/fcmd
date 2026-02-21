@@ -1,0 +1,24 @@
+# Bluloco Light — vivid VS Code light theme
+# github.com/uloco/theme-bluloco-light
+
+bg = "#F9F9F9"
+bg_light = "#ECEDEF"
+fg = "#383A42"
+fg_dim = "#A0A1A7"
+
+red = "#D52753"
+green = "#23974A"
+yellow = "#D5A21C"
+blue = "#275FE4"
+magenta = "#823FF1"
+cyan = "#2D8B56"
+orange = "#DF631C"
+
+border_active = "blue"
+border_inactive = "#D1D1D6"
+status_bg = "#E5E5EA"
+cursor_line = "#E4E8EE"
+
+dir_color = "blue"
+symlink_color = "cyan"
+file_color = "fg"

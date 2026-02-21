@@ -1,0 +1,25 @@
+# Modus Operandi — GNU Emacs accessibility-first light theme
+# Designed for optimal readability (WCAG AAA contrast)
+# protesilaos.com/emacs/modus-themes
+
+bg = "#FFFFFF"
+bg_light = "#F0F0F0"
+fg = "#000000"
+fg_dim = "#595959"
+
+red = "#A60000"
+green = "#006800"
+yellow = "#6F5500"
+blue = "#0031A9"
+magenta = "#721045"
+cyan = "#005E8B"
+orange = "#884900"
+
+border_active = "blue"
+border_inactive = "#9F9F9F"
+status_bg = "#E0E0E0"
+cursor_line = "#C4DFF6"
+
+dir_color = "blue"
+symlink_color = "cyan"
+file_color = "fg"

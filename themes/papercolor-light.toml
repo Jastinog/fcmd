@@ -1,0 +1,24 @@
+# PaperColor Light — popular Vim light theme
+# github.com/NLKNguyen/papercolor-theme
+
+bg = "#EEEEEE"
+bg_light = "#E4E4E4"
+fg = "#444444"
+fg_dim = "#878787"
+
+red = "#AF0000"
+green = "#008700"
+yellow = "#D75F00"
+blue = "#005FAF"
+magenta = "#AF00AF"
+cyan = "#0087AF"
+orange = "#D75F00"
+
+border_active = "blue"
+border_inactive = "#BCBCBC"
+status_bg = "#D0D0D0"
+cursor_line = "#D7D7D7"
+
+dir_color = "blue"
+symlink_color = "cyan"
+file_color = "fg"

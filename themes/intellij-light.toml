@@ -1,0 +1,23 @@
+# IntelliJ Light — JetBrains default light theme
+
+bg = "#FFFFFF"
+bg_light = "#F2F2F2"
+fg = "#000000"
+fg_dim = "#999999"
+
+red = "#CF5B56"
+green = "#00796B"
+yellow = "#EAB700"
+blue = "#4A86C8"
+magenta = "#9876AA"
+cyan = "#008080"
+orange = "#CC7832"
+
+border_active = "blue"
+border_inactive = "#D1D1D1"
+status_bg = "#E8E8E8"
+cursor_line = "#DBE6F0"
+
+dir_color = "blue"
+symlink_color = "cyan"
+file_color = "fg"

@@ -1,0 +1,24 @@
+# Kanagawa Lotus — warm Japanese-inspired light theme
+# github.com/rebelot/kanagawa.nvim
+
+bg = "#F2ECBC"
+bg_light = "#E5DDB0"
+fg = "#545464"
+fg_dim = "#8A8980"
+
+red = "#C84053"
+green = "#6F894E"
+yellow = "#77713F"
+blue = "#4D699B"
+magenta = "#B35B79"
+cyan = "#597B75"
+orange = "#CC6D00"
+
+border_active = "blue"
+border_inactive = "#C9C2A1"
+status_bg = "#DDD6A8"
+cursor_line = "#E7E1B5"
+
+dir_color = "blue"
+symlink_color = "cyan"
+file_color = "fg"
