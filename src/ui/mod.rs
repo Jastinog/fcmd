@@ -199,10 +199,6 @@ pub fn render(f: &mut Frame, app: &mut App) {
         overlays::render_info_popup(f, app, full_area);
     }
 
-    if app.mode == Mode::Search {
-        overlays::render_search_popup(f, app, full_area);
-    }
-
     if app.mode == Mode::Confirm {
         overlays::render_confirm_popup(f, app, full_area);
     }

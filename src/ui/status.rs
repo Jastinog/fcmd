@@ -21,16 +21,20 @@ pub(super) fn render_status(f: &mut Frame, app: &App, area: Rect) {
         area,
     );
 
-    // Input modes — Command stays in status bar, Search moved to popup overlay
+    // Input modes rendered in status bar
     if app.mode == Mode::Command {
         render_status_input(f, area, ":", &app.command_input, t.green, t);
+        return;
+    }
+    if app.mode == Mode::Search {
+        render_status_input(f, area, "/", &app.search_query, t.yellow, t);
         return;
     }
 
     // Confirm mode — overlay handles the popup, status bar shows mode
     if app.mode == Mode::Confirm {
         let mut spans = vec![
-            Span::styled(" 󰗨 CONFIRM ", Style::default().fg(t.bg).bg(t.red)),
+            Span::styled(format!(" \u{f05e8} CONFIRM "), Style::default().fg(t.bg).bg(t.red)),
             Span::styled(SEP_RIGHT, Style::default().fg(t.red).bg(t.status_bg)),
         ];
 
@@ -265,9 +269,9 @@ fn render_status_input(
     t: &Theme,
 ) {
     let label = if prefix == "/" {
-        " 󰍉 SEARCH "
+        " \u{f0349} SEARCH "   // 󰍉
     } else {
-        "  CMD "
+        " \u{f018d} CMD "      // 󰆍
     };
 
     let mut spans = vec![
