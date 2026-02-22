@@ -135,17 +135,24 @@ pub(super) fn render_status(f: &mut Frame, app: &App, area: Rect) {
     // Sort segment (always visible)
     {
         let arrow = if panel.sort_reverse {
-            "\u{2191}"
+            "\u{25b2}"
         } else {
-            "\u{2193}"
+            "\u{25bc}"
         };
-        let sort_fg = if panel.sort_mode != SortMode::Name || panel.sort_reverse {
-            t.cyan
-        } else {
+        let is_default = panel.sort_mode == SortMode::Name && !panel.sort_reverse;
+        let sort_fg = if is_default {
             t.fg_dim
+        } else {
+            match panel.sort_mode {
+                SortMode::Name => t.green,
+                SortMode::Size => t.yellow,
+                SortMode::Modified => t.blue,
+                SortMode::Created => t.magenta,
+                SortMode::Extension => t.orange,
+            }
         };
         right_parts.push((
-            format!(" 󰒓 {}{arrow} ", panel.sort_mode.label()),
+            format!(" {} {arrow} ", panel.sort_mode.display_label()),
             sort_fg,
             t.bg_light,
         ));

@@ -120,16 +120,16 @@ impl App {
         self.active_panel_mut().sort_reverse = rev;
         self.resort_from_cache_or_reload();
         self.save_current_sort();
-        let arrow = if rev { "\u{2191}" } else { "\u{2193}" };
-        let label = self.active_panel().sort_mode.label();
-        self.status_message = format!("Sort: {label}{arrow}");
+        let arrow = if rev { "\u{25b2}" } else { "\u{25bc}" };
+        let mode = self.active_panel().sort_mode;
+        self.status_message = format!("Sort: {} {arrow}", mode.display_label());
     }
 
     pub(super) fn set_sort(&mut self, mode: SortMode) {
         self.active_panel_mut().sort_mode = mode;
         self.resort_from_cache_or_reload();
         self.save_current_sort();
-        self.status_message = format!("Sort: {}", mode.label());
+        self.status_message = format!("Sort: {}", mode.display_label());
     }
 
     fn resort_from_cache_or_reload(&mut self) {
@@ -424,13 +424,13 @@ impl App {
 
         vec![
             ("", "Sort by"),
-            ("n", m(mode == SortMode::Name,     "▍name",     "  name")),
-            ("s", m(mode == SortMode::Size,     "▍size",     "  size")),
-            ("m/d", m(mode == SortMode::Modified, "▍modified", "  modified")),
-            ("c", m(mode == SortMode::Created,  "▍created",  "  created")),
-            ("e", m(mode == SortMode::Extension,"▍extension","  extension")),
+            ("n", m(mode == SortMode::Name,     "▍name",     " name")),
+            ("s", m(mode == SortMode::Size,     "▍size",     " size")),
+            ("m/d", m(mode == SortMode::Modified, "▍modified", " modified")),
+            ("c", m(mode == SortMode::Created,  "▍created",  " created")),
+            ("e", m(mode == SortMode::Extension,"▍extension"," extension")),
             ("", "Direction"),
-            ("r", if rev { "▍reverse ↑" } else { "  ascending ↓" }),
+            ("r", if rev { "▍reverse \u{25b2}" } else { " ascending \u{25bc}" }),
         ]
     }
 

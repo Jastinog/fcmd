@@ -44,6 +44,17 @@ impl SortMode {
         }
     }
 
+    pub fn display_label(self) -> &'static str {
+        match self {
+            SortMode::Name => "Name",
+            SortMode::Size => "Size",
+            SortMode::Modified => "Modified",
+            SortMode::Created => "Created",
+            SortMode::Extension => "Extension",
+        }
+    }
+
+
     pub fn from_label(s: &str) -> Option<SortMode> {
         match s {
             "name" => Some(SortMode::Name),

@@ -345,7 +345,7 @@ fn render_preview_panel(f: &mut Frame, pt: &Theme, area: Rect) {
     let pos_sep = Span::styled(sep_l, Style::default().fg(pt.blue).bg(pt.status_bg));
 
     // Right: sort segment
-    let sort_text = " 󰒓 name\u{2193} ";
+    let sort_text = " Name \u{25bc} ";
     let sort_span = Span::styled(sort_text, Style::default().fg(pt.fg_dim).bg(pt.bg_light));
     let sort_sep = Span::styled(sep_l, Style::default().fg(pt.bg_light).bg(pt.status_bg));
 
