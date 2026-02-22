@@ -1,5 +1,6 @@
 use super::*;
-use crate::util::{format_bytes, format_duration, progress_bar};
+use super::task_manager::TaskEvent;
+use crate::util::format_bytes;
 
 impl App {
     pub fn poll_find(&mut self) {
@@ -10,102 +11,43 @@ impl App {
         }
     }
 
-    pub fn poll_progress(&mut self) {
-        let progress = match self.paste_progress.as_mut() {
-            Some(p) => p,
-            None => return,
-        };
+    pub fn poll_tasks(&mut self) {
+        let events = self.task_manager.poll_all();
 
-        // Drain all pending messages, keep the last Progress for display
-        let mut last_progress = None;
-        let mut finished = None;
+        // Update status bar with latest running task progress
+        if let Some(status) = self.task_manager.status_line() {
+            self.status_message = status;
+        }
 
-        loop {
-            match progress.rx.try_recv() {
-                Ok(msg @ ProgressMsg::Progress { .. }) => {
-                    last_progress = Some(msg);
+        let mut needs_refresh = false;
+
+        for event in events {
+            match event {
+                TaskEvent::PasteFinished { records, error } => {
+                    self.undo_stack.push(records);
+                    if error.is_none() {
+                        self.register = None;
+                    }
+                    needs_refresh = true;
                 }
-                Ok(msg @ ProgressMsg::Finished { .. }) => {
-                    finished = Some(msg);
-                    break;
+                TaskEvent::DeleteFinished => {
+                    needs_refresh = true;
                 }
-                Err(tokio::sync::mpsc::error::TryRecvError::Empty) => break,
-                Err(tokio::sync::mpsc::error::TryRecvError::Disconnected) => break,
             }
         }
 
-        // Update status from latest progress
-        if let Some(ProgressMsg::Progress {
-            bytes_done,
-            bytes_total,
-            item_index,
-            item_total,
-        }) = last_progress
-        {
-            let verb = if progress.op == RegisterOp::Yank {
-                "Copying"
-            } else {
-                "Moving"
-            };
-
-            let pct = if bytes_total > 0 {
-                (bytes_done as f64 / bytes_total as f64 * 100.0) as u8
-            } else {
-                0
-            };
-
-            let bar = progress_bar(pct, 20);
-
-            let elapsed = progress.started_at.elapsed();
-            let eta = if bytes_done > 0 && bytes_total > bytes_done && elapsed.as_secs_f64() > 0.001 {
-                let rate = bytes_done as f64 / elapsed.as_secs_f64();
-                let remaining_bytes = bytes_total - bytes_done;
-                let eta_secs = remaining_bytes as f64 / rate;
-                format!(
-                    " ETA {}",
-                    format_duration(std::time::Duration::from_secs_f64(eta_secs))
-                )
-            } else {
-                String::new()
-            };
-
-            let size_text = format!("{}/{}", format_bytes(bytes_done), format_bytes(bytes_total));
-
-            self.status_message = format!(
-                "{verb} {bar} {pct}% ({size_text}){eta} [{}/{}]",
-                item_index + 1,
-                item_total,
-            );
+        // Set status from the last finished task if no running tasks remain
+        if self.task_manager.active_count() == 0 {
+            // Show the last finished task's summary
+            if let Some(task) = self.task_manager.tasks().last() {
+                if let task_manager::TaskState::Finished { summary, .. } = &task.state {
+                    self.status_message = summary.clone();
+                }
+            }
+            self.task_manager.remove_finished();
         }
 
-        // Handle finish
-        if let Some(ProgressMsg::Finished {
-            records,
-            error,
-            bytes_total,
-        }) = finished
-        {
-            let n = records.len();
-            let op = progress.op;
-            let elapsed = progress.started_at.elapsed();
-            self.undo_stack.push(records);
-
-            if let Some(err) = error {
-                self.status_message = format!("Paste error: {err}");
-                // Preserve register so user can retry
-            } else {
-                let verb = if op == RegisterOp::Yank {
-                    "Copied"
-                } else {
-                    "Moved"
-                };
-                let dur = format_duration(elapsed);
-                let size = format_bytes(bytes_total);
-                self.status_message = format!("{verb} {n} item(s), {size} in {dur}");
-                self.register = None;
-            }
-
-            self.paste_progress = None;
+        if needs_refresh {
             self.refresh_panels();
         }
     }
@@ -233,61 +175,6 @@ impl App {
         }
     }
 
-    pub fn poll_delete(&mut self) {
-        let progress = match self.delete_progress.as_mut() {
-            Some(p) => p,
-            None => return,
-        };
-
-        let mut last_progress = None;
-        let mut finished = None;
-
-        loop {
-            match progress.rx.try_recv() {
-                Ok(msg @ DeleteMsg::Progress { .. }) => {
-                    last_progress = Some(msg);
-                }
-                Ok(msg @ DeleteMsg::Finished { .. }) => {
-                    finished = Some(msg);
-                    break;
-                }
-                Err(_) => break,
-            }
-        }
-
-        if let Some(DeleteMsg::Progress {
-            done,
-            total,
-            current,
-        }) = last_progress
-        {
-            let verb = if progress.permanent {
-                "Deleting"
-            } else {
-                "Trashing"
-            };
-            self.status_message = format!("{verb} [{}/{}] {current}", done + 1, total);
-        }
-
-        if let Some(DeleteMsg::Finished {
-            deleted,
-            errors,
-            permanent,
-        }) = finished
-        {
-            let verb = if permanent { "Deleted" } else { "Trashed" };
-            if errors.is_empty() {
-                self.status_message = format!("{verb} {deleted} item(s)");
-            } else if deleted == 0 {
-                self.status_message = format!("{verb} failed: {}", errors[0]);
-            } else {
-                self.status_message =
-                    format!("{verb} {deleted}, {} failed: {}", errors.len(), errors[0]);
-            }
-            self.delete_progress = None;
-            self.refresh_panels();
-        }
-    }
 
     fn ensure_dir_sizes_loaded(&mut self) {
         let Some(ref db) = self.db else { return };

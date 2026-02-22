@@ -135,7 +135,7 @@ pub fn render(f: &mut Frame, app: &mut App) {
             &tab.panels[i],
             panel_areas[i],
             panels_active && i == active_idx,
-            phantoms,
+            &phantoms,
             &ctx,
         );
     }
@@ -294,9 +294,15 @@ fn render_tab_bar(f: &mut Frame, app: &App, area: Rect) {
     }
 
     // Right side: TASKS section
-    let tasks_label = " \u{f0ae} TASKS ";
+    let active_tasks = app.task_manager.active_count();
+    let tasks_label = if active_tasks > 0 {
+        format!(" \u{f0ae} TASKS {active_tasks} ")
+    } else {
+        " \u{f0ae} TASKS ".into()
+    };
     let tasks_sep_w = 1; // SEP_LEFT char
     let tasks_w = tasks_label.chars().count() + tasks_sep_w;
+    let tasks_bg = if active_tasks > 0 { t.green } else { t.magenta };
 
     // Fill gap between tabs and TASKS
     let used: usize = spans.iter().map(|s| s.content.chars().count()).sum();
@@ -311,11 +317,11 @@ fn render_tab_bar(f: &mut Frame, app: &App, area: Rect) {
 
     spans.push(Span::styled(
         SEP_LEFT,
-        Style::default().fg(t.magenta).bg(t.status_bg),
+        Style::default().fg(tasks_bg).bg(t.status_bg),
     ));
     spans.push(Span::styled(
         tasks_label,
-        Style::default().fg(t.bg_text).bg(t.magenta),
+        Style::default().fg(t.bg_text).bg(tasks_bg),
     ));
 
     let line = Line::from(spans);

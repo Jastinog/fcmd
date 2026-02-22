@@ -87,20 +87,12 @@ impl App {
             });
         });
 
-        self.delete_progress = Some(DeleteProgress {
-            rx,
-            permanent,
-        });
+        self.task_manager.add_delete(rx, permanent);
         self.mode = Mode::Normal;
         self.status_message = format!("Deleting {total} item(s)...");
     }
 
     pub(super) fn paste(&mut self, to_other_panel: bool) {
-        if self.paste_progress.is_some() {
-            self.status_message = "Operation in progress".into();
-            return;
-        }
-
         let (reg_entries, op) = match &self.register {
             Some(r) => (r.entries.clone(), r.op),
             None => {
@@ -138,13 +130,11 @@ impl App {
         };
         self.status_message = format!("{verb}...");
 
-        self.paste_progress = Some(PasteProgress {
-            rx,
-            op,
-            started_at: Instant::now(),
-            dst_dir,
-            phantoms,
-        });
+        if op == RegisterOp::Yank {
+            self.task_manager.add_copy(rx, dst_dir, phantoms);
+        } else {
+            self.task_manager.add_move(rx, dst_dir, phantoms);
+        }
     }
 
     pub(super) fn undo(&mut self) {

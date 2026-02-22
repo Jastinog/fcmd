@@ -137,12 +137,11 @@ async fn run(
                 }
             }
             _ = tick.tick() => {
-                app.poll_progress();
+                app.poll_tasks();
                 app.poll_du();
                 app.poll_find();
                 app.poll_info_du();
                 app.poll_git();
-                app.poll_delete();
             }
             Some(msg) = app.dir_load_rx.recv() => {
                 app.handle_dir_load_msg(msg);

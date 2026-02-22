@@ -5,14 +5,6 @@ pub struct PhantomEntry {
     pub is_dir: bool,
 }
 
-pub struct PasteProgress {
-    pub rx: tokio::sync::mpsc::Receiver<ProgressMsg>,
-    pub op: RegisterOp,
-    pub started_at: Instant,
-    pub dst_dir: PathBuf,
-    pub phantoms: Vec<PhantomEntry>,
-}
-
 pub struct DuProgress {
     pub rx: tokio::sync::mpsc::Receiver<DuMsg>,
     pub started_at: Instant,
@@ -41,11 +33,6 @@ pub enum DeleteMsg {
         errors: Vec<String>,
         permanent: bool,
     },
-}
-
-pub struct DeleteProgress {
-    pub rx: tokio::sync::mpsc::Receiver<DeleteMsg>,
-    pub permanent: bool,
 }
 
 pub enum DirLoadMsg {

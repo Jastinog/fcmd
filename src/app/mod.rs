@@ -5,7 +5,7 @@ pub(crate) use std::time::Instant;
 pub(crate) use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
 pub(crate) use crate::find::{FindScope, FindState};
-pub(crate) use crate::ops::{self, DuMsg, ProgressMsg, Register, RegisterOp, UndoStack};
+pub(crate) use crate::ops::{self, DuMsg, Register, RegisterOp, UndoStack};
 pub(crate) use crate::panel::{self, DirCache, FileEntry, Panel, SortMode};
 pub(crate) use crate::preview::Preview;
 pub(crate) use crate::theme::Theme;
@@ -25,6 +25,7 @@ mod navigation;
 mod polling;
 mod preview_mode;
 mod rename;
+pub(crate) mod task_manager;
 mod search;
 mod tree;
 mod visual;
@@ -180,8 +181,8 @@ pub struct App {
     pub visual_marks: HashMap<PathBuf, u8>,
     // Database
     pub db: Option<crate::db::Db>,
-    // Paste progress
-    pub paste_progress: Option<PasteProgress>,
+    // Task manager (copy/move/delete operations)
+    pub task_manager: task_manager::TaskManager,
     // Directory sizes
     pub dir_sizes: HashMap<PathBuf, u64>,
     pub du_progress: Option<DuProgress>,
@@ -221,8 +222,6 @@ pub struct App {
     pub(super) git_roots: [Option<PathBuf>; 3],
     pub(super) git_checked_dirs: [Option<PathBuf>; 3],
     pub(super) git_progress: Option<GitProgress>,
-    // Delete progress
-    pub delete_progress: Option<DeleteProgress>,
     // Directory cache (LRU)
     pub dir_cache: DirCache,
     // Async dir loading (streaming batches + sorted final result)
@@ -358,7 +357,7 @@ impl App {
             visual_marks,
             dir_sorts,
             db,
-            paste_progress: None,
+            task_manager: task_manager::TaskManager::new(),
             dir_sizes: HashMap::new(),
             du_progress: None,
             dir_sizes_loaded: HashSet::new(),
@@ -389,7 +388,6 @@ impl App {
             git_roots: [None, None, None],
             git_checked_dirs: [None, None, None],
             git_progress: None,
-            delete_progress: None,
             dir_cache: DirCache::new(64),
             dir_load_tx,
             dir_load_rx,
@@ -710,11 +708,8 @@ impl App {
         }
     }
 
-    pub fn phantoms_for(&self, dir: &std::path::Path) -> &[PhantomEntry] {
-        match &self.paste_progress {
-            Some(p) if p.dst_dir == dir => &p.phantoms,
-            _ => &[],
-        }
+    pub fn phantoms_for(&self, dir: &std::path::Path) -> Vec<&PhantomEntry> {
+        self.task_manager.phantoms_for(dir)
     }
 
     pub fn tab(&self) -> &Tab {

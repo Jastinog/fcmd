@@ -19,7 +19,7 @@ pub(super) fn render_panel(
     panel: &Panel,
     area: Rect,
     is_active: bool,
-    phantoms: &[PhantomEntry],
+    phantoms: &[&PhantomEntry],
     ctx: &RenderContext,
 ) {
     let t = ctx.theme;
