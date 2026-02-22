@@ -89,7 +89,6 @@ impl App {
 
         self.task_manager.add_delete(rx, permanent);
         self.mode = Mode::Normal;
-        self.status_message = format!("Deleting {total} item(s)...");
     }
 
     pub(super) fn paste(&mut self, to_other_panel: bool) {
@@ -122,13 +121,6 @@ impl App {
         let paths: Vec<PathBuf> = reg_entries.iter().map(|e| e.path.clone()).collect();
         let (tx, rx) = tokio::sync::mpsc::channel(64);
         ops::paste_in_background(paths, dst_dir.clone(), op, tx);
-
-        let verb = if op == RegisterOp::Yank {
-            "Copying"
-        } else {
-            "Moving"
-        };
-        self.status_message = format!("{verb}...");
 
         if op == RegisterOp::Yank {
             self.task_manager.add_copy(rx, dst_dir, phantoms);

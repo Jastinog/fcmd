@@ -183,6 +183,7 @@ pub struct App {
     pub db: Option<crate::db::Db>,
     // Task manager (copy/move/delete operations)
     pub task_manager: task_manager::TaskManager,
+    pub task_notification: Option<String>,
     // Directory sizes
     pub dir_sizes: HashMap<PathBuf, u64>,
     pub du_progress: Option<DuProgress>,
@@ -358,6 +359,7 @@ impl App {
             dir_sorts,
             db,
             task_manager: task_manager::TaskManager::new(),
+            task_notification: None,
             dir_sizes: HashMap::new(),
             du_progress: None,
             dir_sizes_loaded: HashSet::new(),
@@ -734,6 +736,7 @@ impl App {
 
     pub fn handle_key(&mut self, key: KeyEvent) {
         self.status_message.clear();
+        self.task_notification = None;
 
         match self.mode {
             Mode::Normal => self.handle_normal(key),

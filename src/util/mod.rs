@@ -29,16 +29,6 @@ pub fn format_duration(d: std::time::Duration) -> String {
     }
 }
 
-pub fn progress_bar(pct: u8, width: usize) -> String {
-    let filled = (pct as usize * width / 100).min(width);
-    let empty = width - filled;
-    format!(
-        "\u{2503}{}{}\u{2503}",
-        "\u{2588}".repeat(filled),
-        "\u{2591}".repeat(empty),
-    )
-}
-
 pub fn glob_match(pattern: &str, text: &str) -> bool {
     let mut p: Vec<char> = pattern.chars().flat_map(|c| c.to_lowercase()).collect();
     let t: Vec<char> = text.chars().flat_map(|c| c.to_lowercase()).collect();

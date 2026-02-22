@@ -293,7 +293,7 @@ fn render_tab_bar(f: &mut Frame, app: &App, area: Rect) {
         }
     }
 
-    // Right side: TASKS section
+    // Right side: info segment (optional) + TASKS section
     let active_tasks = app.task_manager.active_count();
     let tasks_label = if active_tasks > 0 {
         format!(" \u{f0ae} TASKS {active_tasks} ")
@@ -304,10 +304,54 @@ fn render_tab_bar(f: &mut Frame, app: &App, area: Rect) {
     let tasks_w = tasks_label.chars().count() + tasks_sep_w;
     let tasks_bg = if active_tasks > 0 { t.green } else { t.magenta };
 
-    // Fill gap between tabs and TASKS
-    let used: usize = spans.iter().map(|s| s.content.chars().count()).sum();
-    let total = area.width as usize;
-    let gap = total.saturating_sub(used + tasks_w);
+    // Build info segment: running task status or finished notification
+    use crate::app::task_manager::{TaskKind, TaskState};
+
+    let info_segment: Option<(String, ratatui::style::Color)> = if active_tasks > 0 {
+        // Show latest running task status
+        app.task_manager.tasks().iter().rev().find_map(|task| {
+            if let TaskState::Running { status_text, progress_pct } = &task.state {
+                let fg = match &task.kind {
+                    TaskKind::Copy { .. } => t.cyan,
+                    TaskKind::Move { .. } => t.yellow,
+                    TaskKind::Delete { .. } => t.red,
+                };
+                Some((format!("{status_text} {progress_pct}%"), fg))
+            } else {
+                None
+            }
+        })
+    } else if let Some(ref notif) = app.task_notification {
+        Some((notif.clone(), t.fg))
+    } else {
+        None
+    };
+
+    // Compute info segment width
+    let tabs_used: usize = spans.iter().map(|s| s.content.chars().count()).sum();
+    let total_w = area.width as usize;
+
+    let (info_spans, info_w): (Option<Span>, usize) =
+        if let Some((text, fg)) = &info_segment {
+            let content = format!(" {text} ");
+            let needed = content.chars().count() + 1; // +1 for SEP_LEFT
+            let available = total_w.saturating_sub(tabs_used + tasks_w + 1);
+
+            if needed <= available {
+                let span = Span::styled(
+                    content.clone(),
+                    Style::default().fg(*fg).bg(t.bg_light),
+                );
+                (Some(span), needed)
+            } else {
+                (None, 0)
+            }
+        } else {
+            (None, 0)
+        };
+
+    // Fill gap between tabs and info/TASKS
+    let gap = total_w.saturating_sub(tabs_used + info_w + tasks_w);
     if gap > 0 {
         spans.push(Span::styled(
             " ".repeat(gap),
@@ -315,10 +359,24 @@ fn render_tab_bar(f: &mut Frame, app: &App, area: Rect) {
         ));
     }
 
-    spans.push(Span::styled(
-        SEP_LEFT,
-        Style::default().fg(tasks_bg).bg(t.status_bg),
-    ));
+    // Info segment (powerline style)
+    if let Some(info_span) = info_spans {
+        spans.push(Span::styled(
+            SEP_LEFT,
+            Style::default().fg(t.bg_light).bg(t.status_bg),
+        ));
+        spans.push(info_span);
+        spans.push(Span::styled(
+            SEP_LEFT,
+            Style::default().fg(tasks_bg).bg(t.bg_light),
+        ));
+    } else {
+        spans.push(Span::styled(
+            SEP_LEFT,
+            Style::default().fg(tasks_bg).bg(t.status_bg),
+        ));
+    }
+
     spans.push(Span::styled(
         tasks_label,
         Style::default().fg(t.bg_text).bg(tasks_bg),

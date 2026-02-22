@@ -14,11 +14,6 @@ impl App {
     pub fn poll_tasks(&mut self) {
         let events = self.task_manager.poll_all();
 
-        // Update status bar with latest running task progress
-        if let Some(status) = self.task_manager.status_line() {
-            self.status_message = status;
-        }
-
         let mut needs_refresh = false;
 
         for event in events {
@@ -36,12 +31,11 @@ impl App {
             }
         }
 
-        // Set status from the last finished task if no running tasks remain
+        // Set notification from the last finished task if no running tasks remain
         if self.task_manager.active_count() == 0 {
-            // Show the last finished task's summary
             if let Some(task) = self.task_manager.tasks().last() {
                 if let task_manager::TaskState::Finished { summary, .. } = &task.state {
-                    self.status_message = summary.clone();
+                    self.task_notification = Some(summary.clone());
                 }
             }
             self.task_manager.remove_finished();
