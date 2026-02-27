@@ -829,4 +829,225 @@ mod tests {
         assert_eq!(path_size(&dir), 8);
         let _ = fs::remove_dir_all(&dir);
     }
+
+    // --- undo: Copied ---
+
+    #[test]
+    fn undo_copied_removes_dst() {
+        let dir = tmp_dir();
+        let dst = dir.join("copy.txt");
+        fs::write(&dst, "data").unwrap();
+        let records = vec![OpRecord::Copied {
+            _src: PathBuf::from("/orig/file.txt"),
+            dst: dst.clone(),
+        }];
+        let msg = undo(&records).unwrap();
+        assert!(!dst.exists());
+        assert!(msg.contains("1"));
+    }
+
+    #[test]
+    fn undo_copied_dir_removes_dst() {
+        let dir = tmp_dir();
+        let dst_dir = dir.join("copied_dir");
+        fs::create_dir_all(dst_dir.join("sub")).unwrap();
+        fs::write(dst_dir.join("sub/file.txt"), "data").unwrap();
+        let records = vec![OpRecord::Copied {
+            _src: PathBuf::from("/orig/dir"),
+            dst: dst_dir.clone(),
+        }];
+        undo(&records).unwrap();
+        assert!(!dst_dir.exists());
+    }
+
+    // --- undo: Moved (same device) ---
+
+    #[test]
+    fn undo_moved_restores_src() {
+        let dir = tmp_dir();
+        let src = dir.join("original");
+        let dst = dir.join("moved");
+        fs::write(&dst, "content").unwrap();
+        let records = vec![OpRecord::Moved {
+            src: src.clone(),
+            dst: dst.clone(),
+        }];
+        let msg = undo(&records).unwrap();
+        assert!(src.exists());
+        assert!(!dst.exists());
+        assert_eq!(fs::read_to_string(&src).unwrap(), "content");
+        assert!(msg.contains("1"));
+    }
+
+    // --- undo: multiple records ---
+
+    #[test]
+    fn undo_multiple_records_reversed() {
+        let dir = tmp_dir();
+        let f1 = dir.join("file1");
+        let f2 = dir.join("file2");
+        fs::write(&f1, "").unwrap();
+        fs::write(&f2, "").unwrap();
+        let records = vec![
+            OpRecord::Created { path: f1.clone() },
+            OpRecord::Created { path: f2.clone() },
+        ];
+        let msg = undo(&records).unwrap();
+        assert!(!f1.exists());
+        assert!(!f2.exists());
+        assert!(msg.contains("2"));
+    }
+
+    // --- dir_stats ---
+
+    #[test]
+    fn dir_stats_counts() {
+        let dir = tmp_dir();
+        fs::write(dir.join("a.txt"), "12345").unwrap();
+        fs::write(dir.join("b.txt"), "67").unwrap();
+        fs::create_dir(dir.join("sub")).unwrap();
+        fs::write(dir.join("sub/c.txt"), "890").unwrap();
+
+        let (size, files, dirs) = dir_stats(&dir);
+        assert_eq!(files, 3); // a.txt, b.txt, sub/c.txt
+        assert_eq!(dirs, 1);  // sub
+        assert_eq!(size, 10); // 5 + 2 + 3
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn dir_stats_empty() {
+        let dir = tmp_dir();
+        let (size, files, dirs) = dir_stats(&dir);
+        assert_eq!(size, 0);
+        assert_eq!(files, 0);
+        assert_eq!(dirs, 0);
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    // --- path_size edge cases ---
+
+    #[test]
+    fn path_size_nonexistent() {
+        assert_eq!(path_size(Path::new("/nonexistent/path/xyz")), 0);
+    }
+
+    #[test]
+    fn path_size_empty_dir() {
+        let dir = tmp_dir();
+        assert_eq!(path_size(&dir), 0);
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn path_size_nested_dirs() {
+        let dir = tmp_dir();
+        fs::create_dir_all(dir.join("a/b/c")).unwrap();
+        fs::write(dir.join("a/b/c/file"), "hello").unwrap();
+        assert_eq!(path_size(&dir), 5);
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    // --- remove_path ---
+
+    #[test]
+    fn remove_path_file() {
+        let dir = tmp_dir();
+        let f = dir.join("file.txt");
+        fs::write(&f, "data").unwrap();
+        remove_path(&f).unwrap();
+        assert!(!f.exists());
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn remove_path_dir() {
+        let dir = tmp_dir();
+        let sub = dir.join("subdir");
+        fs::create_dir(&sub).unwrap();
+        fs::write(sub.join("f"), "").unwrap();
+        remove_path(&sub).unwrap();
+        assert!(!sub.exists());
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    // --- validate_name edge cases ---
+
+    #[test]
+    fn validate_name_rejects_single_dot() {
+        assert!(validate_name(".").is_err());
+    }
+
+    #[test]
+    fn validate_name_rejects_backslash() {
+        assert!(validate_name("foo\\bar").is_err());
+    }
+
+    #[test]
+    fn validate_name_accepts_unicode() {
+        assert!(validate_name("файл.txt").is_ok());
+        assert!(validate_name("日本語").is_ok());
+    }
+
+    #[test]
+    fn validate_name_accepts_dots_in_name() {
+        assert!(validate_name("file.tar.gz").is_ok());
+        assert!(validate_name("...hidden").is_ok());
+    }
+
+    // --- symlink tests ---
+
+    #[cfg(unix)]
+    #[test]
+    fn copy_symlink_preserves_link() {
+        let dir = tmp_dir();
+        let target = dir.join("target.txt");
+        let link = dir.join("link.txt");
+        let copy = dir.join("copy_link.txt");
+        fs::write(&target, "data").unwrap();
+        std::os::unix::fs::symlink(&target, &link).unwrap();
+
+        copy_symlink(&link, &copy).unwrap();
+        assert!(copy.symlink_metadata().unwrap().is_symlink());
+        assert_eq!(fs::read_link(&copy).unwrap(), target);
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn path_size_symlink() {
+        let dir = tmp_dir();
+        let target = dir.join("target.txt");
+        let link = dir.join("link.txt");
+        fs::write(&target, "hello world").unwrap();
+        std::os::unix::fs::symlink(&target, &link).unwrap();
+
+        // Symlink size should be the link's own size, not target's
+        let link_size = path_size(&link);
+        let link_meta = fs::symlink_metadata(&link).unwrap();
+        assert_eq!(link_size, link_meta.len());
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    // --- chmod / chown on test files ---
+
+    #[cfg(unix)]
+    #[test]
+    fn chmod_changes_permissions() {
+        let dir = tmp_dir();
+        let f = dir.join("file.txt");
+        fs::write(&f, "data").unwrap();
+        chmod(&f, 0o644).unwrap();
+
+        use std::os::unix::fs::PermissionsExt;
+        let mode = fs::metadata(&f).unwrap().permissions().mode() & 0o7777;
+        assert_eq!(mode, 0o644);
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn chmod_nonexistent_fails() {
+        assert!(chmod(Path::new("/nonexistent/file"), 0o755).is_err());
+    }
 }

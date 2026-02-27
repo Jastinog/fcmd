@@ -140,6 +140,58 @@ mod tests {
         assert!(!glob_match("", "a"));
         assert!(glob_match("*", ""));
     }
+
+    #[test]
+    fn glob_multiple_stars() {
+        assert!(glob_match("*test*file*", "my_test_data_file_v2"));
+        assert!(!glob_match("*test*file*", "my_data_v2"));
+    }
+
+    #[test]
+    fn glob_consecutive_stars() {
+        // Multiple consecutive stars should behave like one star
+        assert!(glob_match("**", "anything"));
+        assert!(glob_match("***test***", "mytest"));
+    }
+
+    #[test]
+    fn glob_only_question_marks() {
+        assert!(glob_match("???", "abc"));
+        assert!(!glob_match("???", "ab"));
+        assert!(!glob_match("???", "abcd"));
+    }
+
+    #[test]
+    fn glob_star_at_end() {
+        assert!(glob_match("hello*", "hello"));
+        assert!(glob_match("hello*", "hello world"));
+    }
+
+    #[test]
+    fn glob_star_at_start() {
+        assert!(glob_match("*.txt", ".txt"));
+        assert!(glob_match("*world", "world"));
+    }
+
+    #[test]
+    fn glob_pattern_longer_than_text() {
+        assert!(!glob_match("abcdef", "abc"));
+        assert!(!glob_match("a?c?e", "ace"));
+    }
+
+    #[test]
+    fn glob_unicode() {
+        assert!(glob_match("*.рс", "файл.рс"));
+        assert!(glob_match("日*", "日本語"));
+    }
+
+    #[test]
+    fn glob_no_exponential_backtracking() {
+        // This pattern would cause exponential backtracking with naive recursive impl
+        let pattern = "*a*a*a*a*a*a*a*a*b";
+        let text = "aaaaaaaaaaaaaaaaaaaaaaaaa"; // no 'b' at end
+        assert!(!glob_match(pattern, text));
+    }
 }
 
 pub async fn copy_to_clipboard(text: &str) -> std::io::Result<()> {

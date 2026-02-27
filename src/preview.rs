@@ -457,6 +457,186 @@ mod tests {
         assert_eq!(p.scroll, 0);
     }
 
+    // ── sanitize_line extras ───────────────────────────────────────
+
+    #[test]
+    fn sanitize_multiple_tabs() {
+        // Two tabs at col 0 → 4+4 = 8 spaces
+        assert_eq!(sanitize_line("\t\t"), "        ");
+    }
+
+    #[test]
+    fn sanitize_tab_alignment() {
+        // "abc" (3 cols) + tab → 1 space to align to col 4
+        assert_eq!(sanitize_line("abc\td"), "abc d");
+    }
+
+    #[test]
+    fn sanitize_empty() {
+        assert_eq!(sanitize_line(""), "");
+    }
+
+    #[test]
+    fn sanitize_unicode_preserved() {
+        assert_eq!(sanitize_line("日本語"), "日本語");
+        assert_eq!(sanitize_line("café"), "café");
+    }
+
+    // ── Preview::load with real files ────────────────────────────
+
+    #[test]
+    fn load_text_file() {
+        let dir = std::env::temp_dir().join("fcmd_preview_test_text");
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("test.txt");
+        std::fs::write(&path, "line1\nline2\nline3\n").unwrap();
+
+        let p = Preview::load(&path, MAX_LINES);
+        assert!(!p.is_binary);
+        assert_eq!(p.lines.len(), 3);
+        assert_eq!(p.lines[0], "line1");
+        assert_eq!(p.title, "test.txt");
+        assert!(p.info.contains("3 lines"));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn load_binary_file() {
+        let dir = std::env::temp_dir().join("fcmd_preview_test_bin");
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("test.bin");
+        let mut data = vec![0u8; 256];
+        for (i, b) in data.iter_mut().enumerate() {
+            *b = i as u8;
+        }
+        std::fs::write(&path, &data).unwrap();
+
+        let p = Preview::load(&path, MAX_LINES);
+        assert!(p.is_binary);
+        assert_eq!(p.binary_size, 256);
+        assert!(p.info.contains("binary"));
+        // Hex dump lines: 256/16 = 16 lines
+        assert_eq!(p.lines.len(), 16);
+        // First line should start with 00000000
+        assert!(p.lines[0].starts_with("00000000"));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn load_directory_preview() {
+        let dir = std::env::temp_dir().join("fcmd_preview_test_dir");
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("alpha.txt"), "").unwrap();
+        std::fs::write(dir.join("beta.txt"), "").unwrap();
+        std::fs::create_dir(dir.join("gamma")).unwrap();
+
+        let p = Preview::load(&dir, MAX_LINES);
+        assert!(!p.is_binary);
+        assert_eq!(p.lines.len(), 3);
+        assert!(p.info.contains("3 entries"));
+        // Sorted case-insensitive, dirs have trailing /
+        assert!(p.lines.iter().any(|l| l == "gamma/"));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn load_empty_file() {
+        let dir = std::env::temp_dir().join("fcmd_preview_test_empty");
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("empty.txt");
+        std::fs::write(&path, "").unwrap();
+
+        let p = Preview::load(&path, MAX_LINES);
+        assert!(!p.is_binary);
+        assert!(p.lines.is_empty());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn load_nonexistent_file() {
+        let p = Preview::load(std::path::Path::new("/nonexistent/file.txt"), MAX_LINES);
+        assert!(!p.is_binary);
+        assert!(p.lines[0].contains("Cannot read"));
+    }
+
+    #[test]
+    fn load_partial_side_panel() {
+        let dir = std::env::temp_dir().join("fcmd_preview_test_partial");
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("long.txt");
+        let content: String = (0..100).map(|i| format!("line {i}\n")).collect();
+        std::fs::write(&path, &content).unwrap();
+
+        // Partial: only 10 lines
+        let p = Preview::load(&path, 10);
+        assert_eq!(p.lines.len(), 10);
+        assert!(p.info.contains("10+ lines"));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn loading_placeholder_sets_title() {
+        let p = Preview::loading_placeholder(std::path::Path::new("/tmp/foo.rs"));
+        assert_eq!(p.title, "foo.rs");
+        assert!(p.lines.is_empty());
+        assert_eq!(p.info, "loading");
+    }
+
+    // ── hex dump formatting ────────────────────────────────────────
+
+    #[test]
+    fn load_binary_hex_format() {
+        let dir = std::env::temp_dir().join("fcmd_preview_test_hex");
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("test.bin");
+        // Write 5 bytes — tests incomplete line padding
+        std::fs::write(&path, &[0x41, 0x42, 0x00, 0x43, 0x44]).unwrap();
+
+        let p = Preview::load(&path, MAX_LINES);
+        assert!(p.is_binary);
+        assert_eq!(p.lines.len(), 1);
+        // Should have hex and ASCII representation
+        assert!(p.lines[0].contains("41 42 00 43 44"));
+        assert!(p.lines[0].contains("|AB.CD")); // NUL shown as '.'
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    // ── scroll edge cases ──────────────────────────────────────────
+
+    #[test]
+    fn scroll_down_empty_lines() {
+        let mut p = Preview {
+            lines: vec![],
+            scroll: 0,
+            title: String::new(),
+            info: String::new(),
+            is_binary: false,
+            binary_size: 0,
+        };
+        p.scroll_down(10, 5);
+        assert_eq!(p.scroll, 0);
+    }
+
+    #[test]
+    fn scroll_up_already_at_zero() {
+        let mut p = Preview {
+            lines: vec!["a".into()],
+            scroll: 0,
+            title: String::new(),
+            info: String::new(),
+            is_binary: false,
+            binary_size: 0,
+        };
+        p.scroll_up(10);
+        assert_eq!(p.scroll, 0);
+    }
+
     #[test]
     fn scroll_down_clamps_at_max() {
         let lines: Vec<String> = (0..20).map(|i| format!("line {i}")).collect();

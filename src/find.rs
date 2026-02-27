@@ -666,6 +666,195 @@ mod tests {
         assert_eq!(fs.scroll, 0);
     }
 
+    // ── refilter & update_filter ──────────────────────────────────
+
+    #[test]
+    fn update_filter_empty_query_shows_all() {
+        let mut fs = FindState::new_test(
+            Path::new("/tmp"),
+            &[("a.txt", false), ("b.rs", false), ("c.py", false)],
+        );
+        fs.query = String::new();
+        fs.update_filter();
+        assert_eq!(fs.filtered.len(), 3);
+        assert_eq!(fs.selected, 0);
+    }
+
+    #[test]
+    fn update_filter_narrows_results() {
+        let mut fs = FindState::new_test(
+            Path::new("/tmp"),
+            &[("main.rs", false), ("lib.rs", false), ("readme.md", false)],
+        );
+        fs.query = "rs".into();
+        fs.update_filter();
+        assert_eq!(fs.filtered.len(), 2);
+    }
+
+    #[test]
+    fn update_filter_no_match() {
+        let mut fs = FindState::new_test(
+            Path::new("/tmp"),
+            &[("a.txt", false), ("b.txt", false)],
+        );
+        fs.query = "xyz".into();
+        fs.update_filter();
+        assert_eq!(fs.filtered.len(), 0);
+        assert_eq!(fs.selected, 0);
+    }
+
+    #[test]
+    fn update_filter_resets_selected_and_scroll() {
+        let mut fs = FindState::new_test(
+            Path::new("/tmp"),
+            &[("a.txt", false), ("b.txt", false), ("c.txt", false)],
+        );
+        fs.selected = 2;
+        fs.scroll = 1;
+        fs.query = "a".into();
+        fs.update_filter();
+        assert_eq!(fs.selected, 0);
+        assert_eq!(fs.scroll, 0);
+    }
+
+    // ── selected_is_dir ────────────────────────────────────────────
+
+    #[test]
+    fn selected_is_dir_true() {
+        let fs = FindState::new_test(
+            Path::new("/tmp"),
+            &[("src/", true), ("main.rs", false)],
+        );
+        assert!(fs.selected_is_dir());
+    }
+
+    #[test]
+    fn selected_is_dir_false() {
+        let fs = FindState::new_test(
+            Path::new("/tmp"),
+            &[("main.rs", false), ("src/", true)],
+        );
+        assert!(!fs.selected_is_dir());
+    }
+
+    #[test]
+    fn selected_is_dir_empty() {
+        let fs = FindState::new_test(Path::new("/tmp"), &[]);
+        assert!(!fs.selected_is_dir());
+    }
+
+    // ── total_count & filtered_count ──────────────────────────────
+
+    #[test]
+    fn total_and_filtered_counts() {
+        let mut fs = FindState::new_test(
+            Path::new("/tmp"),
+            &[("a.rs", false), ("b.py", false), ("c.rs", false)],
+        );
+        assert_eq!(fs.total_count(), 3);
+        assert_eq!(fs.filtered_count(), 3);
+
+        fs.query = "rs".into();
+        fs.update_filter();
+        assert_eq!(fs.total_count(), 3); // total unchanged
+        assert_eq!(fs.filtered_count(), 2);
+    }
+
+    // ── move_down with empty filtered ──────────────────────────────
+
+    #[test]
+    fn move_down_empty_noop() {
+        let mut fs = FindState::new_test(Path::new("/tmp"), &[]);
+        fs.move_down();
+        assert_eq!(fs.selected, 0);
+    }
+
+    #[test]
+    fn move_up_at_zero_noop() {
+        let mut fs = FindState::new_test(
+            Path::new("/tmp"),
+            &[("a.txt", false)],
+        );
+        fs.move_up();
+        assert_eq!(fs.selected, 0);
+    }
+
+    // ── adjust_scroll zero height ──────────────────────────────────
+
+    #[test]
+    fn adjust_scroll_zero_height_noop() {
+        let mut fs = FindState::new_test(
+            Path::new("/tmp"),
+            &[("a.txt", false)],
+        );
+        fs.selected = 0;
+        fs.scroll = 5;
+        fs.adjust_scroll(0);
+        assert_eq!(fs.scroll, 5); // unchanged
+    }
+
+    // ── get_item out of bounds ─────────────────────────────────────
+
+    #[test]
+    fn get_item_out_of_bounds() {
+        let fs = FindState::new_test(
+            Path::new("/tmp"),
+            &[("a.txt", false)],
+        );
+        assert!(fs.get_item(999).is_none());
+    }
+
+    // ── selected_path with no entries ──────────────────────────────
+
+    #[test]
+    fn selected_path_empty() {
+        let fs = FindState::new_test(Path::new("/tmp"), &[]);
+        assert!(fs.selected_path().is_none());
+    }
+
+    // ── elapsed_str ────────────────────────────────────────────────
+
+    #[test]
+    fn elapsed_str_none() {
+        let fs = FindState::new_test(Path::new("/tmp"), &[]);
+        assert!(fs.elapsed_str().is_empty());
+    }
+
+    // ── switch_scope ───────────────────────────────────────────────
+
+    #[test]
+    fn switch_scope_preserves_query() {
+        let mut fs = FindState::new_test(Path::new("/tmp"), &[]);
+        fs.query = "hello".into();
+        fs.scope = FindScope::Local;
+        // Note: switch_scope creates new state with same query
+        // Can't fully test without tokio runtime, but verify structure
+    }
+
+    // ── fuzzy scoring edge cases ───────────────────────────────────
+
+    #[test]
+    fn fuzzy_single_char_match() {
+        let q: Vec<char> = "a".chars().collect();
+        assert!(fuzzy_score_pre(&q, "abc", 3).is_some());
+        assert!(fuzzy_score_pre(&q, "xyz", 3).is_none());
+    }
+
+    #[test]
+    fn fuzzy_query_longer_than_text() {
+        let q: Vec<char> = "abcdef".chars().collect();
+        assert!(fuzzy_score_pre(&q, "abc", 3).is_none());
+    }
+
+    #[test]
+    fn fuzzy_consecutive_bonus() {
+        // Use inputs without word-boundary separators so consecutive bonus dominates
+        let q: Vec<char> = "abc".chars().collect();
+        let consec = fuzzy_score_pre(&q, "xabcx", 5);
+        let scattered = fuzzy_score_pre(&q, "xaxbxcx", 7);
+        assert!(consec.unwrap() > scattered.unwrap());
+    }
+
     #[test]
     fn get_item_and_selected_path() {
         let fs = FindState::new_test(

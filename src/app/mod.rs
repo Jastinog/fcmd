@@ -1561,4 +1561,552 @@ mod tests {
         app.handle_theme_picker(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE));
         assert_eq!(app.theme_col, 1);
     }
+
+    // ── Visual mode handler tests ────────────────────────────────
+
+    #[tokio::test]
+    async fn visual_j_k_moves_cursor() {
+        let entries = make_test_entries(&["a.txt", "b.txt", "c.txt"]);
+        let mut app = App::new_for_test(entries);
+        app.active_panel_mut().selected = 1;
+        app.enter_visual();
+
+        app.handle_visual(KeyEvent::new(KeyCode::Char('j'), KeyModifiers::NONE));
+        assert_eq!(app.active_panel().selected, 2);
+
+        app.handle_visual(KeyEvent::new(KeyCode::Char('k'), KeyModifiers::NONE));
+        assert_eq!(app.active_panel().selected, 1);
+    }
+
+    #[tokio::test]
+    async fn visual_g_g_goes_to_top() {
+        let entries = make_test_entries(&["a.txt", "b.txt", "c.txt"]);
+        let mut app = App::new_for_test(entries);
+        app.active_panel_mut().selected = 3;
+        app.enter_visual();
+        // Pending 'g' then 'g'
+        app.handle_visual(KeyEvent::new(KeyCode::Char('g'), KeyModifiers::NONE));
+        app.handle_visual(KeyEvent::new(KeyCode::Char('g'), KeyModifiers::NONE));
+        assert_eq!(app.active_panel().selected, 0);
+    }
+
+    #[tokio::test]
+    async fn visual_G_goes_to_bottom() {
+        let entries = make_test_entries(&["a.txt", "b.txt", "c.txt"]);
+        let mut app = App::new_for_test(entries);
+        app.active_panel_mut().selected = 0;
+        app.enter_visual();
+        app.handle_visual(KeyEvent::new(KeyCode::Char('G'), KeyModifiers::NONE));
+        assert_eq!(app.active_panel().selected, 3);
+    }
+
+    #[tokio::test]
+    async fn visual_v_exits() {
+        let entries = make_test_entries(&["a.txt"]);
+        let mut app = App::new_for_test(entries);
+        app.enter_visual();
+        app.handle_visual(KeyEvent::new(KeyCode::Char('v'), KeyModifiers::NONE));
+        assert_eq!(app.mode, Mode::Normal);
+        assert!(app.active_panel().visual_anchor.is_none());
+    }
+
+    #[tokio::test]
+    async fn visual_tab_exits_and_cycles() {
+        let entries = make_test_entries(&["a.txt"]);
+        let mut app = App::new_for_test(entries);
+        app.layout = PanelLayout::Dual;
+        app.enter_visual();
+        app.handle_visual(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE));
+        assert_eq!(app.mode, Mode::Normal);
+        assert_eq!(app.tab().active, 1);
+    }
+
+    #[tokio::test]
+    async fn visual_yank_sets_register() {
+        let entries = make_test_entries(&["a.txt", "b.txt"]);
+        let mut app = App::new_for_test(entries);
+        app.active_panel_mut().selected = 1;
+        app.enter_visual(); // anchor at 1
+        app.active_panel_mut().selected = 2; // extend to 2
+        app.handle_visual(KeyEvent::new(KeyCode::Char('y'), KeyModifiers::NONE));
+        assert_eq!(app.mode, Mode::Normal);
+        assert!(app.register.is_some());
+        assert_eq!(app.register.as_ref().unwrap().entries.len(), 2);
+        assert!(app.status_message.contains("Yanked"));
+    }
+
+    // ── Select mode handler tests ────────────────────────────────
+
+    #[tokio::test]
+    async fn select_j_k_moves_cursor() {
+        let entries = make_test_entries(&["a.txt", "b.txt", "c.txt"]);
+        let mut app = App::new_for_test(entries);
+        app.active_panel_mut().selected = 1;
+        app.enter_select_and_mark(); // toggle_mark moves cursor down → selected=2
+
+        app.handle_select(KeyEvent::new(KeyCode::Char('j'), KeyModifiers::NONE));
+        assert_eq!(app.active_panel().selected, 3);
+
+        app.handle_select(KeyEvent::new(KeyCode::Char('k'), KeyModifiers::NONE));
+        assert_eq!(app.active_panel().selected, 2);
+    }
+
+    #[tokio::test]
+    async fn select_esc_clears_marks() {
+        let entries = make_test_entries(&["a.txt", "b.txt"]);
+        let mut app = App::new_for_test(entries);
+        app.active_panel_mut().selected = 1;
+        app.enter_select_and_mark();
+        assert!(!app.active_panel().marked.is_empty());
+
+        app.handle_select(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
+        assert_eq!(app.mode, Mode::Normal);
+        assert!(app.active_panel().marked.is_empty());
+    }
+
+    #[tokio::test]
+    async fn select_shift_down_marks_and_moves() {
+        let entries = make_test_entries(&["a.txt", "b.txt", "c.txt"]);
+        let mut app = App::new_for_test(entries);
+        app.active_panel_mut().selected = 1;
+        app.mode = Mode::Select;
+        app.handle_select(KeyEvent::new(KeyCode::Down, KeyModifiers::SHIFT));
+        // toggle_mark marks current and moves down
+        assert!(app.active_panel().marked.contains(&PathBuf::from("/test/a.txt")));
+        assert_eq!(app.active_panel().selected, 2);
+    }
+
+    #[tokio::test]
+    async fn select_yank_clears_marks() {
+        let entries = make_test_entries(&["a.txt", "b.txt"]);
+        let mut app = App::new_for_test(entries);
+        app.active_panel_mut().selected = 1;
+        app.enter_select_and_mark();
+        assert!(!app.active_panel().marked.is_empty());
+
+        app.handle_select(KeyEvent::new(KeyCode::Char('y'), KeyModifiers::NONE));
+        assert_eq!(app.mode, Mode::Normal);
+        assert!(app.active_panel().marked.is_empty());
+        assert!(app.register.is_some());
+    }
+
+    #[tokio::test]
+    async fn select_v_enters_visual() {
+        let entries = make_test_entries(&["a.txt"]);
+        let mut app = App::new_for_test(entries);
+        app.mode = Mode::Select;
+        app.handle_select(KeyEvent::new(KeyCode::Char('v'), KeyModifiers::NONE));
+        assert_eq!(app.mode, Mode::Visual);
+    }
+
+    #[tokio::test]
+    async fn select_G_goes_bottom() {
+        let entries = make_test_entries(&["a.txt", "b.txt", "c.txt"]);
+        let mut app = App::new_for_test(entries);
+        app.mode = Mode::Select;
+        app.handle_select(KeyEvent::new(KeyCode::Char('G'), KeyModifiers::NONE));
+        assert_eq!(app.active_panel().selected, 3);
+    }
+
+    #[tokio::test]
+    async fn select_gg_goes_top() {
+        let entries = make_test_entries(&["a.txt", "b.txt", "c.txt"]);
+        let mut app = App::new_for_test(entries);
+        app.active_panel_mut().selected = 3;
+        app.mode = Mode::Select;
+        app.handle_select(KeyEvent::new(KeyCode::Char('g'), KeyModifiers::NONE));
+        app.handle_select(KeyEvent::new(KeyCode::Char('g'), KeyModifiers::NONE));
+        assert_eq!(app.active_panel().selected, 0);
+    }
+
+    // ── Command mode additional tests ────────────────────────────
+    // Note: execute_command is private, so we test via handle_command(Enter)
+
+    fn run_command(app: &mut App, cmd: &str) {
+        app.mode = Mode::Command;
+        app.command_input = cmd.into();
+        app.handle_command(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+    }
+
+    #[tokio::test]
+    async fn cmd_sort_all_modes() {
+        let entries = make_test_entries(&["a.txt"]);
+
+        let mut app = App::new_for_test(entries.clone());
+        run_command(&mut app, "sort mod");
+        assert_eq!(app.active_panel().sort_mode, SortMode::Modified);
+
+        let mut app = App::new_for_test(entries.clone());
+        run_command(&mut app, "sort cre");
+        assert_eq!(app.active_panel().sort_mode, SortMode::Created);
+
+        let mut app = App::new_for_test(entries.clone());
+        run_command(&mut app, "sort ext");
+        assert_eq!(app.active_panel().sort_mode, SortMode::Extension);
+
+        let mut app = App::new_for_test(entries.clone());
+        run_command(&mut app, "sort d");
+        assert_eq!(app.active_panel().sort_mode, SortMode::Modified);
+
+        let mut app = App::new_for_test(entries.clone());
+        run_command(&mut app, "sort e");
+        assert_eq!(app.active_panel().sort_mode, SortMode::Extension);
+    }
+
+    #[tokio::test]
+    async fn cmd_sort_invalid() {
+        let entries = make_test_entries(&["a.txt"]);
+        let mut app = App::new_for_test(entries);
+        run_command(&mut app, "sort xyz");
+        assert!(app.status_message.contains("Usage"));
+    }
+
+    #[tokio::test]
+    async fn cmd_mark_stores() {
+        let entries = make_test_entries(&["a.txt"]);
+        let mut app = App::new_for_test(entries);
+        run_command(&mut app, "mark a");
+        assert!(app.marks.contains_key(&'a'));
+    }
+
+    #[tokio::test]
+    async fn cmd_mark_invalid() {
+        let entries = make_test_entries(&["a.txt"]);
+        let mut app = App::new_for_test(entries);
+        run_command(&mut app, "mark A");
+        assert!(app.status_message.contains("Usage"));
+
+        run_command(&mut app, "mark");
+        assert!(app.status_message.contains("Usage"));
+    }
+
+    #[tokio::test]
+    async fn cmd_marks_empty() {
+        let entries = make_test_entries(&["a.txt"]);
+        let mut app = App::new_for_test(entries);
+        run_command(&mut app, "marks");
+        assert!(app.status_message.contains("No marks"));
+    }
+
+    #[tokio::test]
+    async fn cmd_marks_shows_list() {
+        let entries = make_test_entries(&["a.txt"]);
+        let mut app = App::new_for_test(entries);
+        app.set_mark('a');
+        run_command(&mut app, "marks");
+        assert!(app.status_message.contains("'a="));
+    }
+
+    #[tokio::test]
+    async fn cmd_empty_noop() {
+        let entries = make_test_entries(&["a.txt"]);
+        let mut app = App::new_for_test(entries);
+        run_command(&mut app, "  ");
+        assert!(!app.should_quit);
+    }
+
+    #[tokio::test]
+    async fn cmd_bdel_nonexistent() {
+        let entries = make_test_entries(&["a.txt"]);
+        let mut app = App::new_for_test(entries);
+        run_command(&mut app, "bdel nonexistent");
+        assert!(app.status_message.contains("not found"));
+    }
+
+    #[tokio::test]
+    async fn cmd_du_starts() {
+        let entries = make_test_entries(&["dir/"]);
+        let mut app = App::new_for_test(entries);
+        run_command(&mut app, "du");
+    }
+
+    #[tokio::test]
+    async fn cmd_mkdir_no_arg() {
+        let entries = make_test_entries(&["a.txt"]);
+        let mut app = App::new_for_test(entries);
+        run_command(&mut app, "mkdir");
+        assert!(app.status_message.contains("Usage"));
+    }
+
+    #[tokio::test]
+    async fn cmd_touch_no_arg() {
+        let entries = make_test_entries(&["a.txt"]);
+        let mut app = App::new_for_test(entries);
+        run_command(&mut app, "touch");
+        assert!(app.status_message.contains("Usage"));
+    }
+
+    #[tokio::test]
+    async fn cmd_rename_no_arg() {
+        let entries = make_test_entries(&["a.txt"]);
+        let mut app = App::new_for_test(entries);
+        run_command(&mut app, "rename");
+        assert!(app.status_message.contains("Usage"));
+    }
+
+    #[tokio::test]
+    async fn cmd_cd_no_arg() {
+        let entries = make_test_entries(&["a.txt"]);
+        let mut app = App::new_for_test(entries);
+        run_command(&mut app, "cd");
+        assert!(app.status_message.contains("Usage"));
+    }
+
+    #[tokio::test]
+    async fn cmd_bookmark_no_dir() {
+        let entries = make_test_entries(&["a.txt"]);
+        let mut app = App::new_for_test(entries);
+        app.active_panel_mut().selected = 1; // "a.txt" (not a dir)
+        run_command(&mut app, "bookmark test");
+        assert!(app.status_message.contains("directory"));
+    }
+
+    #[tokio::test]
+    async fn cmd_brename_no_arg() {
+        let entries = make_test_entries(&["a.txt"]);
+        let mut app = App::new_for_test(entries);
+        run_command(&mut app, "brename");
+        assert!(app.status_message.contains("Usage"));
+    }
+
+    #[tokio::test]
+    async fn cmd_brename_missing_newname() {
+        let entries = make_test_entries(&["a.txt"]);
+        let mut app = App::new_for_test(entries);
+        run_command(&mut app, "brename old");
+        assert!(app.status_message.contains("Usage"));
+    }
+
+    #[tokio::test]
+    async fn cmd_quit_excl() {
+        let entries = make_test_entries(&["a.txt"]);
+        let mut app = App::new_for_test(entries);
+        run_command(&mut app, "q!");
+        assert!(app.should_quit);
+    }
+
+    // ── Chmod handler tests ──────────────────────────────────────
+
+    #[tokio::test]
+    async fn handle_chmod_empty_enter_exits() {
+        let entries = make_test_entries(&["a.txt"]);
+        let mut app = App::new_for_test(entries);
+        app.mode = Mode::Chmod;
+        app.rename_input.clear();
+        app.chmod_paths = vec![PathBuf::from("/test/a.txt")];
+        app.handle_chmod(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+        assert_eq!(app.mode, Mode::Normal);
+        assert!(app.chmod_paths.is_empty());
+    }
+
+    #[tokio::test]
+    async fn handle_chmod_invalid_mode_shows_error() {
+        let entries = make_test_entries(&["a.txt"]);
+        let mut app = App::new_for_test(entries);
+        app.mode = Mode::Chmod;
+        app.rename_input = "99".into(); // only 2 digits
+        app.chmod_paths = vec![PathBuf::from("/test/a.txt")];
+        app.handle_chmod(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+        assert!(app.status_message.contains("Invalid"));
+        assert_eq!(app.mode, Mode::Chmod); // stays in chmod mode
+    }
+
+    #[tokio::test]
+    async fn handle_chmod_invalid_digit_shows_error() {
+        let entries = make_test_entries(&["a.txt"]);
+        let mut app = App::new_for_test(entries);
+        app.mode = Mode::Chmod;
+        app.rename_input = "898".into(); // 8 and 9 are not octal
+        app.chmod_paths = vec![PathBuf::from("/test/a.txt")];
+        app.handle_chmod(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+        assert!(app.status_message.contains("Invalid"));
+    }
+
+    #[tokio::test]
+    async fn handle_chmod_backspace_empty_exits() {
+        let entries = make_test_entries(&["a.txt"]);
+        let mut app = App::new_for_test(entries);
+        app.mode = Mode::Chmod;
+        app.rename_input.clear();
+        app.chmod_paths = vec![PathBuf::from("/test/a.txt")];
+        app.handle_chmod(KeyEvent::new(KeyCode::Backspace, KeyModifiers::NONE));
+        assert_eq!(app.mode, Mode::Normal);
+    }
+
+    // ── Chown handler tests ──────────────────────────────────────
+
+    #[tokio::test]
+    async fn handle_chown_navigation() {
+        let entries = make_test_entries(&["a.txt"]);
+        let mut app = App::new_for_test(entries);
+        app.mode = Mode::Chown;
+        app.visible_height = 20;
+        app.chown_picker = Some(crate::app::chmod::ChownPicker {
+            users: vec![("root".into(), 0), ("user".into(), 1000), ("daemon".into(), 1)],
+            groups: vec![("wheel".into(), 0), ("staff".into(), 20)],
+            user_cursor: 0,
+            group_cursor: 0,
+            user_scroll: 0,
+            group_scroll: 0,
+            column: 0,
+            paths: vec![PathBuf::from("/test/a.txt")],
+            current_uid: Some(0),
+            current_gid: Some(0),
+        });
+
+        // j moves user cursor down
+        app.handle_chown(KeyEvent::new(KeyCode::Char('j'), KeyModifiers::NONE));
+        assert_eq!(app.chown_picker.as_ref().unwrap().user_cursor, 1);
+
+        // k moves back
+        app.handle_chown(KeyEvent::new(KeyCode::Char('k'), KeyModifiers::NONE));
+        assert_eq!(app.chown_picker.as_ref().unwrap().user_cursor, 0);
+
+        // Tab switches to group column
+        app.handle_chown(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE));
+        assert_eq!(app.chown_picker.as_ref().unwrap().column, 1);
+
+        // j moves group cursor
+        app.handle_chown(KeyEvent::new(KeyCode::Char('j'), KeyModifiers::NONE));
+        assert_eq!(app.chown_picker.as_ref().unwrap().group_cursor, 1);
+
+        // G goes to end
+        app.handle_chown(KeyEvent::new(KeyCode::Char('G'), KeyModifiers::NONE));
+        assert_eq!(app.chown_picker.as_ref().unwrap().group_cursor, 1); // last item
+
+        // g goes to start
+        app.handle_chown(KeyEvent::new(KeyCode::Char('g'), KeyModifiers::NONE));
+        assert_eq!(app.chown_picker.as_ref().unwrap().group_cursor, 0);
+    }
+
+    #[tokio::test]
+    async fn handle_chown_esc_exits() {
+        let entries = make_test_entries(&["a.txt"]);
+        let mut app = App::new_for_test(entries);
+        app.mode = Mode::Chown;
+        app.chown_picker = Some(crate::app::chmod::ChownPicker {
+            users: vec![],
+            groups: vec![],
+            user_cursor: 0,
+            group_cursor: 0,
+            user_scroll: 0,
+            group_scroll: 0,
+            column: 0,
+            paths: vec![],
+            current_uid: None,
+            current_gid: None,
+        });
+
+        app.handle_chown(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
+        assert_eq!(app.mode, Mode::Normal);
+        assert!(app.chown_picker.is_none());
+    }
+
+    #[tokio::test]
+    async fn handle_chown_no_picker_exits() {
+        let entries = make_test_entries(&["a.txt"]);
+        let mut app = App::new_for_test(entries);
+        app.mode = Mode::Chown;
+        app.chown_picker = None;
+        app.handle_chown(KeyEvent::new(KeyCode::Char('j'), KeyModifiers::NONE));
+        assert_eq!(app.mode, Mode::Normal);
+    }
+
+    // ── File ops tests ──────────────────────────────────────────
+
+    #[tokio::test]
+    async fn yank_targeted_empty() {
+        let entries = make_test_entries(&[]);
+        let mut app = App::new_for_test(entries);
+        app.active_panel_mut().selected = 0; // ".."
+        app.yank_targeted();
+        assert!(app.register.is_none());
+        assert!(app.status_message.contains("Nothing to yank"));
+    }
+
+    #[tokio::test]
+    async fn yank_targeted_single() {
+        let entries = make_test_entries(&["a.txt"]);
+        let mut app = App::new_for_test(entries);
+        app.active_panel_mut().selected = 1; // "a.txt"
+        app.yank_targeted();
+        assert!(app.register.is_some());
+        assert_eq!(app.register.as_ref().unwrap().entries.len(), 1);
+        assert!(app.status_message.contains("Yanked 1"));
+    }
+
+    #[tokio::test]
+    async fn copy_to_other_panel_single_layout_blocked() {
+        let entries = make_test_entries(&["a.txt"]);
+        let mut app = App::new_for_test(entries);
+        app.layout = PanelLayout::Single;
+        app.copy_to_other_panel();
+        assert!(app.status_message.contains("Cannot copy"));
+    }
+
+    #[tokio::test]
+    async fn move_to_other_panel_single_layout_blocked() {
+        let entries = make_test_entries(&["a.txt"]);
+        let mut app = App::new_for_test(entries);
+        app.layout = PanelLayout::Single;
+        app.move_to_other_panel();
+        assert!(app.status_message.contains("Cannot move"));
+    }
+
+    #[tokio::test]
+    async fn move_to_other_panel_empty_nothing() {
+        let entries = make_test_entries(&[]);
+        let mut app = App::new_for_test(entries);
+        app.layout = PanelLayout::Dual;
+        app.active_panel_mut().selected = 0; // ".."
+        app.move_to_other_panel();
+        assert!(app.status_message.contains("Nothing to move"));
+    }
+
+    #[tokio::test]
+    async fn paste_empty_register() {
+        let entries = make_test_entries(&["a.txt"]);
+        let mut app = App::new_for_test(entries);
+        app.register = None;
+        app.paste(false);
+        assert!(app.status_message.contains("Register empty"));
+    }
+
+    #[tokio::test]
+    async fn undo_empty_stack() {
+        let entries = make_test_entries(&["a.txt"]);
+        let mut app = App::new_for_test(entries);
+        app.undo();
+        assert!(app.status_message.contains("Nothing to undo"));
+    }
+
+    #[tokio::test]
+    async fn request_delete_empty_shows_message() {
+        let entries = make_test_entries(&[]);
+        let mut app = App::new_for_test(entries);
+        app.active_panel_mut().selected = 0; // ".."
+        app.request_delete();
+        assert!(app.status_message.contains("Nothing to delete"));
+    }
+
+    #[tokio::test]
+    async fn request_delete_enters_confirm() {
+        let entries = make_test_entries(&["a.txt"]);
+        let mut app = App::new_for_test(entries);
+        app.active_panel_mut().selected = 1; // "a.txt"
+        app.request_delete();
+        assert_eq!(app.mode, Mode::Confirm);
+        assert!(!app.confirm_permanent);
+        assert_eq!(app.confirm_paths.len(), 1);
+    }
+
+    #[tokio::test]
+    async fn request_permanent_delete_sets_flag() {
+        let entries = make_test_entries(&["a.txt"]);
+        let mut app = App::new_for_test(entries);
+        app.active_panel_mut().selected = 1;
+        app.request_permanent_delete();
+        assert_eq!(app.mode, Mode::Confirm);
+        assert!(app.confirm_permanent);
+    }
 }

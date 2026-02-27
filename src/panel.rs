@@ -1071,6 +1071,211 @@ mod tests {
         assert!(cache.get(&PathBuf::from("/b")).is_none());
     }
 
+    // ── Sort edge cases ──────────────────────────────────────────
+
+    #[test]
+    fn sort_by_created() {
+        use std::time::{SystemTime, Duration};
+        let t1 = SystemTime::UNIX_EPOCH;
+        let t2 = SystemTime::UNIX_EPOCH + Duration::from_secs(100);
+        let mut dirs = vec![];
+        let mut files = vec![
+            FileEntry {
+                name: "newer.txt".into(),
+                path: PathBuf::from("/tmp/newer.txt"),
+                is_dir: false,
+                size: 0,
+                modified: None,
+                created: Some(t2),
+                is_symlink: false,
+            },
+            FileEntry {
+                name: "older.txt".into(),
+                path: PathBuf::from("/tmp/older.txt"),
+                is_dir: false,
+                size: 0,
+                modified: None,
+                created: Some(t1),
+                is_symlink: false,
+            },
+        ];
+        sort_file_entries(&mut dirs, &mut files, SortMode::Created, false, &HashMap::new());
+        assert_eq!(files[0].name, "older.txt");
+        assert_eq!(files[1].name, "newer.txt");
+    }
+
+    #[test]
+    fn sort_by_extension_ordering() {
+        let mut dirs = vec![];
+        let mut files = vec![
+            FileEntry {
+                name: "b.py".into(),
+                path: PathBuf::from("/b.py"),
+                is_dir: false,
+                size: 0,
+                modified: None,
+                created: None,
+                is_symlink: false,
+            },
+            FileEntry {
+                name: "a.rs".into(),
+                path: PathBuf::from("/a.rs"),
+                is_dir: false,
+                size: 0,
+                modified: None,
+                created: None,
+                is_symlink: false,
+            },
+            FileEntry {
+                name: "c.go".into(),
+                path: PathBuf::from("/c.go"),
+                is_dir: false,
+                size: 0,
+                modified: None,
+                created: None,
+                is_symlink: false,
+            },
+        ];
+        sort_file_entries(&mut dirs, &mut files, SortMode::Extension, false, &HashMap::new());
+        // go < py < rs
+        assert_eq!(files[0].name, "c.go");
+        assert_eq!(files[1].name, "b.py");
+        assert_eq!(files[2].name, "a.rs");
+    }
+
+    #[test]
+    fn sort_missing_timestamps_handled() {
+        let mut dirs = vec![];
+        let mut files = vec![
+            FileEntry {
+                name: "no_time.txt".into(),
+                path: PathBuf::from("/no_time.txt"),
+                is_dir: false,
+                size: 0,
+                modified: None,
+                created: None,
+                is_symlink: false,
+            },
+            FileEntry {
+                name: "has_time.txt".into(),
+                path: PathBuf::from("/has_time.txt"),
+                is_dir: false,
+                size: 0,
+                modified: Some(std::time::SystemTime::now()),
+                created: None,
+                is_symlink: false,
+            },
+        ];
+        // Should not panic with mixed None/Some timestamps
+        sort_file_entries(&mut dirs, &mut files, SortMode::Modified, false, &HashMap::new());
+        assert_eq!(files.len(), 2);
+    }
+
+    // ── Navigation edge cases ────────────────────────────────────
+
+    #[test]
+    fn move_down_clamps_at_end() {
+        let mut panel = Panel::new(PathBuf::from("/tmp"));
+        panel.entries = vec![
+            FileEntry { name: "..".into(), path: PathBuf::from("/"), is_dir: true, size: 0, modified: None, created: None, is_symlink: false },
+            FileEntry { name: "a".into(), path: PathBuf::from("/a"), is_dir: false, size: 0, modified: None, created: None, is_symlink: false },
+        ];
+        panel.selected = 1;
+        panel.move_down();
+        assert_eq!(panel.selected, 1); // can't go past end
+    }
+
+    #[test]
+    fn move_up_clamps_at_zero() {
+        let mut panel = Panel::new(PathBuf::from("/tmp"));
+        panel.entries = vec![
+            FileEntry { name: "..".into(), path: PathBuf::from("/"), is_dir: true, size: 0, modified: None, created: None, is_symlink: false },
+        ];
+        panel.selected = 0;
+        panel.move_up();
+        assert_eq!(panel.selected, 0);
+    }
+
+    #[test]
+    fn page_up_down_with_empty_panel() {
+        let mut panel = Panel::new(PathBuf::from("/tmp"));
+        panel.entries = vec![];
+        panel.page_down(10);
+        assert_eq!(panel.selected, 0);
+        panel.page_up(10);
+        assert_eq!(panel.selected, 0);
+    }
+
+    // ── Toggle mark edge cases ──────────────────────────────────
+
+    #[test]
+    fn toggle_mark_skips_dotdot() {
+        let mut panel = Panel::new(PathBuf::from("/tmp"));
+        panel.entries = vec![
+            FileEntry { name: "..".into(), path: PathBuf::from("/"), is_dir: true, size: 0, modified: None, created: None, is_symlink: false },
+            FileEntry { name: "a.txt".into(), path: PathBuf::from("/a.txt"), is_dir: false, size: 0, modified: None, created: None, is_symlink: false },
+        ];
+        panel.selected = 0; // ".."
+        panel.toggle_mark();
+        assert!(panel.marked.is_empty());
+        assert_eq!(panel.selected, 1); // still moves down
+    }
+
+    #[test]
+    fn targeted_count_with_marks() {
+        let mut panel = Panel::new(PathBuf::from("/tmp"));
+        panel.entries = vec![
+            FileEntry { name: "..".into(), path: PathBuf::from("/"), is_dir: true, size: 0, modified: None, created: None, is_symlink: false },
+            FileEntry { name: "a".into(), path: PathBuf::from("/a"), is_dir: false, size: 0, modified: None, created: None, is_symlink: false },
+            FileEntry { name: "b".into(), path: PathBuf::from("/b"), is_dir: false, size: 0, modified: None, created: None, is_symlink: false },
+        ];
+        panel.marked.insert(PathBuf::from("/a"));
+        panel.marked.insert(PathBuf::from("/b"));
+        assert_eq!(panel.targeted_count(), 2);
+    }
+
+    // ── DirCache update existing ─────────────────────────────────
+
+    #[test]
+    fn dir_cache_update_existing() {
+        let mut cache = DirCache::new(4);
+        let path = PathBuf::from("/test");
+        cache.insert(path.clone(), DirCacheEntry {
+            entries: vec![],
+            sort_mode: SortMode::Name,
+            sort_reverse: false,
+            show_hidden: false,
+        });
+        // Insert again with different data
+        cache.insert(path.clone(), DirCacheEntry {
+            entries: vec![],
+            sort_mode: SortMode::Size,
+            sort_reverse: true,
+            show_hidden: false,
+        });
+        let entry = cache.get(&path).unwrap();
+        assert_eq!(entry.sort_mode, SortMode::Size);
+        assert!(entry.sort_reverse);
+    }
+
+    // ── selected_entry ───────────────────────────────────────────
+
+    #[test]
+    fn selected_entry_in_bounds() {
+        let mut panel = Panel::new(PathBuf::from("/tmp"));
+        panel.entries = vec![
+            FileEntry { name: "a".into(), path: PathBuf::from("/a"), is_dir: false, size: 0, modified: None, created: None, is_symlink: false },
+        ];
+        panel.selected = 0;
+        assert_eq!(panel.selected_entry().unwrap().name, "a");
+    }
+
+    #[test]
+    fn selected_entry_empty() {
+        let panel = Panel::new(PathBuf::from("/tmp"));
+        assert!(panel.selected_entry().is_none());
+    }
+
     #[test]
     fn load_dir_real_filesystem() {
         let dir = std::env::temp_dir().join("fcmd_panel_test");
