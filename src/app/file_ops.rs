@@ -92,11 +92,19 @@ impl App {
     }
 
     pub(super) fn copy_to_other_panel(&mut self) {
+        if self.layout == PanelLayout::Single {
+            self.status_message = "Cannot copy to same panel in single layout".into();
+            return;
+        }
         self.yank_targeted();
         self.paste(true);
     }
 
     pub(super) fn move_to_other_panel(&mut self) {
+        if self.layout == PanelLayout::Single {
+            self.status_message = "Cannot move to same panel in single layout".into();
+            return;
+        }
         let entries = self.active_panel().targeted_register_entries();
         if entries.is_empty() {
             self.status_message = "Nothing to move".into();
@@ -168,6 +176,30 @@ impl App {
         self.dir_cache.remove(&path);
         let side = self.tab().active;
         self.spawn_dir_load(side, None);
+    }
+
+    /// Like refresh_panels, but passes `select_name` to the active panel
+    /// so the cursor moves to the named entry once the async load completes.
+    pub(super) fn refresh_panels_select(&mut self, select_name: Option<String>) {
+        let tab = &self.tabs[self.active_tab];
+        let paths: Vec<PathBuf> = tab.panels.iter().flat_map(|p| {
+            let mut v = vec![p.path.clone()];
+            if let Some(parent) = p.path.parent() {
+                v.push(parent.to_path_buf());
+            }
+            v
+        }).collect();
+        for p in paths {
+            self.dir_cache.remove(&p);
+        }
+        let active = self.tab().active;
+        for i in 0..3 {
+            let sn = if i == active { select_name.clone() } else { None };
+            self.spawn_dir_load(i, sn);
+        }
+        self.tree_dirty = true;
+        self.git_checked_dirs = [None, None, None];
+        self.refresh_git_status();
     }
 
     pub(super) fn refresh_panels(&mut self) {

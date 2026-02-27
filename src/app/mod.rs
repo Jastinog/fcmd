@@ -606,8 +606,7 @@ impl App {
             FileOpResult::Mkdir { name, result } => match result {
                 Ok(rec) => {
                     self.undo_stack.push(vec![rec]);
-                    self.refresh_panels();
-                    self.active_panel_mut().select_by_name(&name);
+                    self.refresh_panels_select(Some(name.clone()));
                     self.status_message = format!("Created directory: {name}");
                 }
                 Err(e) => self.status_message = format!("mkdir: {e}"),
@@ -615,8 +614,7 @@ impl App {
             FileOpResult::Touch { name, result } => match result {
                 Ok(rec) => {
                     self.undo_stack.push(vec![rec]);
-                    self.refresh_panels();
-                    self.active_panel_mut().select_by_name(&name);
+                    self.refresh_panels_select(Some(name.clone()));
                     self.status_message = format!("Created file: {name}");
                 }
                 Err(e) => self.status_message = format!("touch: {e}"),
@@ -624,8 +622,7 @@ impl App {
             FileOpResult::Rename { new_name, result } => match result {
                 Ok(rec) => {
                     self.undo_stack.push(vec![rec]);
-                    self.refresh_panels();
-                    self.active_panel_mut().select_by_name(&new_name);
+                    self.refresh_panels_select(Some(new_name.clone()));
                     self.status_message = format!("Renamed to: {new_name}");
                 }
                 Err(e) => self.status_message = format!("rename: {e}"),

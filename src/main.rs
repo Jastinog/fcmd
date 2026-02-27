@@ -104,10 +104,11 @@ fn open_in_editor(
 }
 
 /// Helper: await a value from an Option<oneshot::Receiver>, or pend forever if None.
-async fn recv_or_pend<T>(rx: &mut Option<tokio::sync::oneshot::Receiver<T>>) -> T {
+/// Returns None if the sender was dropped (e.g. background task panicked).
+async fn recv_or_pend<T>(rx: &mut Option<tokio::sync::oneshot::Receiver<T>>) -> Option<T> {
     match rx {
         Some(r) => {
-            let val = r.await.unwrap();
+            let val = r.await.ok();
             *rx = None;
             val
         }
@@ -147,28 +148,28 @@ async fn run(
                 app.handle_dir_load_msg(msg);
             }
             result = recv_or_pend(&mut app.preview_load_rx) => {
-                app.apply_preview_load(result);
+                if let Some(r) = result { app.apply_preview_load(r); }
             }
             result = recv_or_pend(&mut app.file_preview_rx) => {
-                app.apply_file_preview_load(result);
+                if let Some(r) = result { app.apply_file_preview_load(r); }
             }
             result = recv_or_pend(&mut app.tree_load_rx) => {
-                app.apply_tree_data(result);
+                if let Some(r) = result { app.apply_tree_data(r); }
             }
             result = recv_or_pend(&mut app.info_load_rx) => {
-                app.apply_info_load(result);
+                if let Some(r) = result { app.apply_info_load(r); }
             }
             result = recv_or_pend(&mut app.chown_load_rx) => {
-                app.apply_chown_load(result);
+                if let Some(r) = result { app.apply_chown_load(r); }
             }
             result = recv_or_pend(&mut app.nav_check_rx) => {
-                app.apply_nav_check(result);
+                if let Some(r) = result { app.apply_nav_check(r); }
             }
             result = recv_or_pend(&mut app.file_op_rx) => {
-                app.apply_file_op(result);
+                if let Some(r) = result { app.apply_file_op(r); }
             }
             result = recv_or_pend(&mut app.theme_load_rx) => {
-                app.apply_theme_preview(result);
+                if let Some(r) = result { app.apply_theme_preview(r); }
             }
         }
 

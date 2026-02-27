@@ -326,13 +326,32 @@ fn dir_stats_inner(p: &Path, size: &mut u64, files: &mut usize, dirs: &mut usize
 
 // --- Operations ---
 
+/// Validate that a user-supplied filename does not escape the parent directory.
+fn validate_name(name: &str) -> std::io::Result<()> {
+    if name.contains('/') || name.contains('\\') {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::InvalidInput,
+            "Name must not contain path separators",
+        ));
+    }
+    if name == "." || name == ".." {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::InvalidInput,
+            "Name must not be '.' or '..'",
+        ));
+    }
+    Ok(())
+}
+
 pub fn mkdir(dir: &Path, name: &str) -> std::io::Result<OpRecord> {
+    validate_name(name)?;
     let path = dir.join(name);
     fs::create_dir_all(&path)?;
     Ok(OpRecord::Created { path })
 }
 
 pub fn touch(dir: &Path, name: &str) -> std::io::Result<OpRecord> {
+    validate_name(name)?;
     let path = dir.join(name);
     if path.exists() {
         return Err(std::io::Error::new(
@@ -345,6 +364,7 @@ pub fn touch(dir: &Path, name: &str) -> std::io::Result<OpRecord> {
 }
 
 pub fn rename_path(path: &Path, new_name: &str) -> std::io::Result<OpRecord> {
+    validate_name(new_name)?;
     let parent = path
         .parent()
         .ok_or_else(|| std::io::Error::new(std::io::ErrorKind::InvalidInput, "no parent dir"))?;
@@ -370,7 +390,32 @@ pub fn undo(records: &[OpRecord]) -> std::io::Result<String> {
         match rec {
             OpRecord::Copied { dst, .. } => remove_path(dst)?,
             OpRecord::Moved { src, dst } => {
-                fs::rename(dst, src)?;
+                match fs::rename(dst, src) {
+                    Ok(()) => {}
+                    Err(ref e) if is_cross_device(e) => {
+                        // Cross-device: copy back then remove from dst
+                        let meta = fs::symlink_metadata(dst)?;
+                        if meta.is_symlink() {
+                            copy_symlink(dst, src)?;
+                            fs::remove_file(dst)?;
+                        } else if meta.is_dir() {
+                            let mut ctx = ProgressCtx {
+                                tx: tokio::sync::mpsc::channel(1).0,
+                                bytes_done: 0,
+                                bytes_total: 0,
+                                item_index: 0,
+                                item_total: 1,
+                            };
+                            copy_dir_progress(dst, src, &mut ctx)?;
+                            fs::remove_dir_all(dst)?;
+                        } else {
+                            fs::copy(dst, src)?;
+                            copy_timestamps(dst, src);
+                            fs::remove_file(dst)?;
+                        }
+                    }
+                    Err(e) => return Err(e),
+                }
             }
             OpRecord::Created { path } => remove_path(path)?,
             OpRecord::Renamed { from, to } => {
@@ -663,6 +708,56 @@ mod tests {
         fs::write(dir.join("b"), "").unwrap();
         let err = rename_path(&dir.join("a"), "b");
         assert!(err.is_err());
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    // --- validate_name ---
+
+    #[test]
+    fn validate_name_rejects_slash() {
+        assert!(validate_name("foo/bar").is_err());
+    }
+
+    #[test]
+    fn validate_name_rejects_dotdot() {
+        assert!(validate_name("..").is_err());
+    }
+
+    #[test]
+    fn validate_name_rejects_traversal() {
+        assert!(validate_name("../etc").is_err());
+    }
+
+    #[test]
+    fn validate_name_accepts_normal() {
+        assert!(validate_name("hello.txt").is_ok());
+        assert!(validate_name(".hidden").is_ok());
+        assert!(validate_name("file with spaces").is_ok());
+    }
+
+    #[test]
+    fn mkdir_rejects_path_traversal() {
+        let dir = tmp_dir();
+        assert!(mkdir(&dir, "../escape").is_err());
+        assert!(mkdir(&dir, "sub/dir").is_err());
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn touch_rejects_path_traversal() {
+        let dir = tmp_dir();
+        assert!(touch(&dir, "../escape").is_err());
+        assert!(touch(&dir, "sub/file").is_err());
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn rename_rejects_path_traversal() {
+        let dir = tmp_dir();
+        fs::write(dir.join("file"), "").unwrap();
+        assert!(rename_path(&dir.join("file"), "../escape").is_err());
+        assert!(rename_path(&dir.join("file"), "sub/name").is_err());
+        assert!(dir.join("file").exists()); // original still there
         let _ = fs::remove_dir_all(&dir);
     }
 

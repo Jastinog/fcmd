@@ -348,8 +348,14 @@ fn read_uid_gid(_path: &std::path::Path) -> Option<(u32, u32)> {
     None
 }
 
+/// Global mutex to serialize access to non-thread-safe POSIX passwd/group
+/// iterators (setpwent/getpwent/endpwent, setgrent/getgrent/endgrent).
+#[cfg(unix)]
+static PWGRP_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
 #[cfg(unix)]
 fn list_system_users() -> Vec<(String, u32)> {
+    let _guard = PWGRP_LOCK.lock().unwrap_or_else(|e| e.into_inner());
     let mut seen = HashSet::new();
     let mut users = Vec::new();
     unsafe {
@@ -379,6 +385,7 @@ fn list_system_users() -> Vec<(String, u32)> {
 
 #[cfg(unix)]
 fn list_system_groups() -> Vec<(String, u32)> {
+    let _guard = PWGRP_LOCK.lock().unwrap_or_else(|e| e.into_inner());
     let mut seen = HashSet::new();
     let mut groups = Vec::new();
     unsafe {

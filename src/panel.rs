@@ -125,22 +125,7 @@ impl Panel {
         let read_dir = fs::read_dir(&self.path)?;
 
         for entry in read_dir.flatten() {
-            let metadata = match entry.metadata() {
-                Ok(m) => m,
-                Err(_) => continue,
-            };
-            let symlink_meta = entry.path().symlink_metadata().ok();
-            let is_symlink = symlink_meta.map(|m| m.is_symlink()).unwrap_or(false);
-
-            let file_entry = FileEntry {
-                name: entry.file_name().to_string_lossy().into(),
-                path: entry.path(),
-                is_dir: metadata.is_dir(),
-                size: metadata.len(),
-                modified: metadata.modified().ok(),
-                created: metadata.created().ok(),
-                is_symlink,
-            };
+            let file_entry = read_file_entry(&entry);
 
             if !self.show_hidden && file_entry.name.starts_with('.') {
                 continue;
@@ -343,6 +328,40 @@ impl Panel {
 
 const BATCH_SIZE: usize = 1000;
 
+/// Build a FileEntry from a DirEntry, handling broken symlinks gracefully.
+/// Uses symlink_metadata first so dangling symlinks are not silently skipped.
+fn read_file_entry(entry: &fs::DirEntry) -> FileEntry {
+    let symlink_meta = entry.path().symlink_metadata().ok();
+    let is_symlink = symlink_meta.as_ref().map(|m| m.is_symlink()).unwrap_or(false);
+
+    // For symlinks, try to follow; if broken, use symlink metadata
+    let (is_dir, size, modified, created) = if is_symlink {
+        match entry.metadata() {
+            Ok(m) => (m.is_dir(), m.len(), m.modified().ok(), m.created().ok()),
+            Err(_) => {
+                // Broken symlink — use symlink's own metadata
+                let sm = symlink_meta.as_ref();
+                (false, sm.map(|m| m.len()).unwrap_or(0), sm.and_then(|m| m.modified().ok()), sm.and_then(|m| m.created().ok()))
+            }
+        }
+    } else {
+        match symlink_meta.as_ref() {
+            Some(m) => (m.is_dir(), m.len(), m.modified().ok(), m.created().ok()),
+            None => (false, 0, None, None),
+        }
+    };
+
+    FileEntry {
+        name: entry.file_name().to_string_lossy().into(),
+        path: entry.path(),
+        is_dir,
+        size,
+        modified,
+        created,
+        is_symlink,
+    }
+}
+
 pub struct DirLoadRequest {
     pub path: PathBuf,
     pub show_hidden: bool,
@@ -374,63 +393,20 @@ pub fn stream_dir_entries(
     let entries = load_dir_entries(path, show_hidden, sort_mode, sort_reverse, dir_sizes)
         .unwrap_or_default();
 
-    // For large directories, send intermediate batches of unsorted entries
-    // so the user sees content appearing progressively.
-    if entries.len() > BATCH_SIZE
-        && let Ok(read_dir) = fs::read_dir(path)
-    {
-            let mut batch = Vec::with_capacity(BATCH_SIZE);
-
-            // Start with ".." entry in the first batch
-            if let Some(parent) = path.parent() {
-                batch.push(FileEntry {
-                    name: "..".into(),
-                    path: parent.to_path_buf(),
-                    is_dir: true,
-                    size: 0,
-                    modified: None,
-                    created: None,
-                    is_symlink: false,
-                });
+    // For large directories, send intermediate batches from the already-loaded
+    // entries so the user sees content appearing progressively.
+    if entries.len() > BATCH_SIZE {
+        for chunk in entries.chunks(BATCH_SIZE) {
+            let msg = crate::app::DirLoadMsg::Batch {
+                panel_idx,
+                tab_index,
+                path: path.clone(),
+                entries: chunk.to_vec(),
+            };
+            if tx.blocking_send(msg).is_err() {
+                return; // Receiver dropped (stale load cancelled)
             }
-
-            for entry in read_dir.flatten() {
-                let metadata = match entry.metadata() {
-                    Ok(m) => m,
-                    Err(_) => continue,
-                };
-                let symlink_meta = entry.path().symlink_metadata().ok();
-                let is_symlink = symlink_meta.map(|m| m.is_symlink()).unwrap_or(false);
-
-                let file_entry = FileEntry {
-                    name: entry.file_name().to_string_lossy().into(),
-                    path: entry.path(),
-                    is_dir: metadata.is_dir(),
-                    size: metadata.len(),
-                    modified: metadata.modified().ok(),
-                    created: metadata.created().ok(),
-                    is_symlink,
-                };
-
-                if !show_hidden && file_entry.name.starts_with('.') {
-                    continue;
-                }
-
-                batch.push(file_entry);
-
-                if batch.len() >= BATCH_SIZE {
-                    let msg = crate::app::DirLoadMsg::Batch {
-                        panel_idx,
-                        tab_index,
-                        path: path.clone(),
-                        entries: std::mem::replace(&mut batch, Vec::with_capacity(BATCH_SIZE)),
-                    };
-                    if tx.blocking_send(msg).is_err() {
-                        return; // Receiver dropped (stale load cancelled)
-                    }
-                }
-            }
-            // Don't send the last partial batch — it will be replaced by the sorted Finished
+        }
     }
 
     // Send the final sorted result
@@ -471,22 +447,7 @@ pub fn load_dir_entries(
     let read_dir = fs::read_dir(path)?;
 
     for entry in read_dir.flatten() {
-        let metadata = match entry.metadata() {
-            Ok(m) => m,
-            Err(_) => continue,
-        };
-        let symlink_meta = entry.path().symlink_metadata().ok();
-        let is_symlink = symlink_meta.map(|m| m.is_symlink()).unwrap_or(false);
-
-        let file_entry = FileEntry {
-            name: entry.file_name().to_string_lossy().into(),
-            path: entry.path(),
-            is_dir: metadata.is_dir(),
-            size: metadata.len(),
-            modified: metadata.modified().ok(),
-            created: metadata.created().ok(),
-            is_symlink,
-        };
+        let file_entry = read_file_entry(&entry);
 
         if !show_hidden && file_entry.name.starts_with('.') {
             continue;

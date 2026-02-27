@@ -208,11 +208,14 @@ impl Db {
         let rows = stmt.query_map(params![pattern], |row| {
             let p: String = row.get(0)?;
             let s: i64 = row.get(1)?;
-            Ok((PathBuf::from(p), s as u64))
+            Ok((PathBuf::from(p), s.max(0) as u64))
         })?;
         let mut map = HashMap::new();
         for (p, s) in rows.flatten() {
-            map.insert(p, s);
+            // Only include direct children (parent must be exactly `dir`)
+            if p.parent() == Some(dir) {
+                map.insert(p, s);
+            }
         }
         Ok(map)
     }

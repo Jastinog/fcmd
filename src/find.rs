@@ -167,7 +167,6 @@ impl FindState {
                 // mdfind not available, use find from $HOME.
                 let home = std::env::var("HOME").unwrap_or_else(|_| "/".to_string());
                 tokio::process::Command::new("find")
-                    .arg("--")
                     .args([&home, "-maxdepth", "6", "-iname", &sanitized_pattern])
                     .stdout(Stdio::piped())
                     .stderr(Stdio::null())
