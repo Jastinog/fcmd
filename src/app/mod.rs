@@ -33,7 +33,7 @@ mod visual;
 
 pub use messages::*;
 
-#[derive(PartialEq, Eq, Clone, Copy)]
+#[derive(PartialEq, Eq, Clone, Copy, Debug)]
 pub enum Mode {
     Normal,
     Visual,
@@ -58,7 +58,7 @@ pub enum Mode {
     UnselectPattern,
 }
 
-#[derive(PartialEq, Eq, Clone, Copy)]
+#[derive(PartialEq, Eq, Clone, Copy, Debug)]
 pub enum PanelLayout {
     Single,
     Dual,
@@ -787,5 +787,781 @@ impl App {
 
         self.update_preview();
         self.ensure_git_status();
+    }
+}
+
+#[cfg(test)]
+pub(crate) fn make_test_entries(names: &[&str]) -> Vec<FileEntry> {
+    let mut entries = vec![FileEntry {
+        name: "..".into(),
+        path: PathBuf::from("/"),
+        is_dir: true,
+        size: 0,
+        modified: None,
+        created: None,
+        is_symlink: false,
+    }];
+    for &name in names {
+        let is_dir = name.ends_with('/');
+        let clean = name.trim_end_matches('/');
+        entries.push(FileEntry {
+            name: clean.to_string(),
+            path: PathBuf::from(format!("/test/{clean}")),
+            is_dir,
+            size: 0,
+            modified: None,
+            created: None,
+            is_symlink: false,
+        });
+    }
+    entries
+}
+
+#[cfg(test)]
+impl App {
+    pub(crate) fn new_for_test(entries: Vec<FileEntry>) -> Self {
+        let db = crate::db::Db::init_in_memory().unwrap();
+        let db = Some(std::sync::Arc::new(std::sync::Mutex::new(db)));
+
+        let (dir_load_tx, dir_load_rx) = tokio::sync::mpsc::channel(64);
+
+        let mut panel = Panel::new(PathBuf::from("/test"));
+        panel.entries = entries;
+        panel.loading = false;
+
+        let tab = Tab {
+            panels: vec![
+                panel,
+                Panel::new(PathBuf::from("/test")),
+                Panel::new(PathBuf::from("/test")),
+            ],
+            active: 0,
+        };
+
+        App {
+            tabs: vec![tab],
+            active_tab: 0,
+            mode: Mode::Normal,
+            command_input: String::new(),
+            rename_input: String::new(),
+            should_quit: false,
+            open_editor: None,
+            status_message: String::new(),
+            pending_key: None,
+            pending_key_time: None,
+            visible_height: 20,
+            register: None,
+            undo_stack: UndoStack::new(),
+            confirm_paths: Vec::new(),
+            confirm_scroll: 0,
+            confirm_permanent: false,
+            search_query: String::new(),
+            search_saved_cursor: 0,
+            marks: HashMap::new(),
+            find_state: None,
+            layout: PanelLayout::Dual,
+            preview_mode: false,
+            preview: None,
+            preview_path: None,
+            file_preview: None,
+            file_preview_path: None,
+            preview_search_query: String::new(),
+            preview_search_matches: Vec::new(),
+            preview_search_current: 0,
+            show_tree: false,
+            tree_focused: false,
+            tree_selected: 0,
+            tree_scroll: 0,
+            start_dir: PathBuf::from("/test"),
+            tree_data: Vec::new(),
+            tree_collapsed: HashSet::new(),
+            tree_expanded: HashSet::new(),
+            visual_marks: HashMap::new(),
+            dir_sorts: HashMap::new(),
+            db,
+            task_manager: task_manager::TaskManager::new(),
+            task_notification: None,
+            dir_sizes: HashMap::new(),
+            du_progress: None,
+            dir_sizes_loaded: HashSet::new(),
+            tree_dirty: false,
+            tree_last_path: None,
+            tree_last_hidden: false,
+            tree_select_path: None,
+            transparent: false,
+            theme: Theme::default_theme(),
+            theme_dark_list: Vec::new(),
+            theme_light_list: Vec::new(),
+            theme_col: 0,
+            theme_cursors: [0; 2],
+            theme_scrolls: [0; 2],
+            theme_active_name: None,
+            theme_preview: None,
+            bookmarks: Vec::new(),
+            bookmark_cursor: 0,
+            bookmark_scroll: 0,
+            bookmark_rename_old: None,
+            bookmark_add_path: None,
+            chmod_paths: Vec::new(),
+            chown_picker: None,
+            info_lines: Vec::new(),
+            info_scroll: 0,
+            info_du_rx: None,
+            git_statuses: HashMap::new(),
+            git_roots: [None, None, None],
+            git_checked_dirs: [None, None, None],
+            git_progress: None,
+            dir_cache: DirCache::new(64),
+            dir_load_tx,
+            dir_load_rx,
+            preview_load_rx: None,
+            file_preview_rx: None,
+            tree_load_rx: None,
+            info_load_rx: None,
+            chown_load_rx: None,
+            dir_sizes_load_rx: None,
+            nav_check_rx: None,
+            file_op_rx: None,
+            theme_load_rx: None,
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // ── Navigation tests ──────────────────────────────────────────
+
+    #[tokio::test]
+    async fn focus_next_cycles_panels() {
+        let entries = make_test_entries(&["a", "b"]);
+        let mut app = App::new_for_test(entries);
+        app.layout = PanelLayout::Triple;
+        assert_eq!(app.tab().active, 0);
+        app.focus_next();
+        assert_eq!(app.tab().active, 1);
+        app.focus_next();
+        assert_eq!(app.tab().active, 2);
+        // At max, stays at max
+        app.focus_next();
+        assert_eq!(app.tab().active, 2);
+    }
+
+    #[tokio::test]
+    async fn focus_prev_cycles_panels() {
+        let entries = make_test_entries(&["a", "b"]);
+        let mut app = App::new_for_test(entries);
+        app.layout = PanelLayout::Triple;
+        app.tab_mut().active = 2;
+        app.focus_prev();
+        assert_eq!(app.tab().active, 1);
+        app.focus_prev();
+        assert_eq!(app.tab().active, 0);
+        // At 0 without tree, stays at 0
+        app.focus_prev();
+        assert_eq!(app.tab().active, 0);
+    }
+
+    #[tokio::test]
+    async fn focus_prev_enters_tree() {
+        let entries = make_test_entries(&["a"]);
+        let mut app = App::new_for_test(entries);
+        app.show_tree = true;
+        app.tree_focused = false;
+        app.tab_mut().active = 0;
+        app.focus_prev();
+        assert!(app.tree_focused);
+    }
+
+    #[tokio::test]
+    async fn focus_next_exits_tree() {
+        let entries = make_test_entries(&["a"]);
+        let mut app = App::new_for_test(entries);
+        app.show_tree = true;
+        app.tree_focused = true;
+        app.focus_next();
+        assert!(!app.tree_focused);
+    }
+
+    #[tokio::test]
+    async fn next_tab_wraps() {
+        let entries = make_test_entries(&["a"]);
+        let mut app = App::new_for_test(entries);
+        // Add a second tab
+        app.tabs.push(Tab::new(PathBuf::from("/test2")));
+        assert_eq!(app.active_tab, 0);
+        app.next_tab();
+        assert_eq!(app.active_tab, 1);
+        app.next_tab();
+        assert_eq!(app.active_tab, 0); // wraps
+    }
+
+    #[tokio::test]
+    async fn prev_tab_wraps() {
+        let entries = make_test_entries(&["a"]);
+        let mut app = App::new_for_test(entries);
+        app.tabs.push(Tab::new(PathBuf::from("/test2")));
+        assert_eq!(app.active_tab, 0);
+        app.prev_tab();
+        assert_eq!(app.active_tab, 1); // wraps to end
+        app.prev_tab();
+        assert_eq!(app.active_tab, 0);
+    }
+
+    #[tokio::test]
+    async fn tab_switch_exits_visual() {
+        let entries = make_test_entries(&["a", "b"]);
+        let mut app = App::new_for_test(entries);
+        app.tabs.push(Tab::new(PathBuf::from("/test2")));
+        app.mode = Mode::Visual;
+        app.active_panel_mut().visual_anchor = Some(0);
+        app.next_tab();
+        assert_eq!(app.mode, Mode::Normal);
+    }
+
+    #[tokio::test]
+    async fn set_layout_clamps_active() {
+        let entries = make_test_entries(&["a"]);
+        let mut app = App::new_for_test(entries);
+        app.layout = PanelLayout::Triple;
+        app.tab_mut().active = 2;
+        app.set_layout(PanelLayout::Single);
+        assert_eq!(app.layout, PanelLayout::Single);
+        assert_eq!(app.tab().active, 0);
+    }
+
+    #[tokio::test]
+    async fn single_tab_no_switch() {
+        let entries = make_test_entries(&["a"]);
+        let mut app = App::new_for_test(entries);
+        // Only 1 tab — next_tab should be a no-op
+        app.next_tab();
+        assert_eq!(app.active_tab, 0);
+        app.prev_tab();
+        assert_eq!(app.active_tab, 0);
+    }
+
+    // ── Marks tests ───────────────────────────────────────────────
+
+    #[tokio::test]
+    async fn toggle_visual_mark_cycles() {
+        let entries = make_test_entries(&["a.txt", "b.txt"]);
+        let mut app = App::new_for_test(entries);
+        app.active_panel_mut().selected = 1; // "a.txt"
+        let path = app.active_panel().entries[1].path.clone();
+
+        app.toggle_visual_mark();
+        assert_eq!(app.visual_marks.get(&path), Some(&1));
+        app.toggle_visual_mark();
+        assert_eq!(app.visual_marks.get(&path), Some(&2));
+        app.toggle_visual_mark();
+        assert_eq!(app.visual_marks.get(&path), Some(&3));
+        app.toggle_visual_mark();
+        assert_eq!(app.visual_marks.get(&path), None); // back to 0
+    }
+
+    #[tokio::test]
+    async fn toggle_visual_mark_skips_dotdot() {
+        let entries = make_test_entries(&["a.txt"]);
+        let mut app = App::new_for_test(entries);
+        app.active_panel_mut().selected = 0; // ".."
+        app.toggle_visual_mark();
+        assert!(app.visual_marks.is_empty());
+    }
+
+    #[tokio::test]
+    async fn jump_next_visual_mark_finds_next() {
+        let entries = make_test_entries(&["a.txt", "b.txt", "c.txt"]);
+        let mut app = App::new_for_test(entries);
+        let path_c = app.active_panel().entries[3].path.clone(); // "c.txt"
+        app.visual_marks.insert(path_c, 1);
+        app.active_panel_mut().selected = 0;
+        app.jump_next_visual_mark();
+        assert_eq!(app.active_panel().selected, 3);
+    }
+
+    #[tokio::test]
+    async fn jump_next_visual_mark_wraps() {
+        let entries = make_test_entries(&["a.txt", "b.txt", "c.txt"]);
+        let mut app = App::new_for_test(entries);
+        let path_a = app.active_panel().entries[1].path.clone(); // "a.txt"
+        app.visual_marks.insert(path_a, 1);
+        app.active_panel_mut().selected = 2; // past a.txt
+        app.jump_next_visual_mark();
+        assert_eq!(app.active_panel().selected, 1); // wrapped
+    }
+
+    #[tokio::test]
+    async fn jump_next_visual_mark_empty() {
+        let entries = make_test_entries(&["a.txt"]);
+        let mut app = App::new_for_test(entries);
+        app.jump_next_visual_mark();
+        assert_eq!(app.status_message, "No marks");
+    }
+
+    #[tokio::test]
+    async fn select_all_marks_everything() {
+        let entries = make_test_entries(&["a.txt", "b.txt", "c.txt"]);
+        let mut app = App::new_for_test(entries);
+        app.select_all();
+        assert_eq!(app.active_panel().marked.len(), 3); // excludes ".."
+    }
+
+    #[tokio::test]
+    async fn unselect_all_clears() {
+        let entries = make_test_entries(&["a.txt", "b.txt"]);
+        let mut app = App::new_for_test(entries);
+        app.select_all();
+        assert!(!app.active_panel().marked.is_empty());
+        app.unselect_all();
+        assert!(app.active_panel().marked.is_empty());
+    }
+
+    #[tokio::test]
+    async fn set_mark_stores_path() {
+        let entries = make_test_entries(&["a.txt"]);
+        let mut app = App::new_for_test(entries);
+        app.set_mark('a');
+        assert_eq!(app.marks.get(&'a'), Some(&PathBuf::from("/test")));
+    }
+
+    #[tokio::test]
+    async fn set_mark_status_message() {
+        let entries = make_test_entries(&["a.txt"]);
+        let mut app = App::new_for_test(entries);
+        app.set_mark('z');
+        assert_eq!(app.status_message, "Mark 'z' set");
+    }
+
+    // ── Bookmarks tests ──────────────────────────────────────────
+
+    #[tokio::test]
+    async fn add_bookmark_sorted_insert() {
+        let entries = make_test_entries(&["a.txt"]);
+        let mut app = App::new_for_test(entries);
+        app.add_bookmark("zebra", PathBuf::from("/z"));
+        app.add_bookmark("alpha", PathBuf::from("/a"));
+        assert_eq!(app.bookmarks[0].0, "alpha");
+        assert_eq!(app.bookmarks[1].0, "zebra");
+    }
+
+    #[tokio::test]
+    async fn add_bookmark_update_existing() {
+        let entries = make_test_entries(&["a.txt"]);
+        let mut app = App::new_for_test(entries);
+        app.add_bookmark("test", PathBuf::from("/old"));
+        app.add_bookmark("test", PathBuf::from("/new"));
+        assert_eq!(app.bookmarks.len(), 1);
+        assert_eq!(app.bookmarks[0].1, PathBuf::from("/new"));
+    }
+
+    #[tokio::test]
+    async fn remove_bookmark_by_name_removes() {
+        let entries = make_test_entries(&["a.txt"]);
+        let mut app = App::new_for_test(entries);
+        app.add_bookmark("test", PathBuf::from("/t"));
+        app.remove_bookmark_by_name("test");
+        assert!(app.bookmarks.is_empty());
+    }
+
+    #[tokio::test]
+    async fn rename_bookmark_updates_name() {
+        let entries = make_test_entries(&["a.txt"]);
+        let mut app = App::new_for_test(entries);
+        app.add_bookmark("old", PathBuf::from("/t"));
+        app.rename_bookmark("old", "new");
+        assert_eq!(app.bookmarks[0].0, "new");
+        assert_eq!(app.bookmarks[0].1, PathBuf::from("/t"));
+    }
+
+    #[tokio::test]
+    async fn open_bookmarks_empty_shows_message() {
+        let entries = make_test_entries(&["a.txt"]);
+        let mut app = App::new_for_test(entries);
+        app.open_bookmarks();
+        assert_eq!(app.mode, Mode::Normal);
+        assert!(app.status_message.contains("No bookmarks"));
+    }
+
+    #[tokio::test]
+    async fn open_bookmarks_non_empty_enters_mode() {
+        let entries = make_test_entries(&["a.txt"]);
+        let mut app = App::new_for_test(entries);
+        app.add_bookmark("test", PathBuf::from("/t"));
+        app.open_bookmarks();
+        assert_eq!(app.mode, Mode::Bookmarks);
+        assert_eq!(app.bookmark_cursor, 0);
+    }
+
+    #[tokio::test]
+    async fn bookmark_cursor_navigation() {
+        let entries = make_test_entries(&["a.txt"]);
+        let mut app = App::new_for_test(entries);
+        app.add_bookmark("a", PathBuf::from("/a"));
+        app.add_bookmark("b", PathBuf::from("/b"));
+        app.add_bookmark("c", PathBuf::from("/c"));
+        app.open_bookmarks();
+        // Navigate down
+        app.handle_bookmarks(KeyEvent::new(KeyCode::Char('j'), KeyModifiers::NONE));
+        assert_eq!(app.bookmark_cursor, 1);
+        app.handle_bookmarks(KeyEvent::new(KeyCode::Char('j'), KeyModifiers::NONE));
+        assert_eq!(app.bookmark_cursor, 2);
+        // Clamps at end
+        app.handle_bookmarks(KeyEvent::new(KeyCode::Char('j'), KeyModifiers::NONE));
+        assert_eq!(app.bookmark_cursor, 2);
+        // Navigate up
+        app.handle_bookmarks(KeyEvent::new(KeyCode::Char('k'), KeyModifiers::NONE));
+        assert_eq!(app.bookmark_cursor, 1);
+    }
+
+    #[tokio::test]
+    async fn bookmark_esc_returns_normal() {
+        let entries = make_test_entries(&["a.txt"]);
+        let mut app = App::new_for_test(entries);
+        app.add_bookmark("test", PathBuf::from("/t"));
+        app.open_bookmarks();
+        assert_eq!(app.mode, Mode::Bookmarks);
+        app.handle_bookmarks(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
+        assert_eq!(app.mode, Mode::Normal);
+    }
+
+    // ── Search tests ─────────────────────────────────────────────
+
+    #[tokio::test]
+    async fn search_jump_finds_match() {
+        let entries = make_test_entries(&["alpha.rs", "beta.rs", "gamma.py"]);
+        let mut app = App::new_for_test(entries);
+        app.active_panel_mut().selected = 0;
+        app.search_saved_cursor = 0;
+        app.search_query = "beta".into();
+        app.handle_search(KeyEvent::new(KeyCode::Char('a'), KeyModifiers::NONE));
+        // search_query is now "betaa" but let's test properly
+        // Instead, test the jump directly
+        let entries = make_test_entries(&["alpha.rs", "beta.rs", "gamma.py"]);
+        let mut app = App::new_for_test(entries);
+        app.search_saved_cursor = 0;
+        app.mode = Mode::Search;
+        // Type "beta"
+        app.search_query = "beta".into();
+        // Call the private method indirectly via handle_search with Enter
+        // Actually, let's just set up and check via search_next
+        app.active_panel_mut().selected = 0;
+        app.search_next();
+        assert_eq!(app.active_panel().selected, 2); // "beta.rs" is at index 2
+    }
+
+    #[tokio::test]
+    async fn search_case_insensitive() {
+        let entries = make_test_entries(&["Alpha.RS", "beta.rs"]);
+        let mut app = App::new_for_test(entries);
+        app.search_query = "ALPHA".into();
+        app.search_saved_cursor = 0;
+        app.active_panel_mut().selected = 0;
+        app.search_next();
+        assert_eq!(app.active_panel().selected, 1); // "Alpha.RS"
+    }
+
+    #[tokio::test]
+    async fn search_next_wraps() {
+        let entries = make_test_entries(&["a.rs", "b.txt", "c.rs"]);
+        let mut app = App::new_for_test(entries);
+        app.search_query = ".rs".into();
+        app.active_panel_mut().selected = 3; // "c.rs" (last .rs)
+        app.search_next();
+        assert_eq!(app.active_panel().selected, 1); // wraps to "a.rs"
+    }
+
+    #[tokio::test]
+    async fn search_prev_wraps() {
+        let entries = make_test_entries(&["a.rs", "b.txt", "c.rs"]);
+        let mut app = App::new_for_test(entries);
+        app.search_query = ".rs".into();
+        app.active_panel_mut().selected = 1; // "a.rs"
+        app.search_prev();
+        assert_eq!(app.active_panel().selected, 3); // wraps to "c.rs"
+    }
+
+    #[tokio::test]
+    async fn search_no_match() {
+        let entries = make_test_entries(&["a.rs", "b.rs"]);
+        let mut app = App::new_for_test(entries);
+        app.search_query = "xyz".into();
+        app.search_next();
+        assert_eq!(app.status_message, "No match");
+    }
+
+    #[tokio::test]
+    async fn search_empty_query_shows_hint() {
+        let entries = make_test_entries(&["a.rs"]);
+        let mut app = App::new_for_test(entries);
+        app.search_query.clear();
+        app.search_next();
+        assert!(app.status_message.contains("No search pattern"));
+    }
+
+    #[tokio::test]
+    async fn search_prev_empty_query_shows_hint() {
+        let entries = make_test_entries(&["a.rs"]);
+        let mut app = App::new_for_test(entries);
+        app.search_query.clear();
+        app.search_prev();
+        assert!(app.status_message.contains("No search pattern"));
+    }
+
+    // ── Select pattern tests ─────────────────────────────────────
+
+    #[tokio::test]
+    async fn select_pattern_rs_marks_only_rs() {
+        let entries = make_test_entries(&["a.rs", "b.py", "c.rs"]);
+        let mut app = App::new_for_test(entries);
+        app.rename_input = "*.rs".into();
+        app.mode = Mode::SelectPattern;
+        app.handle_select_pattern(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+        assert_eq!(app.active_panel().marked.len(), 2);
+        assert_eq!(app.mode, Mode::Select);
+    }
+
+    #[tokio::test]
+    async fn select_pattern_star_marks_all() {
+        let entries = make_test_entries(&["a.rs", "b.py", "dir/"]);
+        let mut app = App::new_for_test(entries);
+        app.rename_input = "*".into();
+        app.mode = Mode::SelectPattern;
+        app.handle_select_pattern(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+        assert_eq!(app.active_panel().marked.len(), 3);
+        assert_eq!(app.mode, Mode::Select);
+    }
+
+    #[tokio::test]
+    async fn select_pattern_no_match_returns_normal() {
+        let entries = make_test_entries(&["a.rs", "b.py"]);
+        let mut app = App::new_for_test(entries);
+        app.rename_input = "*.xyz".into();
+        app.mode = Mode::SelectPattern;
+        app.handle_select_pattern(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+        assert_eq!(app.active_panel().marked.len(), 0);
+        assert_eq!(app.mode, Mode::Normal);
+    }
+
+    #[tokio::test]
+    async fn unselect_pattern_removes_matching() {
+        let entries = make_test_entries(&["a.rs", "b.py", "c.rs"]);
+        let mut app = App::new_for_test(entries);
+        // First select all
+        app.select_all();
+        assert_eq!(app.active_panel().marked.len(), 3);
+        // Unselect *.rs
+        app.rename_input = "*.rs".into();
+        app.mode = Mode::UnselectPattern;
+        app.handle_unselect_pattern(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+        assert_eq!(app.active_panel().marked.len(), 1); // only b.py
+        assert_eq!(app.mode, Mode::Select);
+    }
+
+    #[tokio::test]
+    async fn unselect_pattern_clears_all_returns_normal() {
+        let entries = make_test_entries(&["a.rs", "b.rs"]);
+        let mut app = App::new_for_test(entries);
+        app.select_all();
+        app.rename_input = "*".into();
+        app.mode = Mode::UnselectPattern;
+        app.handle_unselect_pattern(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+        assert!(app.active_panel().marked.is_empty());
+        assert_eq!(app.mode, Mode::Normal);
+    }
+
+    #[tokio::test]
+    async fn invert_selection_from_none() {
+        let entries = make_test_entries(&["a.rs", "b.py"]);
+        let mut app = App::new_for_test(entries);
+        app.invert_selection();
+        assert_eq!(app.active_panel().marked.len(), 2);
+        assert_eq!(app.mode, Mode::Select);
+    }
+
+    #[tokio::test]
+    async fn invert_selection_from_all() {
+        let entries = make_test_entries(&["a.rs", "b.py"]);
+        let mut app = App::new_for_test(entries);
+        app.select_all();
+        app.invert_selection();
+        assert!(app.active_panel().marked.is_empty());
+        assert_eq!(app.mode, Mode::Normal);
+    }
+
+    #[tokio::test]
+    async fn select_pattern_esc_exits() {
+        let entries = make_test_entries(&["a.rs"]);
+        let mut app = App::new_for_test(entries);
+        app.mode = Mode::SelectPattern;
+        app.handle_select_pattern(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
+        assert_eq!(app.mode, Mode::Normal);
+    }
+
+    // ── Visual mode tests ────────────────────────────────────────
+
+    #[tokio::test]
+    async fn enter_visual_sets_mode_and_anchor() {
+        let entries = make_test_entries(&["a.txt", "b.txt", "c.txt"]);
+        let mut app = App::new_for_test(entries);
+        app.active_panel_mut().selected = 2;
+        app.enter_visual();
+        assert_eq!(app.mode, Mode::Visual);
+        assert_eq!(app.active_panel().visual_anchor, Some(2));
+    }
+
+    #[tokio::test]
+    async fn exit_visual_clears_anchor() {
+        let entries = make_test_entries(&["a.txt"]);
+        let mut app = App::new_for_test(entries);
+        app.enter_visual();
+        app.exit_visual();
+        assert_eq!(app.mode, Mode::Normal);
+        assert_eq!(app.active_panel().visual_anchor, None);
+    }
+
+    #[tokio::test]
+    async fn enter_select_and_mark_sets_mode() {
+        let entries = make_test_entries(&["a.txt", "b.txt"]);
+        let mut app = App::new_for_test(entries);
+        app.active_panel_mut().selected = 1; // "a.txt"
+        app.enter_select_and_mark();
+        assert_eq!(app.mode, Mode::Select);
+        assert!(app.active_panel().marked.contains(&PathBuf::from("/test/a.txt")));
+    }
+
+    #[tokio::test]
+    async fn exit_select_preserves_marks() {
+        let entries = make_test_entries(&["a.txt", "b.txt"]);
+        let mut app = App::new_for_test(entries);
+        app.active_panel_mut().selected = 1;
+        app.enter_select_and_mark();
+        app.exit_select();
+        assert_eq!(app.mode, Mode::Normal);
+        // Marks are preserved after exit_select
+        assert!(!app.active_panel().marked.is_empty());
+    }
+
+    #[tokio::test]
+    async fn visual_esc_exits() {
+        let entries = make_test_entries(&["a.txt"]);
+        let mut app = App::new_for_test(entries);
+        app.enter_visual();
+        assert_eq!(app.mode, Mode::Visual);
+        app.handle_visual(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
+        assert_eq!(app.mode, Mode::Normal);
+    }
+
+    // ── Info load / du poll tests ────────────────────────────────────
+
+    #[tokio::test]
+    async fn apply_info_load_in_info_mode() {
+        let entries = make_test_entries(&["a.txt"]);
+        let mut app = App::new_for_test(entries);
+        app.mode = Mode::Info;
+        let lines = vec![("Name".into(), "test.txt".into()), ("Size".into(), "100 B".into())];
+        app.apply_info_load(lines.clone());
+        assert_eq!(app.info_lines.len(), 2);
+        assert_eq!(app.info_lines[0].1, "test.txt");
+    }
+
+    #[tokio::test]
+    async fn apply_info_load_not_in_info_mode_ignored() {
+        let entries = make_test_entries(&["a.txt"]);
+        let mut app = App::new_for_test(entries);
+        app.mode = Mode::Normal;
+        app.info_lines = vec![("old".into(), "data".into())];
+        let lines = vec![("Name".into(), "test.txt".into())];
+        app.apply_info_load(lines);
+        assert_eq!(app.info_lines[0].0, "old"); // unchanged
+    }
+
+    #[tokio::test]
+    async fn poll_info_du_replaces_placeholders() {
+        let entries = make_test_entries(&["a.txt"]);
+        let mut app = App::new_for_test(entries);
+        app.mode = Mode::Info;
+        app.info_lines = vec![
+            ("Name".into(), "dir".into()),
+            ("Size".into(), "Calculating...".into()),
+            ("Files".into(), "Calculating...".into()),
+            ("Subdirs".into(), "Calculating...".into()),
+        ];
+        let (tx, rx) = tokio::sync::oneshot::channel();
+        app.info_du_rx = Some(rx);
+        tx.send((2048u64, 10usize, 3usize)).unwrap();
+        app.poll_info_du();
+        assert!(app.info_lines[1].1.contains("2.0 KB"));
+        assert_eq!(app.info_lines[2].1, "10");
+        assert_eq!(app.info_lines[3].1, "3");
+        assert!(app.info_du_rx.is_none());
+    }
+
+    // ── Tree data tests ──────────────────────────────────────────────
+
+    #[tokio::test]
+    async fn apply_tree_data_matching_start_dir() {
+        let entries = make_test_entries(&["a.txt"]);
+        let mut app = App::new_for_test(entries);
+        app.tree_dirty = true;
+        let tree_line = crate::tree::TreeLine {
+            prefix: String::new(),
+            name: "test".into(),
+            path: PathBuf::from("/test"),
+            is_dir: true,
+            is_current: true,
+            is_on_path: true,
+            is_expanded: false,
+            depth: 0,
+        };
+        let result = TreeLoadResult {
+            start_dir: PathBuf::from("/test"),
+            current_path: PathBuf::from("/test"),
+            data: vec![tree_line],
+        };
+        app.apply_tree_data(result);
+        assert_eq!(app.tree_data.len(), 1);
+        assert!(!app.tree_dirty);
+    }
+
+    #[tokio::test]
+    async fn apply_tree_data_mismatched_start_dir_discarded() {
+        let entries = make_test_entries(&["a.txt"]);
+        let mut app = App::new_for_test(entries);
+        app.tree_dirty = true;
+        let result = TreeLoadResult {
+            start_dir: PathBuf::from("/other"),
+            current_path: PathBuf::from("/other"),
+            data: vec![],
+        };
+        app.apply_tree_data(result);
+        assert!(app.tree_data.is_empty());
+        assert!(app.tree_dirty); // unchanged
+    }
+
+    // ── Theme picker navigation test ─────────────────────────────────
+
+    #[tokio::test]
+    async fn handle_theme_picker_jk_moves_cursor() {
+        let entries = make_test_entries(&["a.txt"]);
+        let mut app = App::new_for_test(entries);
+        app.mode = Mode::ThemePicker;
+        app.theme_dark_list = vec!["a".into(), "b".into(), "c".into()];
+        app.theme_light_list = vec!["x".into(), "y".into()];
+        app.theme_col = 0;
+        app.theme_cursors = [0; 2];
+
+        // j moves down in dark column
+        app.handle_theme_picker(KeyEvent::new(KeyCode::Char('j'), KeyModifiers::NONE));
+        assert_eq!(app.theme_cursors[0], 1);
+
+        // k moves up
+        app.handle_theme_picker(KeyEvent::new(KeyCode::Char('k'), KeyModifiers::NONE));
+        assert_eq!(app.theme_cursors[0], 0);
+
+        // Tab switches to light column
+        app.handle_theme_picker(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE));
+        assert_eq!(app.theme_col, 1);
     }
 }

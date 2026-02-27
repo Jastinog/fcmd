@@ -153,3 +153,103 @@ impl App {
         self.theme_scrolls = [0; 2];
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+
+    #[tokio::test]
+    async fn handle_confirm_scroll_down_up() {
+        let entries = crate::app::make_test_entries(&["a.txt"]);
+        let mut app = App::new_for_test(entries);
+        app.mode = Mode::Confirm;
+        app.confirm_paths = (0..10).map(|i| (PathBuf::from(format!("/f{i}")), false)).collect();
+        app.confirm_scroll = 0;
+
+        app.handle_confirm(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
+        assert_eq!(app.confirm_scroll, 1);
+        app.handle_confirm(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
+        assert_eq!(app.confirm_scroll, 2);
+        app.handle_confirm(KeyEvent::new(KeyCode::Up, KeyModifiers::NONE));
+        assert_eq!(app.confirm_scroll, 1);
+    }
+
+    #[tokio::test]
+    async fn handle_confirm_cancel_no_marks() {
+        let entries = crate::app::make_test_entries(&["a.txt"]);
+        let mut app = App::new_for_test(entries);
+        app.mode = Mode::Confirm;
+        app.confirm_paths = vec![(PathBuf::from("/test/a.txt"), false)];
+
+        // Press 'n' to cancel
+        app.handle_confirm(KeyEvent::new(KeyCode::Char('n'), KeyModifiers::NONE));
+        assert!(app.confirm_paths.is_empty());
+        assert_eq!(app.status_message, "Cancelled");
+        assert_eq!(app.mode, Mode::Normal);
+    }
+
+    #[tokio::test]
+    async fn handle_confirm_cancel_with_marks_returns_select() {
+        let entries = crate::app::make_test_entries(&["a.txt", "b.txt"]);
+        let mut app = App::new_for_test(entries);
+        // Mark a file
+        let path = app.active_panel().entries[1].path.clone();
+        app.active_panel_mut().marked.insert(path);
+        app.mode = Mode::Confirm;
+        app.confirm_paths = vec![(PathBuf::from("/test/a.txt"), false)];
+
+        app.handle_confirm(KeyEvent::new(KeyCode::Char('n'), KeyModifiers::NONE));
+        assert_eq!(app.mode, Mode::Select);
+    }
+
+    #[tokio::test]
+    async fn handle_confirm_scroll_clamped() {
+        let entries = crate::app::make_test_entries(&["a.txt"]);
+        let mut app = App::new_for_test(entries);
+        app.mode = Mode::Confirm;
+        app.confirm_paths = vec![(PathBuf::from("/a"), false), (PathBuf::from("/b"), false)];
+        app.confirm_scroll = 0;
+
+        // Scroll down past max should clamp
+        for _ in 0..5 {
+            app.handle_confirm(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
+        }
+        assert_eq!(app.confirm_scroll, 1); // max is len-1 = 1
+    }
+
+    #[tokio::test]
+    async fn handle_help_esc_returns_normal() {
+        let entries = crate::app::make_test_entries(&["a.txt"]);
+        let mut app = App::new_for_test(entries);
+        app.mode = Mode::Help;
+        app.handle_help(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
+        assert_eq!(app.mode, Mode::Normal);
+    }
+
+    #[tokio::test]
+    async fn position_theme_cursors_finds_dark() {
+        let entries = crate::app::make_test_entries(&["a.txt"]);
+        let mut app = App::new_for_test(entries);
+        app.theme_dark_list = vec!["gruvbox".into(), "dracula".into(), "nord".into()];
+        app.theme_light_list = vec!["solarized".into()];
+        app.theme_active_name = Some("dracula".into());
+
+        app.position_theme_cursors();
+        assert_eq!(app.theme_col, 0);
+        assert_eq!(app.theme_cursors[0], 1);
+    }
+
+    #[tokio::test]
+    async fn position_theme_cursors_finds_light() {
+        let entries = crate::app::make_test_entries(&["a.txt"]);
+        let mut app = App::new_for_test(entries);
+        app.theme_dark_list = vec!["gruvbox".into()];
+        app.theme_light_list = vec!["solarized".into(), "github-light".into()];
+        app.theme_active_name = Some("github-light".into());
+
+        app.position_theme_cursors();
+        assert_eq!(app.theme_col, 1);
+        assert_eq!(app.theme_cursors[1], 1);
+    }
+}

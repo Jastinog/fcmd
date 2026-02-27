@@ -99,3 +99,91 @@ impl App {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+
+    #[tokio::test]
+    async fn handle_rename_char_input() {
+        let entries = crate::app::make_test_entries(&["a.txt"]);
+        let mut app = App::new_for_test(entries);
+        app.mode = Mode::Rename;
+        app.rename_input.clear();
+
+        app.handle_rename(KeyEvent::new(KeyCode::Char('h'), KeyModifiers::NONE));
+        app.handle_rename(KeyEvent::new(KeyCode::Char('i'), KeyModifiers::NONE));
+        assert_eq!(app.rename_input, "hi");
+    }
+
+    #[tokio::test]
+    async fn handle_rename_backspace_and_empty_exits() {
+        let entries = crate::app::make_test_entries(&["a.txt"]);
+        let mut app = App::new_for_test(entries);
+        app.mode = Mode::Rename;
+        app.rename_input = "ab".into();
+
+        app.handle_rename(KeyEvent::new(KeyCode::Backspace, KeyModifiers::NONE));
+        assert_eq!(app.rename_input, "a");
+        assert_eq!(app.mode, Mode::Rename);
+
+        app.handle_rename(KeyEvent::new(KeyCode::Backspace, KeyModifiers::NONE));
+        assert_eq!(app.rename_input, "");
+        assert_eq!(app.mode, Mode::Rename);
+
+        // Empty backspace exits to Normal
+        app.handle_rename(KeyEvent::new(KeyCode::Backspace, KeyModifiers::NONE));
+        assert_eq!(app.mode, Mode::Normal);
+    }
+
+    #[tokio::test]
+    async fn handle_rename_esc_exits() {
+        let entries = crate::app::make_test_entries(&["a.txt"]);
+        let mut app = App::new_for_test(entries);
+        app.mode = Mode::Rename;
+        app.rename_input = "test".into();
+        app.handle_rename(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
+        assert_eq!(app.mode, Mode::Normal);
+    }
+
+    #[tokio::test]
+    async fn handle_rename_enter_empty_noop() {
+        let entries = crate::app::make_test_entries(&["a.txt"]);
+        let mut app = App::new_for_test(entries);
+        app.mode = Mode::Rename;
+        app.rename_input.clear();
+        app.handle_rename(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+        assert_eq!(app.mode, Mode::Normal);
+    }
+
+    #[tokio::test]
+    async fn handle_create_char_input() {
+        let entries = crate::app::make_test_entries(&["a.txt"]);
+        let mut app = App::new_for_test(entries);
+        app.mode = Mode::Create;
+        app.rename_input.clear();
+
+        app.handle_create(KeyEvent::new(KeyCode::Char('f'), KeyModifiers::NONE));
+        assert_eq!(app.rename_input, "f");
+    }
+
+    #[tokio::test]
+    async fn handle_create_esc_exits() {
+        let entries = crate::app::make_test_entries(&["a.txt"]);
+        let mut app = App::new_for_test(entries);
+        app.mode = Mode::Create;
+        app.handle_create(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
+        assert_eq!(app.mode, Mode::Normal);
+    }
+
+    #[tokio::test]
+    async fn handle_create_enter_empty_noop() {
+        let entries = crate::app::make_test_entries(&["a.txt"]);
+        let mut app = App::new_for_test(entries);
+        app.mode = Mode::Create;
+        app.rename_input.clear();
+        app.handle_create(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+        assert_eq!(app.mode, Mode::Normal);
+    }
+}

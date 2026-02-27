@@ -389,6 +389,40 @@ impl FindState {
     }
 }
 
+#[cfg(test)]
+impl FindState {
+    /// Create a FindState with manually populated entries for testing.
+    pub fn new_test(base_dir: &Path, items: &[(&str, bool)]) -> Self {
+        let mut entries = Vec::new();
+        for &(rel, is_dir) in items {
+            entries.push(Entry {
+                rel_path: rel.to_string(),
+                rel_path_lower: rel.to_lowercase(),
+                full_path: base_dir.join(rel),
+                is_dir,
+            });
+        }
+        let filtered: Vec<usize> = (0..entries.len()).collect();
+        FindState {
+            query: String::new(),
+            entries,
+            rx: None,
+            filtered,
+            selected: 0,
+            scroll: 0,
+            loading: false,
+            scope: FindScope::Local,
+            base_dir: base_dir.to_path_buf(),
+            search_task: None,
+            find_preview: None,
+            find_preview_path: None,
+            find_preview_rx: None,
+            search_started: None,
+            tick: 0,
+        }
+    }
+}
+
 fn abbreviate_home(path: &str) -> String {
     if let Ok(home) = std::env::var("HOME")
         && let Some(rest) = path.strip_prefix(&home)
@@ -571,5 +605,82 @@ mod tests {
         let short = fuzzy_score_pre(&q, "a", 1);
         let long = fuzzy_score_pre(&q, "a_very_long_filename.txt", 24);
         assert!(short.unwrap() > long.unwrap());
+    }
+
+    #[test]
+    fn spinner_returns_nonempty() {
+        let fs = FindState::new_test(Path::new("/tmp"), &[("a.txt", false)]);
+        assert!(!fs.spinner().is_empty());
+    }
+
+    #[test]
+    fn move_down_increments_selected() {
+        let mut fs = FindState::new_test(
+            Path::new("/tmp"),
+            &[("a.txt", false), ("b.txt", false), ("c.txt", false)],
+        );
+        assert_eq!(fs.selected, 0);
+        fs.move_down();
+        assert_eq!(fs.selected, 1);
+        fs.move_down();
+        assert_eq!(fs.selected, 2);
+        // Clamped at last
+        fs.move_down();
+        assert_eq!(fs.selected, 2);
+    }
+
+    #[test]
+    fn move_up_decrements_selected() {
+        let mut fs = FindState::new_test(
+            Path::new("/tmp"),
+            &[("a.txt", false), ("b.txt", false)],
+        );
+        fs.selected = 1;
+        fs.move_up();
+        assert_eq!(fs.selected, 0);
+        // Saturating at 0
+        fs.move_up();
+        assert_eq!(fs.selected, 0);
+    }
+
+    #[test]
+    fn adjust_scroll_follows_selected_down() {
+        let mut fs = FindState::new_test(
+            Path::new("/tmp"),
+            &[("a", false), ("b", false), ("c", false), ("d", false), ("e", false)],
+        );
+        fs.selected = 4;
+        fs.scroll = 0;
+        fs.adjust_scroll(3); // visible height 3
+        assert_eq!(fs.scroll, 2); // 4 - 3 + 1
+    }
+
+    #[test]
+    fn adjust_scroll_follows_selected_up() {
+        let mut fs = FindState::new_test(
+            Path::new("/tmp"),
+            &[("a", false), ("b", false), ("c", false)],
+        );
+        fs.scroll = 2;
+        fs.selected = 0;
+        fs.adjust_scroll(3);
+        assert_eq!(fs.scroll, 0);
+    }
+
+    #[test]
+    fn get_item_and_selected_path() {
+        let fs = FindState::new_test(
+            Path::new("/tmp"),
+            &[("src/main.rs", false), ("docs/", true)],
+        );
+        let (rel, is_dir) = fs.get_item(0).unwrap();
+        assert_eq!(rel, "src/main.rs");
+        assert!(!is_dir);
+
+        let (rel, is_dir) = fs.get_item(1).unwrap();
+        assert_eq!(rel, "docs/");
+        assert!(is_dir);
+
+        assert_eq!(fs.selected_path().unwrap(), Path::new("/tmp/src/main.rs"));
     }
 }

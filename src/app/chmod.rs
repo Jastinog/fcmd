@@ -424,3 +424,85 @@ pub(crate) fn format_rwx(mode: u32) -> String {
     }
     s
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+
+    #[test]
+    fn format_rwx_755() {
+        assert_eq!(format_rwx(0o755), "rwxr-xr-x");
+    }
+
+    #[test]
+    fn format_rwx_644() {
+        assert_eq!(format_rwx(0o644), "rw-r--r--");
+    }
+
+    #[test]
+    fn format_rwx_000() {
+        assert_eq!(format_rwx(0o000), "---------");
+    }
+
+    #[test]
+    fn adjust_scroll_cursor_above() {
+        let mut scroll = 5;
+        adjust_scroll(&mut scroll, 2, 10);
+        assert_eq!(scroll, 2);
+    }
+
+    #[test]
+    fn adjust_scroll_cursor_below() {
+        let mut scroll = 0;
+        adjust_scroll(&mut scroll, 15, 10);
+        assert_eq!(scroll, 6); // 15 - 10 + 1
+    }
+
+    #[tokio::test]
+    async fn handle_chmod_accepts_octal_digits() {
+        let entries = crate::app::make_test_entries(&["a.txt"]);
+        let mut app = App::new_for_test(entries);
+        app.mode = Mode::Chmod;
+        app.rename_input.clear();
+        app.chmod_paths = vec![PathBuf::from("/test/a.txt")];
+
+        // Only 0-7 digits should be accepted
+        app.handle_chmod(KeyEvent::new(KeyCode::Char('7'), KeyModifiers::NONE));
+        app.handle_chmod(KeyEvent::new(KeyCode::Char('5'), KeyModifiers::NONE));
+        app.handle_chmod(KeyEvent::new(KeyCode::Char('5'), KeyModifiers::NONE));
+        assert_eq!(app.rename_input, "755");
+
+        // Digit 8 rejected
+        app.handle_chmod(KeyEvent::new(KeyCode::Char('8'), KeyModifiers::NONE));
+        assert_eq!(app.rename_input, "755");
+
+        // Max 4 chars
+        app.handle_chmod(KeyEvent::new(KeyCode::Char('0'), KeyModifiers::NONE));
+        assert_eq!(app.rename_input, "7550");
+        app.handle_chmod(KeyEvent::new(KeyCode::Char('1'), KeyModifiers::NONE));
+        assert_eq!(app.rename_input, "7550"); // still 4
+    }
+
+    #[tokio::test]
+    async fn handle_chmod_esc_exits_and_clears() {
+        let entries = crate::app::make_test_entries(&["a.txt"]);
+        let mut app = App::new_for_test(entries);
+        app.mode = Mode::Chmod;
+        app.chmod_paths = vec![PathBuf::from("/test/a.txt")];
+        app.handle_chmod(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
+        assert_eq!(app.mode, Mode::Normal);
+        assert!(app.chmod_paths.is_empty());
+    }
+
+    #[test]
+    fn chown_picker_list_height_calculation() {
+        // popup_h = min(20, visible_height+2).max(10), then subtract 5
+        // visible_height=20 → popup_h = min(20, 22).max(10) = 20 → 20-5 = 15
+        assert_eq!(ChownPicker::list_height(20), 15);
+        // visible_height=5 → popup_h = min(20, 7).max(10) = 10 → 10-5 = 5
+        assert_eq!(ChownPicker::list_height(5), 5);
+        // visible_height=0 → popup_h = min(20, 2).max(10) = 10 → 10-5 = 5
+        assert_eq!(ChownPicker::list_height(0), 5);
+    }
+}

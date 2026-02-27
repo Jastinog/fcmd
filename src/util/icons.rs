@@ -74,3 +74,79 @@ pub fn file_icon(name: &str, is_dir: bool) -> &'static str {
         _ => "\u{f016} ",                                                  //
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn dotdot_entry() {
+        let icon = file_icon("..", true);
+        assert_eq!(icon, "\u{f005e} ");
+    }
+
+    #[test]
+    fn dir_git() {
+        assert_eq!(file_icon(".git", true), "\u{e702} ");
+    }
+
+    #[test]
+    fn dir_node_modules() {
+        assert_eq!(file_icon("node_modules", true), "\u{e718} ");
+    }
+
+    #[test]
+    fn dir_src() {
+        assert_eq!(file_icon("src", true), "\u{f0d09} ");
+    }
+
+    #[test]
+    fn dir_generic() {
+        assert_eq!(file_icon("mydir", true), "\u{f07b} ");
+    }
+
+    #[test]
+    fn special_cargo_toml() {
+        assert_eq!(file_icon("Cargo.toml", false), "\u{e7a8} ");
+    }
+
+    #[test]
+    fn special_dockerfile() {
+        assert_eq!(file_icon("Dockerfile", false), "\u{f0868} ");
+    }
+
+    #[test]
+    fn special_gitignore() {
+        assert_eq!(file_icon(".gitignore", false), "\u{e702} ");
+    }
+
+    #[test]
+    fn special_readme() {
+        assert_eq!(file_icon("README.md", false), "\u{f00ba} ");
+    }
+
+    #[test]
+    fn ext_rs() {
+        assert_eq!(file_icon("main.rs", false), "\u{e7a8} ");
+    }
+
+    #[test]
+    fn ext_py() {
+        assert_eq!(file_icon("script.py", false), "\u{e73c} ");
+    }
+
+    #[test]
+    fn ext_js() {
+        assert_eq!(file_icon("app.js", false), "\u{e74e} ");
+    }
+
+    #[test]
+    fn unknown_extension() {
+        assert_eq!(file_icon("data.xyz", false), "\u{f016} ");
+    }
+
+    #[test]
+    fn no_extension() {
+        assert_eq!(file_icon("Makefile_custom", false), "\u{f016} ");
+    }
+}

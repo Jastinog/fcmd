@@ -582,6 +582,88 @@ mod tests {
     }
 
     #[test]
+    fn is_light_theme_white_bg() {
+        let content = r##"
+            bg = "#ffffff"
+            bg_light = "#eeeeee"
+            fg = "#000000"
+            fg_dim = "#444444"
+            red = "#ff0000"
+            green = "#00ff00"
+            yellow = "#ffff00"
+            blue = "#0000ff"
+            magenta = "#ff00ff"
+            cyan = "#00ffff"
+            orange = "#ff8000"
+            border_active = "#aaaaaa"
+            border_inactive = "#bbbbbb"
+            status_bg = "#cccccc"
+            cursor_line = "#dddddd"
+            dir_color = "#eeeeee"
+            symlink_color = "#999999"
+            file_color = "#888888"
+        "##;
+        assert!(is_light_theme_content(content));
+    }
+
+    #[test]
+    fn is_light_theme_dark_bg() {
+        let content = r##"
+            bg = "#0b0e14"
+            bg_light = "#111111"
+            fg = "#bfbdb6"
+            fg_dim = "#444444"
+            red = "#ff0000"
+            green = "#00ff00"
+            yellow = "#ffff00"
+            blue = "#0000ff"
+            magenta = "#ff00ff"
+            cyan = "#00ffff"
+            orange = "#ff8000"
+            border_active = "#aaaaaa"
+            border_inactive = "#bbbbbb"
+            status_bg = "#cccccc"
+            cursor_line = "#dddddd"
+            dir_color = "#eeeeee"
+            symlink_color = "#999999"
+            file_color = "#888888"
+        "##;
+        assert!(!is_light_theme_content(content));
+    }
+
+    #[test]
+    fn is_light_theme_near_threshold() {
+        // Luminance exactly at boundary: R=128, G=128, B=128
+        // lum = 0.299*128 + 0.587*128 + 0.114*128 = 128.0 → not > 128
+        let content = r##"
+            bg = "#808080"
+            bg_light = "#222222"
+            fg = "#333333"
+            fg_dim = "#444444"
+            red = "#ff0000"
+            green = "#00ff00"
+            yellow = "#ffff00"
+            blue = "#0000ff"
+            magenta = "#ff00ff"
+            cyan = "#00ffff"
+            orange = "#ff8000"
+            border_active = "#aaaaaa"
+            border_inactive = "#bbbbbb"
+            status_bg = "#cccccc"
+            cursor_line = "#dddddd"
+            dir_color = "#eeeeee"
+            symlink_color = "#999999"
+            file_color = "#888888"
+        "##;
+        assert!(!is_light_theme_content(content));
+    }
+
+    #[test]
+    fn is_light_theme_invalid_toml() {
+        assert!(!is_light_theme_content("not valid toml {{{{"));
+    }
+
+    #[test]
     fn default_theme_has_distinct_colors() {
         let t = Theme::default_theme();
         // Basic sanity: bg and fg should differ

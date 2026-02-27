@@ -330,3 +330,146 @@ impl Preview {
         self.scroll = (self.scroll + n).min(max);
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // ── sanitize_line ──────────────────────────────────────────────
+
+    #[test]
+    fn sanitize_plain_text() {
+        assert_eq!(sanitize_line("hello world"), "hello world");
+    }
+
+    #[test]
+    fn sanitize_tab_start_of_line() {
+        assert_eq!(sanitize_line("\thello"), "    hello");
+    }
+
+    #[test]
+    fn sanitize_tab_mid_line() {
+        // "ab" is col 2, tab expands to 2 spaces (4 - 2%4 = 2)
+        assert_eq!(sanitize_line("ab\tc"), "ab  c");
+    }
+
+    #[test]
+    fn sanitize_control_chars() {
+        assert_eq!(sanitize_line("a\x01b\x7fc"), "abc");
+    }
+
+    #[test]
+    fn sanitize_mixed() {
+        assert_eq!(sanitize_line("\t\x01hello"), "    hello");
+    }
+
+    // ── text_position ──────────────────────────────────────────────
+
+    #[test]
+    fn text_position_empty() {
+        let p = Preview {
+            lines: vec![],
+            scroll: 0,
+            title: String::new(),
+            info: String::new(),
+            is_binary: false,
+            binary_size: 0,
+        };
+        assert_eq!(p.text_position(10), (0, 0, 0));
+    }
+
+    #[test]
+    fn text_position_binary_returns_zeros() {
+        let p = Preview {
+            lines: vec!["hex".into()],
+            scroll: 0,
+            title: String::new(),
+            info: String::new(),
+            is_binary: true,
+            binary_size: 100,
+        };
+        assert_eq!(p.text_position(10), (0, 0, 0));
+    }
+
+    #[test]
+    fn text_position_normal() {
+        let lines: Vec<String> = (0..100).map(|i| format!("line {i}")).collect();
+        let p = Preview {
+            lines,
+            scroll: 10,
+            title: String::new(),
+            info: String::new(),
+            is_binary: false,
+            binary_size: 0,
+        };
+        let (first, total, pct) = p.text_position(20);
+        assert_eq!(first, 11); // scroll + 1
+        assert_eq!(total, 100);
+        assert_eq!(pct, 30); // (10+20)*100/100 = 30
+    }
+
+    // ── hex_position ───────────────────────────────────────────────
+
+    #[test]
+    fn hex_position_non_binary() {
+        let p = Preview {
+            lines: vec!["text".into()],
+            scroll: 0,
+            title: String::new(),
+            info: String::new(),
+            is_binary: false,
+            binary_size: 0,
+        };
+        assert_eq!(p.hex_position(10), (0, 0, 0, 0));
+    }
+
+    #[test]
+    fn hex_position_binary() {
+        let lines: Vec<String> = (0..16).map(|_| "hex line".into()).collect();
+        let p = Preview {
+            lines,
+            scroll: 2,
+            title: String::new(),
+            info: String::new(),
+            is_binary: true,
+            binary_size: 256,
+        };
+        let (first_byte, last_byte, total, pct) = p.hex_position(10);
+        assert_eq!(first_byte, 32);  // 2 * 16
+        assert_eq!(last_byte, 192);  // (2+10) * 16
+        assert_eq!(total, 256);
+        assert_eq!(pct, 75);         // 192 * 100 / 256
+    }
+
+    // ── scroll_up / scroll_down ────────────────────────────────────
+
+    #[test]
+    fn scroll_up_clamps_at_zero() {
+        let mut p = Preview {
+            lines: vec!["a".into(), "b".into()],
+            scroll: 1,
+            title: String::new(),
+            info: String::new(),
+            is_binary: false,
+            binary_size: 0,
+        };
+        p.scroll_up(5);
+        assert_eq!(p.scroll, 0);
+    }
+
+    #[test]
+    fn scroll_down_clamps_at_max() {
+        let lines: Vec<String> = (0..20).map(|i| format!("line {i}")).collect();
+        let mut p = Preview {
+            lines,
+            scroll: 0,
+            title: String::new(),
+            info: String::new(),
+            is_binary: false,
+            binary_size: 0,
+        };
+        // visible=10, max scroll = 20 - 10 = 10
+        p.scroll_down(100, 10);
+        assert_eq!(p.scroll, 10);
+    }
+}

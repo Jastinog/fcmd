@@ -215,3 +215,86 @@ impl App {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+    use crate::tree::TreeLine;
+
+    fn make_tree_lines(n: usize) -> Vec<TreeLine> {
+        (0..n)
+            .map(|i| TreeLine {
+                prefix: String::new(),
+                name: format!("dir{i}"),
+                path: PathBuf::from(format!("/test/dir{i}")),
+                is_dir: true,
+                is_current: i == 0,
+                is_on_path: false,
+                is_expanded: false,
+                depth: 0,
+            })
+            .collect()
+    }
+
+    #[tokio::test]
+    async fn tree_j_increments_selected() {
+        let entries = crate::app::make_test_entries(&["a.txt"]);
+        let mut app = App::new_for_test(entries);
+        app.show_tree = true;
+        app.tree_focused = true;
+        app.tree_data = make_tree_lines(5);
+        app.tree_selected = 0;
+
+        app.handle_tree_input(KeyEvent::new(KeyCode::Char('j'), KeyModifiers::NONE));
+        assert_eq!(app.tree_selected, 1);
+    }
+
+    #[tokio::test]
+    async fn tree_k_decrements_selected() {
+        let entries = crate::app::make_test_entries(&["a.txt"]);
+        let mut app = App::new_for_test(entries);
+        app.tree_data = make_tree_lines(5);
+        app.tree_selected = 2;
+
+        app.handle_tree_input(KeyEvent::new(KeyCode::Char('k'), KeyModifiers::NONE));
+        assert_eq!(app.tree_selected, 1);
+
+        // Saturating at 0
+        app.tree_selected = 0;
+        app.handle_tree_input(KeyEvent::new(KeyCode::Char('k'), KeyModifiers::NONE));
+        assert_eq!(app.tree_selected, 0);
+    }
+
+    #[tokio::test]
+    async fn tree_G_goes_to_last() {
+        let entries = crate::app::make_test_entries(&["a.txt"]);
+        let mut app = App::new_for_test(entries);
+        app.tree_data = make_tree_lines(5);
+        app.tree_selected = 0;
+
+        app.handle_tree_input(KeyEvent::new(KeyCode::Char('G'), KeyModifiers::NONE));
+        assert_eq!(app.tree_selected, 4);
+    }
+
+    #[tokio::test]
+    async fn tree_tab_unfocuses() {
+        let entries = crate::app::make_test_entries(&["a.txt"]);
+        let mut app = App::new_for_test(entries);
+        app.tree_focused = true;
+        app.tree_data = make_tree_lines(3);
+
+        app.handle_tree_input(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE));
+        assert!(!app.tree_focused);
+    }
+
+    #[tokio::test]
+    async fn tree_q_quits() {
+        let entries = crate::app::make_test_entries(&["a.txt"]);
+        let mut app = App::new_for_test(entries);
+        app.tree_data = make_tree_lines(3);
+
+        app.handle_tree_input(KeyEvent::new(KeyCode::Char('q'), KeyModifiers::NONE));
+        assert!(app.should_quit);
+    }
+}

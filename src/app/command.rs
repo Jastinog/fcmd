@@ -328,3 +328,149 @@ impl App {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+
+    #[tokio::test]
+    async fn handle_command_char_appends() {
+        let entries = crate::app::make_test_entries(&["a.txt"]);
+        let mut app = App::new_for_test(entries);
+        app.mode = Mode::Command;
+        app.command_input.clear();
+
+        app.handle_command(KeyEvent::new(KeyCode::Char('q'), KeyModifiers::NONE));
+        assert_eq!(app.command_input, "q");
+    }
+
+    #[tokio::test]
+    async fn handle_command_backspace_pops() {
+        let entries = crate::app::make_test_entries(&["a.txt"]);
+        let mut app = App::new_for_test(entries);
+        app.mode = Mode::Command;
+        app.command_input = "ab".into();
+
+        app.handle_command(KeyEvent::new(KeyCode::Backspace, KeyModifiers::NONE));
+        assert_eq!(app.command_input, "a");
+
+        app.handle_command(KeyEvent::new(KeyCode::Backspace, KeyModifiers::NONE));
+        assert_eq!(app.command_input, "");
+
+        // Empty backspace → Normal mode
+        app.handle_command(KeyEvent::new(KeyCode::Backspace, KeyModifiers::NONE));
+        assert_eq!(app.mode, Mode::Normal);
+    }
+
+    #[tokio::test]
+    async fn handle_command_esc_clears_and_exits() {
+        let entries = crate::app::make_test_entries(&["a.txt"]);
+        let mut app = App::new_for_test(entries);
+        app.mode = Mode::Command;
+        app.command_input = "something".into();
+
+        app.handle_command(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
+        assert_eq!(app.mode, Mode::Normal);
+        assert!(app.command_input.is_empty());
+    }
+
+    #[tokio::test]
+    async fn handle_command_enter_executes() {
+        let entries = crate::app::make_test_entries(&["a.txt"]);
+        let mut app = App::new_for_test(entries);
+        app.mode = Mode::Command;
+        app.command_input = "q".into();
+
+        app.handle_command(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+        assert_eq!(app.mode, Mode::Normal);
+        assert!(app.should_quit);
+    }
+
+    #[tokio::test]
+    async fn execute_command_quit() {
+        let entries = crate::app::make_test_entries(&["a.txt"]);
+        let mut app = App::new_for_test(entries);
+        app.command_input = "q".into();
+        app.execute_command();
+        assert!(app.should_quit);
+    }
+
+    #[tokio::test]
+    async fn execute_command_sort_name() {
+        let entries = crate::app::make_test_entries(&["a.txt"]);
+        let mut app = App::new_for_test(entries);
+        app.command_input = "sort name".into();
+        app.execute_command();
+        assert_eq!(app.active_panel().sort_mode, SortMode::Name);
+    }
+
+    #[tokio::test]
+    async fn execute_command_sort_size() {
+        let entries = crate::app::make_test_entries(&["a.txt"]);
+        let mut app = App::new_for_test(entries);
+        app.command_input = "sort size".into();
+        app.execute_command();
+        assert_eq!(app.active_panel().sort_mode, SortMode::Size);
+    }
+
+    #[tokio::test]
+    async fn execute_command_hidden_toggles() {
+        let entries = crate::app::make_test_entries(&["a.txt"]);
+        let mut app = App::new_for_test(entries);
+        let before = app.active_panel().show_hidden;
+        app.command_input = "hidden".into();
+        app.execute_command();
+        assert_ne!(app.active_panel().show_hidden, before);
+    }
+
+    #[tokio::test]
+    async fn execute_command_tabnew() {
+        let entries = crate::app::make_test_entries(&["a.txt"]);
+        let mut app = App::new_for_test(entries);
+        assert_eq!(app.tabs.len(), 1);
+        app.command_input = "tabnew".into();
+        app.execute_command();
+        assert_eq!(app.tabs.len(), 2);
+    }
+
+    #[tokio::test]
+    async fn execute_command_tabclose() {
+        let entries = crate::app::make_test_entries(&["a.txt"]);
+        let mut app = App::new_for_test(entries);
+        app.tabs.push(Tab::new(PathBuf::from("/test2")));
+        assert_eq!(app.tabs.len(), 2);
+        app.command_input = "tabclose".into();
+        app.execute_command();
+        assert_eq!(app.tabs.len(), 1);
+    }
+
+    #[tokio::test]
+    async fn execute_command_select_pattern() {
+        let entries = crate::app::make_test_entries(&["a.rs", "b.py", "c.rs"]);
+        let mut app = App::new_for_test(entries);
+        app.command_input = "select *.rs".into();
+        app.execute_command();
+        assert_eq!(app.active_panel().marked.len(), 2);
+    }
+
+    #[tokio::test]
+    async fn execute_command_unselect_clears() {
+        let entries = crate::app::make_test_entries(&["a.rs", "b.py"]);
+        let mut app = App::new_for_test(entries);
+        app.select_all();
+        assert!(!app.active_panel().marked.is_empty());
+        app.command_input = "unselect".into();
+        app.execute_command();
+        assert!(app.active_panel().marked.is_empty());
+    }
+
+    #[tokio::test]
+    async fn execute_command_unknown_shows_status() {
+        let entries = crate::app::make_test_entries(&["a.txt"]);
+        let mut app = App::new_for_test(entries);
+        app.command_input = "foobar".into();
+        app.execute_command();
+        assert!(app.status_message.contains("Unknown command"));
+    }
+}

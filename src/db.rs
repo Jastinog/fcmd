@@ -258,7 +258,7 @@ impl Db {
     }
 
     #[cfg(test)]
-    fn init_in_memory() -> rusqlite::Result<Self> {
+    pub(crate) fn init_in_memory() -> rusqlite::Result<Self> {
         let conn = Connection::open_in_memory()?;
         conn.execute_batch(
             "CREATE TABLE IF NOT EXISTS visual_marks (path TEXT PRIMARY KEY, level INTEGER NOT NULL DEFAULT 1);

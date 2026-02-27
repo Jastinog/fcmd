@@ -280,3 +280,69 @@ fn get_group_name(gid: u32) -> Option<String> {
 fn get_group_name(_gid: u32) -> Option<String> {
     None
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+
+    #[test]
+    fn format_size_bytes() {
+        assert_eq!(format_size(500), "500 B");
+    }
+
+    #[test]
+    fn format_size_kilobytes() {
+        assert_eq!(format_size(1024), "1.0 KB");
+    }
+
+    #[test]
+    fn format_size_megabytes() {
+        assert_eq!(format_size(1_500_000), "1.4 MB");
+    }
+
+    #[test]
+    fn format_size_gigabytes() {
+        assert_eq!(format_size(2_000_000_000), "1.86 GB");
+    }
+
+    #[test]
+    fn format_size_detailed_large_shows_bytes() {
+        let result = format_size_detailed(1024);
+        assert!(result.contains("1.0 KB"));
+        assert!(result.contains("1024 bytes"));
+    }
+
+    #[test]
+    fn format_size_detailed_small_no_extra() {
+        let result = format_size_detailed(500);
+        assert_eq!(result, "500 B");
+        assert!(!result.contains("bytes"));
+    }
+
+    #[tokio::test]
+    async fn handle_info_scroll_and_esc() {
+        let entries = crate::app::make_test_entries(&["a.txt"]);
+        let mut app = App::new_for_test(entries);
+        app.mode = Mode::Info;
+        app.info_lines = (0..20).map(|i| (format!("Key{i}"), format!("Val{i}"))).collect();
+        app.info_scroll = 0;
+
+        // Scroll down 5 times
+        for _ in 0..5 {
+            app.handle_info(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
+        }
+        assert_eq!(app.info_scroll, 5);
+
+        // Scroll up 2 times
+        for _ in 0..2 {
+            app.handle_info(KeyEvent::new(KeyCode::Up, KeyModifiers::NONE));
+        }
+        assert_eq!(app.info_scroll, 3);
+
+        // Esc clears and returns to Normal
+        app.handle_info(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
+        assert_eq!(app.mode, Mode::Normal);
+        assert!(app.info_lines.is_empty());
+    }
+}

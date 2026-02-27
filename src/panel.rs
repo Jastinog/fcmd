@@ -874,6 +874,249 @@ mod tests {
         assert_eq!(p.offset, 0);
     }
 
+    // ── sort_file_entries tests ──────────────────────────────────────
+
+    fn make_file_entry(name: &str, is_dir: bool, size: u64) -> FileEntry {
+        FileEntry {
+            name: name.into(),
+            path: PathBuf::from(format!("/tmp/{name}")),
+            is_dir,
+            size,
+            modified: None,
+            created: None,
+            is_symlink: false,
+        }
+    }
+
+    #[test]
+    fn sort_by_name() {
+        let mut dirs = vec![
+            make_file_entry("zebra", true, 0),
+            make_file_entry("alpha", true, 0),
+        ];
+        let mut files = vec![
+            make_file_entry("omega.txt", false, 10),
+            make_file_entry("beta.txt", false, 20),
+        ];
+        sort_file_entries(&mut dirs, &mut files, SortMode::Name, false, &HashMap::new());
+        assert_eq!(dirs[0].name, "alpha");
+        assert_eq!(dirs[1].name, "zebra");
+        assert_eq!(files[0].name, "beta.txt");
+        assert_eq!(files[1].name, "omega.txt");
+    }
+
+    #[test]
+    fn sort_by_size() {
+        let mut dirs = vec![];
+        let mut files = vec![
+            make_file_entry("big.txt", false, 999),
+            make_file_entry("small.txt", false, 1),
+            make_file_entry("mid.txt", false, 100),
+        ];
+        sort_file_entries(&mut dirs, &mut files, SortMode::Size, false, &HashMap::new());
+        assert_eq!(files[0].name, "small.txt");
+        assert_eq!(files[1].name, "mid.txt");
+        assert_eq!(files[2].name, "big.txt");
+    }
+
+    #[test]
+    fn sort_by_extension() {
+        let mut dirs = vec![];
+        let mut files = vec![
+            make_file_entry("b.rs", false, 0),
+            make_file_entry("a.py", false, 0),
+            make_file_entry("c.go", false, 0),
+        ];
+        sort_file_entries(&mut dirs, &mut files, SortMode::Extension, false, &HashMap::new());
+        assert_eq!(files[0].name, "c.go");
+        assert_eq!(files[1].name, "a.py");
+        assert_eq!(files[2].name, "b.rs");
+    }
+
+    #[test]
+    fn sort_reverse() {
+        let mut dirs = vec![];
+        let mut files = vec![
+            make_file_entry("a.txt", false, 1),
+            make_file_entry("c.txt", false, 3),
+            make_file_entry("b.txt", false, 2),
+        ];
+        sort_file_entries(&mut dirs, &mut files, SortMode::Name, true, &HashMap::new());
+        assert_eq!(files[0].name, "c.txt");
+        assert_eq!(files[1].name, "b.txt");
+        assert_eq!(files[2].name, "a.txt");
+    }
+
+    #[test]
+    fn sort_by_modified() {
+        use std::time::{SystemTime, Duration};
+        let t1 = SystemTime::UNIX_EPOCH;
+        let t2 = SystemTime::UNIX_EPOCH + Duration::from_secs(100);
+        let mut dirs = vec![];
+        let mut files = vec![
+            FileEntry {
+                name: "newer.txt".into(),
+                path: PathBuf::from("/tmp/newer.txt"),
+                is_dir: false,
+                size: 0,
+                modified: Some(t2),
+                created: None,
+                is_symlink: false,
+            },
+            FileEntry {
+                name: "older.txt".into(),
+                path: PathBuf::from("/tmp/older.txt"),
+                is_dir: false,
+                size: 0,
+                modified: Some(t1),
+                created: None,
+                is_symlink: false,
+            },
+        ];
+        sort_file_entries(&mut dirs, &mut files, SortMode::Modified, false, &HashMap::new());
+        assert_eq!(files[0].name, "older.txt");
+        assert_eq!(files[1].name, "newer.txt");
+    }
+
+    // ── resort_entries tests ──────────────────────────────────────
+
+    #[test]
+    fn resort_entries_dotdot_stays_first() {
+        let mut entries = vec![
+            FileEntry {
+                name: "..".into(),
+                path: PathBuf::from("/"),
+                is_dir: true,
+                size: 0,
+                modified: None,
+                created: None,
+                is_symlink: false,
+            },
+            make_file_entry("z_dir", true, 0),
+            make_file_entry("a_dir", true, 0),
+            make_file_entry("b.txt", false, 0),
+        ];
+        resort_entries(&mut entries, SortMode::Name, false, &HashMap::new());
+        assert_eq!(entries[0].name, "..");
+        assert_eq!(entries[1].name, "a_dir");
+        assert_eq!(entries[2].name, "z_dir");
+        assert_eq!(entries[3].name, "b.txt");
+    }
+
+    #[test]
+    fn resort_entries_reorders() {
+        let mut entries = vec![
+            make_file_entry("b.txt", false, 200),
+            make_file_entry("a.txt", false, 100),
+        ];
+        resort_entries(&mut entries, SortMode::Size, false, &HashMap::new());
+        assert_eq!(entries[0].name, "a.txt");
+        assert_eq!(entries[1].name, "b.txt");
+    }
+
+    #[test]
+    fn resort_entries_empty() {
+        let mut entries: Vec<FileEntry> = vec![];
+        resort_entries(&mut entries, SortMode::Name, false, &HashMap::new());
+        assert!(entries.is_empty());
+    }
+
+    // ── DirCache tests ────────────────────────────────────────────
+
+    #[test]
+    fn dir_cache_insert_and_get() {
+        let mut cache = DirCache::new(4);
+        let path = PathBuf::from("/tmp/test");
+        cache.insert(
+            path.clone(),
+            DirCacheEntry {
+                entries: vec![],
+                sort_mode: SortMode::Name,
+                sort_reverse: false,
+                show_hidden: false,
+            },
+        );
+        assert!(cache.get(&path).is_some());
+        assert!(cache.get(&PathBuf::from("/nonexistent")).is_none());
+    }
+
+    #[test]
+    fn dir_cache_lru_eviction() {
+        let mut cache = DirCache::new(2);
+        let p1 = PathBuf::from("/a");
+        let p2 = PathBuf::from("/b");
+        let p3 = PathBuf::from("/c");
+        let entry = || DirCacheEntry {
+            entries: vec![],
+            sort_mode: SortMode::Name,
+            sort_reverse: false,
+            show_hidden: false,
+        };
+        cache.insert(p1.clone(), entry());
+        cache.insert(p2.clone(), entry());
+        // p1 is LRU, inserting p3 should evict p1
+        cache.insert(p3.clone(), entry());
+        assert!(cache.get(&p1).is_none());
+        assert!(cache.get(&p2).is_some());
+        assert!(cache.get(&p3).is_some());
+    }
+
+    #[test]
+    fn dir_cache_promote_on_get() {
+        let mut cache = DirCache::new(2);
+        let p1 = PathBuf::from("/a");
+        let p2 = PathBuf::from("/b");
+        let p3 = PathBuf::from("/c");
+        let entry = || DirCacheEntry {
+            entries: vec![],
+            sort_mode: SortMode::Name,
+            sort_reverse: false,
+            show_hidden: false,
+        };
+        cache.insert(p1.clone(), entry());
+        cache.insert(p2.clone(), entry());
+        // Access p1 to promote it
+        cache.get(&p1);
+        // Now p2 is LRU, inserting p3 should evict p2
+        cache.insert(p3.clone(), entry());
+        assert!(cache.get(&p1).is_some());
+        assert!(cache.get(&p2).is_none());
+        assert!(cache.get(&p3).is_some());
+    }
+
+    #[test]
+    fn dir_cache_remove() {
+        let mut cache = DirCache::new(4);
+        let path = PathBuf::from("/tmp/test");
+        cache.insert(
+            path.clone(),
+            DirCacheEntry {
+                entries: vec![],
+                sort_mode: SortMode::Name,
+                sort_reverse: false,
+                show_hidden: false,
+            },
+        );
+        cache.remove(&path);
+        assert!(cache.get(&path).is_none());
+    }
+
+    #[test]
+    fn dir_cache_clear() {
+        let mut cache = DirCache::new(4);
+        let entry = || DirCacheEntry {
+            entries: vec![],
+            sort_mode: SortMode::Name,
+            sort_reverse: false,
+            show_hidden: false,
+        };
+        cache.insert(PathBuf::from("/a"), entry());
+        cache.insert(PathBuf::from("/b"), entry());
+        cache.clear();
+        assert!(cache.get(&PathBuf::from("/a")).is_none());
+        assert!(cache.get(&PathBuf::from("/b")).is_none());
+    }
+
     #[test]
     fn load_dir_real_filesystem() {
         let dir = std::env::temp_dir().join("fcmd_panel_test");
