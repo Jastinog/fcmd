@@ -76,21 +76,29 @@ impl App {
                 self.active_panel_mut().page_up(half);
             }
             KeyCode::Char('l') | KeyCode::Right | KeyCode::Enter => {
-                let is_file = self
+                let entry_info = self
                     .active_panel()
                     .selected_entry()
-                    .map(|e| !e.is_dir && e.name != "..")
-                    .unwrap_or(false);
-                if is_file && key.code == KeyCode::Enter {
-                    if let Some(entry) = self.active_panel().selected_entry() {
-                        let path = entry.path.clone();
-                        self.file_preview_path = Some(path.clone());
-                        self.file_preview = Some(Preview::loading_placeholder(&path));
-                        self.mode = Mode::Preview;
-                        self.spawn_file_preview_load(path);
+                    .map(|e| (e.is_dir, e.name == ".."));
+                match entry_info {
+                    Some((false, _)) if key.code == KeyCode::Enter => {
+                        // Enter on file → open preview
+                        if let Some(entry) = self.active_panel().selected_entry() {
+                            let path = entry.path.clone();
+                            self.file_preview_path = Some(path.clone());
+                            self.file_preview = Some(Preview::loading_placeholder(&path));
+                            self.mode = Mode::Preview;
+                            self.spawn_file_preview_load(path);
+                        }
                     }
-                } else {
-                    self.enter_dir_async();
+                    Some((_, true)) if key.code == KeyCode::Enter => {
+                        // Enter on ".." → go to parent
+                        self.go_parent_async();
+                    }
+                    _ => {
+                        // l/Right/Enter on directory → enter it
+                        self.enter_dir_async();
+                    }
                 }
             }
             KeyCode::Char('h') | KeyCode::Left | KeyCode::Backspace | KeyCode::Char('-') => {

@@ -239,7 +239,6 @@ impl App {
             _ => return,
         };
         if entry.name == ".." {
-            self.go_parent_async();
             return;
         }
         let new_path = entry.path.clone();
