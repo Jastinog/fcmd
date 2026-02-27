@@ -122,15 +122,8 @@ impl App {
             }
 
             // Save to DB (fire-and-forget)
-            if let Some(ref db) = self.db {
-                let db = std::sync::Arc::clone(db);
-                let sizes = sizes.clone();
-                tokio::task::spawn_blocking(move || {
-                    if let Ok(db) = db.lock() {
-                        let _ = db.save_dir_sizes(&sizes);
-                    }
-                });
-            }
+            let sizes_clone = sizes.clone();
+            self.db_spawn(move |db| { let _ = db.save_dir_sizes(&sizes_clone); });
 
             let secs = elapsed.as_secs_f64();
             let total_str = format_bytes(total);
@@ -161,15 +154,8 @@ impl App {
                 self.git_roots = roots;
                 self.git_checked_dirs = checked_dirs;
                 self.git_progress = None;
-                if let Some(ref db) = self.db {
-                    let db = std::sync::Arc::clone(db);
-                    let statuses = self.git_statuses.clone();
-                    tokio::task::spawn_blocking(move || {
-                        if let Ok(db) = db.lock() {
-                            let _ = db.save_git_statuses(&statuses);
-                        }
-                    });
-                }
+                let statuses = self.git_statuses.clone();
+                self.db_spawn(move |db| { let _ = db.save_git_statuses(&statuses); });
             }
             Err(tokio::sync::oneshot::error::TryRecvError::Closed) => {
                 self.git_progress = None;

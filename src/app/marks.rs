@@ -19,27 +19,12 @@ impl App {
 
         if next_level == 0 {
             self.visual_marks.remove(&path);
-            if let Some(ref db) = self.db {
-                let db = std::sync::Arc::clone(db);
-                let path = path.clone();
-                tokio::task::spawn_blocking(move || {
-                    if let Ok(db) = db.lock() {
-                        let _ = db.remove_visual_mark(&path);
-                    }
-                });
-            }
+            let p = path;
+            self.db_spawn(move |db| { let _ = db.remove_visual_mark(&p); });
             self.status_message = format!("Unmarked: {name}");
         } else {
             self.visual_marks.insert(path.clone(), next_level);
-            if let Some(ref db) = self.db {
-                let db = std::sync::Arc::clone(db);
-                let path = path.clone();
-                tokio::task::spawn_blocking(move || {
-                    if let Ok(db) = db.lock() {
-                        let _ = db.set_visual_mark(&path, next_level);
-                    }
-                });
-            }
+            self.db_spawn(move |db| { let _ = db.set_visual_mark(&path, next_level); });
             let label = match next_level {
                 1 => "●1",
                 2 => "●2",

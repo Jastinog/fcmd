@@ -428,9 +428,11 @@ impl App {
         Ok(app)
     }
 
+    /// Save session and layout to DB. Synchronous — called on shutdown
+    /// where fire-and-forget could lose data if the runtime exits first.
     pub fn save_session(&self) {
         let Some(ref db) = self.db else { return };
-        let db = std::sync::Arc::clone(db);
+        let Ok(db) = db.lock() else { return };
         let tabs: Vec<crate::db::SavedTab> = self
             .tabs
             .iter()
@@ -440,18 +442,24 @@ impl App {
                 active_panel: t.active,
             })
             .collect();
-        let active_tab = self.active_tab;
-        let layout_label = self.layout.label().to_string();
-        tokio::task::spawn_blocking(move || {
-            if let Ok(db) = db.lock() {
-                if let Err(e) = db.save_session(&tabs, active_tab) {
-                    eprintln!("Warning: failed to save session: {e}");
+        if let Err(e) = db.save_session(&tabs, self.active_tab) {
+            eprintln!("Warning: failed to save session: {e}");
+        }
+        if let Err(e) = db.save_layout(self.layout.label()) {
+            eprintln!("Warning: failed to save layout: {e}");
+        }
+    }
+
+    /// Fire-and-forget DB write on the blocking thread pool.
+    pub(super) fn db_spawn(&self, f: impl FnOnce(&crate::db::Db) + Send + 'static) {
+        if let Some(ref db) = self.db {
+            let db = std::sync::Arc::clone(db);
+            tokio::task::spawn_blocking(move || {
+                if let Ok(db) = db.lock() {
+                    f(&db);
                 }
-                if let Err(e) = db.save_layout(&layout_label) {
-                    eprintln!("Warning: failed to save layout: {e}");
-                }
-            }
-        });
+            });
+        }
     }
 
     pub fn apply_transparency(&mut self) {
@@ -675,15 +683,8 @@ impl App {
                     self.theme_dark_list = dark_list;
                     self.theme_light_list = light_list;
                     self.theme_active_name = Some(name.clone());
-                    if let Some(ref db) = self.db {
-                        let db = std::sync::Arc::clone(db);
-                        let name_clone = name.clone();
-                        tokio::task::spawn_blocking(move || {
-                            if let Ok(db) = db.lock() {
-                                let _ = db.save_theme(&name_clone);
-                            }
-                        });
-                    }
+                    let n = name.clone();
+                    self.db_spawn(move |db| { let _ = db.save_theme(&n); });
                     self.status_message = format!("Theme: {name}");
                 }
                 None => self.status_message = format!("Theme not found: {name}"),

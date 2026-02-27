@@ -164,16 +164,8 @@ impl App {
         } else {
             self.dir_sorts.insert(path.clone(), (mode, rev));
         }
-        if let Some(ref db) = self.db {
-            let db = std::sync::Arc::clone(db);
-            let path = path.clone();
-            let label = mode.label().to_string();
-            tokio::task::spawn_blocking(move || {
-                if let Ok(db) = db.lock() {
-                    let _ = db.save_dir_sort(&path, &label, rev);
-                }
-            });
-        }
+        let label = mode.label().to_string();
+        self.db_spawn(move |db| { let _ = db.save_dir_sort(&path, &label, rev); });
     }
 
     pub(super) fn refresh_current_panel(&mut self) {
@@ -371,15 +363,8 @@ impl App {
             self.theme.bg = self.theme.bg_text;
             self.theme.status_bg = self.theme.status_bg_orig;
         }
-        if let Some(ref db) = self.db {
-            let db = std::sync::Arc::clone(db);
-            let transparent = self.transparent;
-            tokio::task::spawn_blocking(move || {
-                if let Ok(db) = db.lock() {
-                    let _ = db.save_transparent(transparent);
-                }
-            });
-        }
+        let transparent = self.transparent;
+        self.db_spawn(move |db| { let _ = db.save_transparent(transparent); });
         self.status_message = if self.transparent {
             "Background: transparent".into()
         } else {
