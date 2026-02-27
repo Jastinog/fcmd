@@ -148,7 +148,9 @@ impl App {
 
         let paths: Vec<PathBuf> = reg_entries.iter().map(|e| e.path.clone()).collect();
         let (tx, rx) = tokio::sync::mpsc::channel(64);
-        ops::paste_in_background(paths, dst_dir.clone(), op, tx);
+        let (conflict_tx, conflict_rx) = tokio::sync::mpsc::channel(4);
+        ops::paste_in_background(paths, dst_dir.clone(), op, tx, conflict_tx);
+        self.conflict_rx = Some(conflict_rx);
 
         if op == RegisterOp::Yank {
             self.task_manager.add_copy(rx, dst_dir, phantoms);

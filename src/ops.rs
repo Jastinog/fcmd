@@ -1,6 +1,7 @@
 use std::collections::VecDeque;
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::time::SystemTime;
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum RegisterOp {
@@ -70,6 +71,35 @@ pub enum ProgressMsg {
     },
 }
 
+// --- Conflict resolution ---
+
+pub struct ConflictInfo {
+    pub src_path: PathBuf,
+    pub dst_path: PathBuf,
+    pub src_size: u64,
+    pub dst_size: u64,
+    pub src_modified: Option<SystemTime>,
+    pub dst_modified: Option<SystemTime>,
+    pub is_dir: bool,
+    pub response_tx: tokio::sync::oneshot::Sender<ConflictChoice>,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ConflictChoice {
+    Overwrite,
+    Skip,
+    OverwriteAll,
+    SkipAll,
+    OverwriteNewer,
+    Abort,
+}
+
+#[derive(Default)]
+struct ConflictPolicy {
+    overwrite_all: bool,
+    skip_all: bool,
+}
+
 /// Total size of a path (recursive for directories).
 /// Uses symlink_metadata to avoid following symlink cycles.
 pub fn path_size(p: &Path) -> u64 {
@@ -110,7 +140,83 @@ impl ProgressCtx {
     }
 }
 
-fn copy_dir_progress(src: &Path, dst: &Path, ctx: &mut ProgressCtx) -> std::io::Result<()> {
+/// Abort sentinel error used to signal the user chose Abort.
+fn abort_error() -> std::io::Error {
+    std::io::Error::new(std::io::ErrorKind::Interrupted, "Aborted by user")
+}
+
+/// Ask the UI for a conflict resolution. Returns the user's choice.
+/// If the channel is closed (e.g. app quit), returns Abort.
+fn ask_conflict(
+    conflict_tx: &tokio::sync::mpsc::Sender<ConflictInfo>,
+    src: &Path,
+    dst: &Path,
+    is_dir: bool,
+) -> ConflictChoice {
+    let src_meta = fs::symlink_metadata(src).ok();
+    let dst_meta = fs::symlink_metadata(dst).ok();
+    let (response_tx, response_rx) = tokio::sync::oneshot::channel();
+    let info = ConflictInfo {
+        src_path: src.into(),
+        dst_path: dst.into(),
+        src_size: src_meta.as_ref().map(|m| if m.is_dir() { path_size(src) } else { m.len() }).unwrap_or(0),
+        dst_size: dst_meta.as_ref().map(|m| if m.is_dir() { path_size(dst) } else { m.len() }).unwrap_or(0),
+        src_modified: src_meta.as_ref().and_then(|m| m.modified().ok()),
+        dst_modified: dst_meta.as_ref().and_then(|m| m.modified().ok()),
+        is_dir,
+        response_tx,
+    };
+    if conflict_tx.blocking_send(info).is_err() {
+        return ConflictChoice::Abort;
+    }
+    response_rx.blocking_recv().unwrap_or(ConflictChoice::Abort)
+}
+
+/// Resolve a conflict for a single file/symlink, returning true if we should proceed (overwrite).
+fn resolve_file_conflict(
+    src: &Path,
+    dst: &Path,
+    is_dir: bool,
+    conflict_tx: &tokio::sync::mpsc::Sender<ConflictInfo>,
+    policy: &mut ConflictPolicy,
+) -> Result<bool, std::io::Error> {
+    if policy.overwrite_all {
+        return Ok(true);
+    }
+    if policy.skip_all {
+        return Ok(false);
+    }
+    let choice = ask_conflict(conflict_tx, src, dst, is_dir);
+    match choice {
+        ConflictChoice::Overwrite => Ok(true),
+        ConflictChoice::Skip => Ok(false),
+        ConflictChoice::OverwriteAll => {
+            policy.overwrite_all = true;
+            Ok(true)
+        }
+        ConflictChoice::SkipAll => {
+            policy.skip_all = true;
+            Ok(false)
+        }
+        ConflictChoice::OverwriteNewer => {
+            let src_mod = fs::symlink_metadata(src).ok().and_then(|m| m.modified().ok());
+            let dst_mod = fs::symlink_metadata(dst).ok().and_then(|m| m.modified().ok());
+            Ok(match (src_mod, dst_mod) {
+                (Some(s), Some(d)) => s > d,
+                _ => true, // if we can't determine, overwrite
+            })
+        }
+        ConflictChoice::Abort => Err(abort_error()),
+    }
+}
+
+fn copy_dir_progress(
+    src: &Path,
+    dst: &Path,
+    ctx: &mut ProgressCtx,
+    conflict_tx: &tokio::sync::mpsc::Sender<ConflictInfo>,
+    policy: &mut ConflictPolicy,
+) -> std::io::Result<()> {
     fs::create_dir_all(dst)?;
     // Preserve source directory permissions
     if let Ok(src_meta) = fs::metadata(src) {
@@ -121,11 +227,41 @@ fn copy_dir_progress(src: &Path, dst: &Path, ctx: &mut ProgressCtx) -> std::io::
         let target = dst.join(entry.file_name());
         let ft = entry.file_type()?;
         if ft.is_symlink() {
+            if target.exists() || target.symlink_metadata().is_ok() {
+                if !resolve_file_conflict(&entry.path(), &target, false, conflict_tx, policy)? {
+                    continue;
+                }
+                let _ = fs::remove_file(&target);
+            }
             copy_symlink(&entry.path(), &target)?;
         } else if ft.is_dir() {
-            copy_dir_progress(&entry.path(), &target, ctx)?;
+            if target.exists() {
+                if target.is_dir() {
+                    // Merge: recurse into existing directory
+                    copy_dir_progress(&entry.path(), &target, ctx, conflict_tx, policy)?;
+                } else {
+                    // Type mismatch: dir -> existing file
+                    return Err(std::io::Error::new(
+                        std::io::ErrorKind::AlreadyExists,
+                        format!("Cannot copy directory over file: {}", target.display()),
+                    ));
+                }
+            } else {
+                copy_dir_progress(&entry.path(), &target, ctx, conflict_tx, policy)?;
+            }
         } else {
             let size = entry.metadata().map(|m| m.len()).unwrap_or(0);
+            if target.exists() {
+                if target.is_dir() {
+                    return Err(std::io::Error::new(
+                        std::io::ErrorKind::AlreadyExists,
+                        format!("Cannot copy file over directory: {}", target.display()),
+                    ));
+                }
+                if !resolve_file_conflict(&entry.path(), &target, false, conflict_tx, policy)? {
+                    continue;
+                }
+            }
             fs::copy(entry.path(), &target)?;
             copy_timestamps(&entry.path(), &target);
             ctx.bytes_done += size;
@@ -137,56 +273,146 @@ fn copy_dir_progress(src: &Path, dst: &Path, ctx: &mut ProgressCtx) -> std::io::
     Ok(())
 }
 
+/// Simple copy_dir_progress without conflict support (used by undo).
+fn copy_dir_progress_simple(src: &Path, dst: &Path, ctx: &mut ProgressCtx) -> std::io::Result<()> {
+    fs::create_dir_all(dst)?;
+    if let Ok(src_meta) = fs::metadata(src) {
+        let _ = fs::set_permissions(dst, src_meta.permissions());
+    }
+    for entry in fs::read_dir(src)? {
+        let entry = entry?;
+        let target = dst.join(entry.file_name());
+        let ft = entry.file_type()?;
+        if ft.is_symlink() {
+            copy_symlink(&entry.path(), &target)?;
+        } else if ft.is_dir() {
+            copy_dir_progress_simple(&entry.path(), &target, ctx)?;
+        } else {
+            let size = entry.metadata().map(|m| m.len()).unwrap_or(0);
+            fs::copy(entry.path(), &target)?;
+            copy_timestamps(&entry.path(), &target);
+            ctx.bytes_done += size;
+            ctx.report();
+        }
+    }
+    copy_timestamps(src, dst);
+    Ok(())
+}
+
 fn copy_path_progress(
     src: &Path,
     dst_dir: &Path,
     ctx: &mut ProgressCtx,
-) -> std::io::Result<OpRecord> {
+    conflict_tx: &tokio::sync::mpsc::Sender<ConflictInfo>,
+    policy: &mut ConflictPolicy,
+) -> std::io::Result<Option<OpRecord>> {
     let name = filename(src)?;
-    let dst = resolve_conflict(dst_dir, &name);
+    let dst = dst_dir.join(&name);
     let meta = fs::symlink_metadata(src)?;
+
     if meta.is_symlink() {
+        if dst.exists() || dst.symlink_metadata().is_ok() {
+            if !resolve_file_conflict(src, &dst, false, conflict_tx, policy)? {
+                return Ok(None);
+            }
+            let _ = fs::remove_file(&dst);
+        }
         copy_symlink(src, &dst)?;
         ctx.report();
     } else if meta.is_dir() {
-        ctx.report();
-        copy_dir_progress(src, &dst, ctx)?;
+        if dst.exists() {
+            if dst.is_dir() {
+                // Merge: recurse into existing directory
+                ctx.report();
+                copy_dir_progress(src, &dst, ctx, conflict_tx, policy)?;
+            } else {
+                return Err(std::io::Error::new(
+                    std::io::ErrorKind::AlreadyExists,
+                    format!("Cannot copy directory over file: {}", dst.display()),
+                ));
+            }
+        } else {
+            ctx.report();
+            copy_dir_progress(src, &dst, ctx, conflict_tx, policy)?;
+        }
     } else {
+        if dst.exists() {
+            if dst.is_dir() {
+                return Err(std::io::Error::new(
+                    std::io::ErrorKind::AlreadyExists,
+                    format!("Cannot copy file over directory: {}", dst.display()),
+                ));
+            }
+            if !resolve_file_conflict(src, &dst, false, conflict_tx, policy)? {
+                return Ok(None);
+            }
+        }
         let size = meta.len();
         fs::copy(src, &dst)?;
         copy_timestamps(src, &dst);
         ctx.bytes_done += size;
         ctx.report();
     }
-    Ok(OpRecord::Copied {
+    Ok(Some(OpRecord::Copied {
         _src: src.into(),
         dst,
-    })
+    }))
 }
 
 fn move_path_progress(
     src: &Path,
     dst_dir: &Path,
     ctx: &mut ProgressCtx,
-) -> std::io::Result<OpRecord> {
+    conflict_tx: &tokio::sync::mpsc::Sender<ConflictInfo>,
+    policy: &mut ConflictPolicy,
+) -> std::io::Result<Option<OpRecord>> {
     let name = filename(src)?;
-    let dst = resolve_conflict(dst_dir, &name);
+    let dst = dst_dir.join(&name);
     let meta = fs::symlink_metadata(src)?;
     let src_size = if meta.is_symlink() { meta.len() } else { path_size(src) };
+
+    // Handle conflicts before attempting rename
+    if dst.exists() {
+        if meta.is_dir() && dst.is_dir() {
+            // Dir -> Dir: merge via cross-device path (copy + remove)
+            ctx.report();
+            copy_dir_progress(src, &dst, ctx, conflict_tx, policy)?;
+            fs::remove_dir_all(src)?;
+            return Ok(Some(OpRecord::Moved {
+                src: src.into(),
+                dst,
+            }));
+        } else if meta.is_dir() && !dst.is_dir() {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::AlreadyExists,
+                format!("Cannot move directory over file: {}", dst.display()),
+            ));
+        } else if !meta.is_dir() && dst.is_dir() {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::AlreadyExists,
+                format!("Cannot move file over directory: {}", dst.display()),
+            ));
+        }
+        // File -> File conflict
+        if !resolve_file_conflict(src, &dst, false, conflict_tx, policy)? {
+            return Ok(None);
+        }
+        // Remove existing before rename/copy
+        let _ = fs::remove_file(&dst);
+    }
+
     match fs::rename(src, &dst) {
         Ok(()) => {
-            // Same filesystem rename — instant, credit all bytes
             ctx.bytes_done += src_size;
             ctx.report();
         }
         Err(ref e) if is_cross_device(e) => {
-            // Cross-device: copy then remove
             if meta.is_symlink() {
                 copy_symlink(src, &dst)?;
                 fs::remove_file(src)?;
             } else if meta.is_dir() {
                 ctx.report();
-                copy_dir_progress(src, &dst, ctx)?;
+                copy_dir_progress(src, &dst, ctx, conflict_tx, policy)?;
                 fs::remove_dir_all(src)?;
             } else {
                 fs::copy(src, &dst)?;
@@ -197,10 +423,10 @@ fn move_path_progress(
         }
         Err(e) => return Err(e),
     }
-    Ok(OpRecord::Moved {
+    Ok(Some(OpRecord::Moved {
         src: src.into(),
         dst,
-    })
+    }))
 }
 
 pub fn paste_in_background(
@@ -208,9 +434,9 @@ pub fn paste_in_background(
     dst_dir: PathBuf,
     op: RegisterOp,
     tx: tokio::sync::mpsc::Sender<ProgressMsg>,
+    conflict_tx: tokio::sync::mpsc::Sender<ConflictInfo>,
 ) {
     tokio::task::spawn_blocking(move || {
-        // Pre-compute total bytes
         let bytes_total: u64 = paths.iter().map(|p| path_size(p)).sum();
         let item_total = paths.len();
 
@@ -221,8 +447,8 @@ pub fn paste_in_background(
             item_index: 0,
             item_total,
         };
+        let mut policy = ConflictPolicy::default();
 
-        // Send initial 0% progress
         ctx.report();
 
         let mut records = Vec::new();
@@ -230,16 +456,17 @@ pub fn paste_in_background(
             ctx.item_index = i;
 
             let result = match op {
-                RegisterOp::Yank => copy_path_progress(src, &dst_dir, &mut ctx),
+                RegisterOp::Yank => copy_path_progress(src, &dst_dir, &mut ctx, &conflict_tx, &mut policy),
                 RegisterOp::Cut => {
                     if src.parent().is_some_and(|p| p == dst_dir) {
                         continue;
                     }
-                    move_path_progress(src, &dst_dir, &mut ctx)
+                    move_path_progress(src, &dst_dir, &mut ctx, &conflict_tx, &mut policy)
                 }
             };
             match result {
-                Ok(rec) => records.push(rec),
+                Ok(Some(rec)) => records.push(rec),
+                Ok(None) => {} // skipped
                 Err(e) => {
                     let _ = tx.blocking_send(ProgressMsg::Finished {
                         records,
@@ -406,7 +633,7 @@ pub fn undo(records: &[OpRecord]) -> std::io::Result<String> {
                                 item_index: 0,
                                 item_total: 1,
                             };
-                            copy_dir_progress(dst, src, &mut ctx)?;
+                            copy_dir_progress_simple(dst, src, &mut ctx)?;
                             fs::remove_dir_all(dst)?;
                         } else {
                             fs::copy(dst, src)?;
@@ -501,7 +728,8 @@ fn filename(p: &Path) -> std::io::Result<String> {
         .ok_or_else(|| std::io::Error::new(std::io::ErrorKind::InvalidInput, "no filename"))
 }
 
-fn resolve_conflict(dir: &Path, name: &str) -> PathBuf {
+#[cfg(test)]
+fn auto_rename(dir: &Path, name: &str) -> PathBuf {
     let candidate = dir.join(name);
     if !candidate.exists() {
         return candidate;
@@ -610,41 +838,41 @@ mod tests {
         assert_eq!(stack.entries.len(), MAX_UNDO);
     }
 
-    // --- resolve_conflict ---
+    // --- auto_rename ---
 
     #[test]
-    fn resolve_conflict_no_conflict() {
+    fn auto_rename_no_conflict() {
         let dir = tmp_dir();
-        let result = resolve_conflict(&dir, "newfile.txt");
+        let result = auto_rename(&dir, "newfile.txt");
         assert_eq!(result, dir.join("newfile.txt"));
         let _ = fs::remove_dir_all(&dir);
     }
 
     #[test]
-    fn resolve_conflict_with_existing() {
+    fn auto_rename_with_existing() {
         let dir = tmp_dir();
         fs::write(dir.join("file.txt"), "").unwrap();
-        let result = resolve_conflict(&dir, "file.txt");
+        let result = auto_rename(&dir, "file.txt");
         assert_eq!(result, dir.join("file_1.txt"));
         let _ = fs::remove_dir_all(&dir);
     }
 
     #[test]
-    fn resolve_conflict_multiple() {
+    fn auto_rename_multiple() {
         let dir = tmp_dir();
         fs::write(dir.join("file.txt"), "").unwrap();
         fs::write(dir.join("file_1.txt"), "").unwrap();
         fs::write(dir.join("file_2.txt"), "").unwrap();
-        let result = resolve_conflict(&dir, "file.txt");
+        let result = auto_rename(&dir, "file.txt");
         assert_eq!(result, dir.join("file_3.txt"));
         let _ = fs::remove_dir_all(&dir);
     }
 
     #[test]
-    fn resolve_conflict_no_extension() {
+    fn auto_rename_no_extension() {
         let dir = tmp_dir();
         fs::write(dir.join("Makefile"), "").unwrap();
-        let result = resolve_conflict(&dir, "Makefile");
+        let result = auto_rename(&dir, "Makefile");
         assert_eq!(result, dir.join("Makefile_1"));
         let _ = fs::remove_dir_all(&dir);
     }
@@ -1070,7 +1298,7 @@ mod tests {
             item_index: 0,
             item_total: 1,
         };
-        copy_dir_progress(&src, &target, &mut ctx).unwrap();
+        copy_dir_progress_simple(&src, &target, &mut ctx).unwrap();
 
         assert!(target.join("a.txt").exists());
         assert!(target.join("sub/b.txt").exists());
@@ -1079,6 +1307,10 @@ mod tests {
         assert!(ctx.bytes_done > 0);
         let _ = fs::remove_dir_all(&src);
         let _ = fs::remove_dir_all(&dst);
+    }
+
+    fn make_conflict_channel() -> (tokio::sync::mpsc::Sender<ConflictInfo>, tokio::sync::mpsc::Receiver<ConflictInfo>) {
+        tokio::sync::mpsc::channel(4)
     }
 
     #[test]
@@ -1095,7 +1327,9 @@ mod tests {
             item_index: 0,
             item_total: 1,
         };
-        let record = copy_path_progress(&src, &dst_dir, &mut ctx).unwrap();
+        let (ctxt, _crx) = make_conflict_channel();
+        let mut policy = ConflictPolicy::default();
+        let record = copy_path_progress(&src, &dst_dir, &mut ctx, &ctxt, &mut policy).unwrap().unwrap();
         match record {
             OpRecord::Copied { dst, .. } => {
                 assert!(dst.exists());
@@ -1123,7 +1357,9 @@ mod tests {
             item_index: 0,
             item_total: 1,
         };
-        let record = copy_path_progress(&src, &dst_dir, &mut ctx).unwrap();
+        let (ctxt, _crx) = make_conflict_channel();
+        let mut policy = ConflictPolicy::default();
+        let record = copy_path_progress(&src, &dst_dir, &mut ctx, &ctxt, &mut policy).unwrap().unwrap();
         match record {
             OpRecord::Copied { dst, .. } => {
                 assert!(dst.join("inner.txt").exists());
@@ -1152,10 +1388,11 @@ mod tests {
             item_index: 0,
             item_total: 1,
         };
-        let record = copy_path_progress(&link, &dst_dir, &mut ctx).unwrap();
+        let (ctxt, _crx) = make_conflict_channel();
+        let mut policy = ConflictPolicy::default();
+        let record = copy_path_progress(&link, &dst_dir, &mut ctx, &ctxt, &mut policy).unwrap().unwrap();
         match record {
             OpRecord::Copied { dst, .. } => {
-                // dst should be a symlink
                 assert!(fs::symlink_metadata(&dst).unwrap().is_symlink());
             }
             _ => panic!("expected Copied record"),
@@ -1178,8 +1415,10 @@ mod tests {
             item_index: 0,
             item_total: 1,
         };
-        let record = move_path_progress(&src, &dst_dir, &mut ctx).unwrap();
-        assert!(!src.exists()); // source should be gone
+        let (ctxt, _crx) = make_conflict_channel();
+        let mut policy = ConflictPolicy::default();
+        let record = move_path_progress(&src, &dst_dir, &mut ctx, &ctxt, &mut policy).unwrap().unwrap();
+        assert!(!src.exists());
         match record {
             OpRecord::Moved { dst, .. } => {
                 assert!(dst.exists());
@@ -1206,7 +1445,9 @@ mod tests {
             item_index: 0,
             item_total: 1,
         };
-        let record = move_path_progress(&src, &dst_dir, &mut ctx).unwrap();
+        let (ctxt, _crx) = make_conflict_channel();
+        let mut policy = ConflictPolicy::default();
+        let record = move_path_progress(&src, &dst_dir, &mut ctx, &ctxt, &mut policy).unwrap().unwrap();
         assert!(!src.exists());
         match record {
             OpRecord::Moved { dst, .. } => {
@@ -1256,7 +1497,7 @@ mod tests {
             item_index: 0,
             item_total: 1,
         };
-        copy_dir_progress(&src, &target, &mut ctx).unwrap();
+        copy_dir_progress_simple(&src, &target, &mut ctx).unwrap();
 
         let mode = fs::metadata(&target).unwrap().permissions().mode() & 0o7777;
         assert_eq!(mode, 0o755);
@@ -1265,11 +1506,11 @@ mod tests {
     }
 
     #[test]
-    fn resolve_conflict_handles_no_extension() {
+    fn auto_rename_handles_no_extension() {
         let dir = tmp_dir();
         let f = dir.join("Makefile");
         fs::write(&f, "").unwrap();
-        let resolved = resolve_conflict(&dir, "Makefile");
+        let resolved = auto_rename(&dir, "Makefile");
         assert_ne!(resolved, f);
         assert!(resolved.to_string_lossy().contains("Makefile_1"));
         let _ = fs::remove_dir_all(&dir);

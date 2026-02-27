@@ -46,6 +46,24 @@ impl App {
         }
     }
 
+    pub fn poll_conflicts(&mut self) {
+        let rx = match self.conflict_rx.as_mut() {
+            Some(rx) => rx,
+            None => return,
+        };
+        match rx.try_recv() {
+            Ok(info) => {
+                self.conflict_info = Some(info);
+                self.conflict_selected = 0;
+                self.mode = Mode::Conflict;
+            }
+            Err(tokio::sync::mpsc::error::TryRecvError::Disconnected) => {
+                self.conflict_rx = None;
+            }
+            Err(tokio::sync::mpsc::error::TryRecvError::Empty) => {}
+        }
+    }
+
     pub(super) fn start_du(&mut self) {
         if self.du_progress.is_some() {
             self.status_message = "Directory size calculation already in progress".into();

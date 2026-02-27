@@ -139,6 +139,7 @@ async fn run(
             }
             _ = tick.tick() => {
                 app.poll_tasks();
+                app.poll_conflicts();
                 app.poll_du();
                 app.poll_find();
                 app.poll_info_du();

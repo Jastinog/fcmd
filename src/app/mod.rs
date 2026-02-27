@@ -56,6 +56,7 @@ pub enum Mode {
     Info,
     SelectPattern,
     UnselectPattern,
+    Conflict,
 }
 
 #[derive(PartialEq, Eq, Clone, Copy, Debug)]
@@ -187,6 +188,10 @@ pub struct App {
     // Task manager (copy/move/delete operations)
     pub task_manager: task_manager::TaskManager,
     pub task_notification: Option<String>,
+    // Conflict resolution
+    pub conflict_rx: Option<tokio::sync::mpsc::Receiver<crate::ops::ConflictInfo>>,
+    pub conflict_info: Option<crate::ops::ConflictInfo>,
+    pub conflict_selected: usize,
     // Directory sizes
     pub dir_sizes: HashMap<PathBuf, u64>,
     pub du_progress: Option<DuProgress>,
@@ -362,6 +367,9 @@ impl App {
             db,
             task_manager: task_manager::TaskManager::new(),
             task_notification: None,
+            conflict_rx: None,
+            conflict_info: None,
+            conflict_selected: 0,
             dir_sizes: HashMap::new(),
             du_progress: None,
             dir_sizes_loaded: HashSet::new(),
@@ -780,6 +788,7 @@ impl App {
             Mode::Info => self.handle_info(key),
             Mode::SelectPattern => self.handle_select_pattern(key),
             Mode::UnselectPattern => self.handle_unselect_pattern(key),
+            Mode::Conflict => self.handle_conflict(key),
         }
 
         self.update_preview();
@@ -878,6 +887,9 @@ impl App {
             db,
             task_manager: task_manager::TaskManager::new(),
             task_notification: None,
+            conflict_rx: None,
+            conflict_info: None,
+            conflict_selected: 0,
             dir_sizes: HashMap::new(),
             du_progress: None,
             dir_sizes_loaded: HashSet::new(),

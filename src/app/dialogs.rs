@@ -29,6 +29,65 @@ impl App {
         }
     }
 
+    pub(super) fn handle_conflict(&mut self, key: KeyEvent) {
+        use crate::ops::ConflictChoice;
+        const BUTTON_COUNT: usize = 6;
+
+        let choice = match key.code {
+            // Shortcut keys
+            KeyCode::Char('o') | KeyCode::Char('O') => Some(ConflictChoice::Overwrite),
+            KeyCode::Char('s') | KeyCode::Char('S') => Some(ConflictChoice::Skip),
+            KeyCode::Char('a') | KeyCode::Char('A') => Some(ConflictChoice::OverwriteAll),
+            KeyCode::Char('n') | KeyCode::Char('N') => Some(ConflictChoice::SkipAll),
+            KeyCode::Char('w') | KeyCode::Char('W') => Some(ConflictChoice::OverwriteNewer),
+            KeyCode::Esc => Some(ConflictChoice::Abort),
+            // Navigation: 2 rows x 3 cols grid
+            KeyCode::Left | KeyCode::Char('h') => {
+                if self.conflict_selected > 0 {
+                    self.conflict_selected -= 1;
+                }
+                None
+            }
+            KeyCode::Right | KeyCode::Char('l') => {
+                if self.conflict_selected < BUTTON_COUNT - 1 {
+                    self.conflict_selected += 1;
+                }
+                None
+            }
+            KeyCode::Up | KeyCode::Char('k') => {
+                if self.conflict_selected >= 3 {
+                    self.conflict_selected -= 3;
+                }
+                None
+            }
+            KeyCode::Down | KeyCode::Char('j') => {
+                if self.conflict_selected + 3 < BUTTON_COUNT {
+                    self.conflict_selected += 3;
+                }
+                None
+            }
+            KeyCode::Enter => {
+                let c = match self.conflict_selected {
+                    0 => ConflictChoice::Overwrite,
+                    1 => ConflictChoice::Skip,
+                    2 => ConflictChoice::OverwriteAll,
+                    3 => ConflictChoice::SkipAll,
+                    4 => ConflictChoice::OverwriteNewer,
+                    _ => ConflictChoice::Abort,
+                };
+                Some(c)
+            }
+            _ => None,
+        };
+
+        if let Some(choice) = choice {
+            if let Some(info) = self.conflict_info.take() {
+                let _ = info.response_tx.send(choice);
+            }
+            self.mode = Mode::Normal;
+        }
+    }
+
     pub(super) fn handle_help(&mut self, key: KeyEvent) {
         match key.code {
             KeyCode::Esc | KeyCode::Char('q') | KeyCode::Enter | KeyCode::F(1) => {
