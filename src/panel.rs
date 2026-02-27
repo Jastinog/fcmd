@@ -82,8 +82,8 @@ pub struct Panel {
 }
 
 impl Panel {
-    pub fn new(path: PathBuf) -> std::io::Result<Self> {
-        let mut panel = Panel {
+    pub fn new(path: PathBuf) -> Self {
+        Panel {
             path,
             entries: Vec::new(),
             selected: 0,
@@ -93,10 +93,8 @@ impl Panel {
             sort_mode: SortMode::Name,
             sort_reverse: false,
             show_hidden: false,
-            loading: false,
-        };
-        panel.load_dir()?;
-        Ok(panel)
+            loading: true,
+        }
     }
 
     pub fn load_dir(&mut self) -> std::io::Result<()> {
@@ -884,7 +882,8 @@ mod tests {
         fs::write(dir.join("beta.txt"), "").unwrap();
         let _ = fs::create_dir_all(dir.join("gamma_dir"));
 
-        let panel = Panel::new(dir.clone()).unwrap();
+        let mut panel = Panel::new(dir.clone());
+        panel.load_dir().unwrap();
 
         // Should have ".." + gamma_dir + alpha.txt + beta.txt (dirs first)
         assert!(panel.entries.len() >= 4);

@@ -98,15 +98,15 @@ pub struct Tab {
 }
 
 impl Tab {
-    pub fn new(path: PathBuf) -> std::io::Result<Self> {
-        Ok(Tab {
+    pub fn new(path: PathBuf) -> Self {
+        Tab {
             panels: vec![
-                Panel::new(path.clone())?,
-                Panel::new(path.clone())?,
-                Panel::new(path)?,
+                Panel::new(path.clone()),
+                Panel::new(path.clone()),
+                Panel::new(path),
             ],
             active: 0,
-        })
+        }
     }
 
     pub fn active_panel(&self) -> &Panel {
@@ -183,7 +183,7 @@ pub struct App {
     // Visual marks (persistent colored dots, level 1-3)
     pub visual_marks: HashMap<PathBuf, u8>,
     // Database
-    pub db: Option<crate::db::Db>,
+    pub db: Option<std::sync::Arc<std::sync::Mutex<crate::db::Db>>>,
     // Task manager (copy/move/delete operations)
     pub task_manager: task_manager::TaskManager,
     pub task_notification: Option<String>,
@@ -240,6 +240,8 @@ pub struct App {
     pub info_load_rx: Option<tokio::sync::oneshot::Receiver<Vec<(String, String)>>>,
     // Async chown picker loading
     pub chown_load_rx: Option<tokio::sync::oneshot::Receiver<ChownLoadResult>>,
+    // Async dir sizes loading from DB
+    pub(super) dir_sizes_load_rx: Option<tokio::sync::oneshot::Receiver<Vec<(PathBuf, HashMap<PathBuf, u64>)>>>,
     // Async navigation validation
     pub nav_check_rx: Option<tokio::sync::oneshot::Receiver<NavCheckResult>>,
     // Async file operations (mkdir, touch, rename, chmod, chown, undo)
@@ -282,34 +284,29 @@ impl App {
                         let paths: Vec<PathBuf> = st.panel_paths.iter().map(|p| {
                             if p.is_dir() { p.clone() } else { cwd.clone() }
                         }).collect();
-                        let mut tab = Tab {
+                        let tab = Tab {
                             panels: vec![
-                                Panel::new(paths.first().cloned().unwrap_or_else(|| cwd.clone()))?,
-                                Panel::new(paths.get(1).cloned().unwrap_or_else(|| cwd.clone()))?,
-                                Panel::new(paths.get(2).cloned().unwrap_or_else(|| cwd.clone()))?,
+                                Panel::new(paths.first().cloned().unwrap_or_else(|| cwd.clone())),
+                                Panel::new(paths.get(1).cloned().unwrap_or_else(|| cwd.clone())),
+                                Panel::new(paths.get(2).cloned().unwrap_or_else(|| cwd.clone())),
                             ],
                             active: st.active_panel.min(2),
                         };
-                        for (i, panel) in tab.panels.iter_mut().enumerate() {
-                            let _ = panel.load_dir();
-                            let cursor = st.panel_cursors.get(i).copied().unwrap_or(0);
-                            panel.selected = cursor.min(panel.entries.len().saturating_sub(1));
-                        }
                         tabs.push(tab);
                     }
                     let at = at.min(tabs.len().saturating_sub(1));
                     (tabs, at, layout)
                 }
-                _ => (vec![Tab::new(cwd.clone())?], 0, layout),
+                _ => (vec![Tab::new(cwd.clone())], 0, layout),
             }
         } else {
-            (vec![Tab::new(cwd.clone())?], 0, None)
+            (vec![Tab::new(cwd.clone())], 0, None)
         };
         let layout = saved_layout
             .and_then(|s| PanelLayout::from_label(&s))
             .unwrap_or(PanelLayout::Dual);
 
-        Theme::ensure_builtin_themes();
+        tokio::task::spawn_blocking(Theme::ensure_builtin_themes);
         let transparent = db.as_ref().is_some_and(|d| d.load_transparent());
         let saved_theme_name = db.as_ref().and_then(|d| d.load_theme());
         let theme = match saved_theme_name.as_deref().and_then(Theme::load_by_name) {
@@ -317,6 +314,8 @@ impl App {
             None => Theme::from_config(),
         };
         let theme_active_name = saved_theme_name;
+
+        let db = db.map(|d| std::sync::Arc::new(std::sync::Mutex::new(d)));
 
         let (dir_load_tx, dir_load_rx) = tokio::sync::mpsc::channel(64);
 
@@ -401,29 +400,37 @@ impl App {
             tree_load_rx: None,
             info_load_rx: None,
             chown_load_rx: None,
+            dir_sizes_load_rx: None,
             nav_check_rx: None,
             file_op_rx: None,
             theme_load_rx: None,
         };
         app.refresh_git_status();
         app.apply_transparency();
-        // Apply saved sort preferences to restored panels
+        // Apply saved sort preferences to panels before spawning async loads
         for tab in &mut app.tabs {
             for panel in tab.panels.iter_mut() {
-                if let Some(&(mode, rev)) = app.dir_sorts.get(&panel.path)
-                    && (panel.sort_mode != mode || panel.sort_reverse != rev)
-                {
+                if let Some(&(mode, rev)) = app.dir_sorts.get(&panel.path) {
                     panel.sort_mode = mode;
                     panel.sort_reverse = rev;
-                    let _ = panel.load_dir();
                 }
             }
         }
+        // Spawn async directory loads for all panels in all tabs
+        let saved_active_tab = app.active_tab;
+        for tab_idx in 0..app.tabs.len() {
+            app.active_tab = tab_idx;
+            for panel_idx in 0..3 {
+                app.spawn_dir_load(panel_idx, None);
+            }
+        }
+        app.active_tab = saved_active_tab;
         Ok(app)
     }
 
     pub fn save_session(&self) {
         let Some(ref db) = self.db else { return };
+        let db = std::sync::Arc::clone(db);
         let tabs: Vec<crate::db::SavedTab> = self
             .tabs
             .iter()
@@ -433,12 +440,18 @@ impl App {
                 active_panel: t.active,
             })
             .collect();
-        if let Err(e) = db.save_session(&tabs, self.active_tab) {
-            eprintln!("Warning: failed to save session: {e}");
-        }
-        if let Err(e) = db.save_layout(self.layout.label()) {
-            eprintln!("Warning: failed to save layout: {e}");
-        }
+        let active_tab = self.active_tab;
+        let layout_label = self.layout.label().to_string();
+        tokio::task::spawn_blocking(move || {
+            if let Ok(db) = db.lock() {
+                if let Err(e) = db.save_session(&tabs, active_tab) {
+                    eprintln!("Warning: failed to save session: {e}");
+                }
+                if let Err(e) = db.save_layout(&layout_label) {
+                    eprintln!("Warning: failed to save layout: {e}");
+                }
+            }
+        });
     }
 
     pub fn apply_transparency(&mut self) {
@@ -663,7 +676,13 @@ impl App {
                     self.theme_light_list = light_list;
                     self.theme_active_name = Some(name.clone());
                     if let Some(ref db) = self.db {
-                        let _ = db.save_theme(&name);
+                        let db = std::sync::Arc::clone(db);
+                        let name_clone = name.clone();
+                        tokio::task::spawn_blocking(move || {
+                            if let Ok(db) = db.lock() {
+                                let _ = db.save_theme(&name_clone);
+                            }
+                        });
                     }
                     self.status_message = format!("Theme: {name}");
                 }

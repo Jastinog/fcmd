@@ -62,15 +62,21 @@ impl App {
 
     pub(super) fn new_tab(&mut self) {
         let path = self.active_panel().path.clone();
-        match Tab::new(path) {
-            Ok(tab) => {
-                self.tabs.push(tab);
-                self.active_tab = self.tabs.len() - 1;
-                self.preview_path = None;
-                self.status_message = format!("Tab {}", self.tabs.len());
+        let mut tab = Tab::new(path);
+        // Apply sort prefs before spawning loads
+        for panel in tab.panels.iter_mut() {
+            if let Some(&(mode, rev)) = self.dir_sorts.get(&panel.path) {
+                panel.sort_mode = mode;
+                panel.sort_reverse = rev;
             }
-            Err(e) => self.status_message = format!("Tab error: {e}"),
         }
+        self.tabs.push(tab);
+        self.active_tab = self.tabs.len() - 1;
+        self.preview_path = None;
+        for panel_idx in 0..3 {
+            self.spawn_dir_load(panel_idx, None);
+        }
+        self.status_message = format!("Tab {}", self.tabs.len());
     }
 
     pub(super) fn close_tab(&mut self) {
@@ -159,7 +165,14 @@ impl App {
             self.dir_sorts.insert(path.clone(), (mode, rev));
         }
         if let Some(ref db) = self.db {
-            let _ = db.save_dir_sort(&path, mode.label(), rev);
+            let db = std::sync::Arc::clone(db);
+            let path = path.clone();
+            let label = mode.label().to_string();
+            tokio::task::spawn_blocking(move || {
+                if let Ok(db) = db.lock() {
+                    let _ = db.save_dir_sort(&path, &label, rev);
+                }
+            });
         }
     }
 
@@ -359,7 +372,13 @@ impl App {
             self.theme.status_bg = self.theme.status_bg_orig;
         }
         if let Some(ref db) = self.db {
-            let _ = db.save_transparent(self.transparent);
+            let db = std::sync::Arc::clone(db);
+            let transparent = self.transparent;
+            tokio::task::spawn_blocking(move || {
+                if let Ok(db) = db.lock() {
+                    let _ = db.save_transparent(transparent);
+                }
+            });
         }
         self.status_message = if self.transparent {
             "Background: transparent".into()

@@ -30,11 +30,15 @@ impl App {
     }
 
     pub(super) fn add_bookmark(&mut self, name: &str, path: PathBuf) {
-        if let Some(ref db) = self.db
-            && let Err(e) = db.save_bookmark(name, &path)
-        {
-            self.status_message = format!("Bookmark error: {e}");
-            return;
+        if let Some(ref db) = self.db {
+            let db = std::sync::Arc::clone(db);
+            let name = name.to_string();
+            let path = path.clone();
+            tokio::task::spawn_blocking(move || {
+                if let Ok(db) = db.lock() {
+                    let _ = db.save_bookmark(&name, &path);
+                }
+            });
         }
         // Update in-memory list (keep sorted)
         if let Some(pos) = self.bookmarks.iter().position(|(n, _)| n == name) {
@@ -48,7 +52,13 @@ impl App {
 
     pub(super) fn remove_bookmark_by_name(&mut self, name: &str) {
         if let Some(ref db) = self.db {
-            let _ = db.remove_bookmark(name);
+            let db = std::sync::Arc::clone(db);
+            let name = name.to_string();
+            tokio::task::spawn_blocking(move || {
+                if let Ok(db) = db.lock() {
+                    let _ = db.remove_bookmark(&name);
+                }
+            });
         }
         self.bookmarks.retain(|(n, _)| n != name);
     }
@@ -209,11 +219,15 @@ impl App {
             self.status_message = format!("Bookmark not found: {old_name}");
             return;
         }
-        if let Some(ref db) = self.db
-            && let Err(e) = db.rename_bookmark(old_name, new_name)
-        {
-            self.status_message = format!("Bookmark error: {e}");
-            return;
+        if let Some(ref db) = self.db {
+            let db = std::sync::Arc::clone(db);
+            let old = old_name.to_string();
+            let new = new_name.to_string();
+            tokio::task::spawn_blocking(move || {
+                if let Ok(db) = db.lock() {
+                    let _ = db.rename_bookmark(&old, &new);
+                }
+            });
         }
         if let Some(pos) = self.bookmarks.iter().position(|(n, _)| n == old_name) {
             self.bookmarks[pos].0 = new_name.to_string();

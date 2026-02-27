@@ -74,6 +74,7 @@ impl App {
 
     pub fn poll_du(&mut self) {
         self.ensure_dir_sizes_loaded();
+        self.poll_dir_sizes_load();
 
         let progress = match self.du_progress.as_mut() {
             Some(p) => p,
@@ -120,13 +121,15 @@ impl App {
                 self.dir_sizes.insert(path.clone(), size);
             }
 
-            // Save to DB
-            if let Some(ref db) = self.db
-                && let Err(e) = db.save_dir_sizes(&sizes)
-            {
-                self.status_message = format!("Sizes calculated but DB save failed: {e}");
-                self.du_progress = None;
-                return;
+            // Save to DB (fire-and-forget)
+            if let Some(ref db) = self.db {
+                let db = std::sync::Arc::clone(db);
+                let sizes = sizes.clone();
+                tokio::task::spawn_blocking(move || {
+                    if let Ok(db) = db.lock() {
+                        let _ = db.save_dir_sizes(&sizes);
+                    }
+                });
             }
 
             let secs = elapsed.as_secs_f64();
@@ -159,7 +162,13 @@ impl App {
                 self.git_checked_dirs = checked_dirs;
                 self.git_progress = None;
                 if let Some(ref db) = self.db {
-                    let _ = db.save_git_statuses(&self.git_statuses);
+                    let db = std::sync::Arc::clone(db);
+                    let statuses = self.git_statuses.clone();
+                    tokio::task::spawn_blocking(move || {
+                        if let Ok(db) = db.lock() {
+                            let _ = db.save_git_statuses(&statuses);
+                        }
+                    });
                 }
             }
             Err(tokio::sync::oneshot::error::TryRecvError::Closed) => {
@@ -171,15 +180,54 @@ impl App {
 
 
     fn ensure_dir_sizes_loaded(&mut self) {
+        if self.dir_sizes_load_rx.is_some() {
+            return;
+        }
         let Some(ref db) = self.db else { return };
-        let dirs: Vec<PathBuf> = self.tab().panels.iter().map(|p| p.path.clone()).collect();
-        for dir in dirs {
-            if !self.dir_sizes_loaded.contains(&dir) {
-                if let Ok(sizes) = db.load_dir_sizes(&dir) {
+        let dirs: Vec<PathBuf> = self
+            .tab()
+            .panels
+            .iter()
+            .map(|p| p.path.clone())
+            .filter(|d| !self.dir_sizes_loaded.contains(d))
+            .collect();
+        if dirs.is_empty() {
+            return;
+        }
+        for d in &dirs {
+            self.dir_sizes_loaded.insert(d.clone());
+        }
+        let db = std::sync::Arc::clone(db);
+        let (tx, rx) = tokio::sync::oneshot::channel();
+        self.dir_sizes_load_rx = Some(rx);
+        tokio::task::spawn_blocking(move || {
+            let mut results = Vec::new();
+            if let Ok(db) = db.lock() {
+                for dir in dirs {
+                    if let Ok(sizes) = db.load_dir_sizes(&dir) {
+                        results.push((dir, sizes));
+                    }
+                }
+            }
+            let _ = tx.send(results);
+        });
+    }
+
+    pub(super) fn poll_dir_sizes_load(&mut self) {
+        let Some(ref mut rx) = self.dir_sizes_load_rx else {
+            return;
+        };
+        match rx.try_recv() {
+            Ok(results) => {
+                for (_, sizes) in results {
                     self.dir_sizes.extend(sizes);
                 }
-                self.dir_sizes_loaded.insert(dir);
+                self.dir_sizes_load_rx = None;
             }
+            Err(tokio::sync::oneshot::error::TryRecvError::Closed) => {
+                self.dir_sizes_load_rx = None;
+            }
+            Err(tokio::sync::oneshot::error::TryRecvError::Empty) => {}
         }
     }
 }

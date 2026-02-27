@@ -87,7 +87,13 @@ impl App {
                 self.apply_transparency();
                 self.theme_active_name = Some(name.clone());
                 if let Some(ref db) = self.db {
-                    let _ = db.save_theme(&name);
+                    let db = std::sync::Arc::clone(db);
+                    let name_clone = name.clone();
+                    tokio::task::spawn_blocking(move || {
+                        if let Ok(db) = db.lock() {
+                            let _ = db.save_theme(&name_clone);
+                        }
+                    });
                 }
                 self.status_message = format!("Theme: {name}");
                 self.mode = Mode::Normal;
