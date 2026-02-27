@@ -91,6 +91,26 @@ impl App {
         self.mode = Mode::Normal;
     }
 
+    pub(super) fn copy_to_other_panel(&mut self) {
+        self.yank_targeted();
+        self.paste(true);
+    }
+
+    pub(super) fn move_to_other_panel(&mut self) {
+        let entries = self.active_panel().targeted_register_entries();
+        if entries.is_empty() {
+            self.status_message = "Nothing to move".into();
+            return;
+        }
+        let n = entries.len();
+        self.register = Some(Register {
+            entries,
+            op: RegisterOp::Cut,
+        });
+        self.status_message = format!("Moving {n} item(s)");
+        self.paste(true);
+    }
+
     pub(super) fn paste(&mut self, to_other_panel: bool) {
         let (reg_entries, op) = match &self.register {
             Some(r) => (r.entries.clone(), r.op),

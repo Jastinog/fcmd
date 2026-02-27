@@ -21,6 +21,34 @@ impl App {
 
         match key.code {
             KeyCode::Char('q') => self.should_quit = true,
+            KeyCode::F(1) => self.mode = Mode::Help,
+            KeyCode::F(2) => self.enter_rename(),
+            KeyCode::F(5) => self.copy_to_other_panel(),
+            KeyCode::F(6) => self.move_to_other_panel(),
+            KeyCode::F(7) => self.enter_create(),
+            KeyCode::F(8) => self.request_delete(),
+            KeyCode::F(10) => self.should_quit = true,
+            KeyCode::F(4) => {
+                if let Some(entry) = self.active_panel().selected_entry()
+                    && !entry.is_dir
+                    && entry.name != ".."
+                {
+                    let path = entry.path.clone();
+                    self.request_open_editor(path);
+                }
+            }
+            KeyCode::F(3) => {
+                if let Some(entry) = self.active_panel().selected_entry()
+                    && !entry.is_dir
+                    && entry.name != ".."
+                {
+                    let path = entry.path.clone();
+                    self.file_preview_path = Some(path.clone());
+                    self.file_preview = Some(Preview::loading_placeholder(&path));
+                    self.mode = Mode::Preview;
+                    self.spawn_file_preview_load(path);
+                }
+            }
             KeyCode::Esc => {
                 self.active_panel_mut().marked.clear();
             }

@@ -31,7 +31,7 @@ impl App {
 
     pub(super) fn handle_help(&mut self, key: KeyEvent) {
         match key.code {
-            KeyCode::Esc | KeyCode::Char('q') | KeyCode::Enter => {
+            KeyCode::Esc | KeyCode::Char('q') | KeyCode::Enter | KeyCode::F(1) => {
                 self.mode = Mode::Normal;
             }
             _ => {}
