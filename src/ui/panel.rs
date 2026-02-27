@@ -16,6 +16,7 @@ use crate::util::natsort::natsort;
 use crate::ops::RegisterOp;
 
 use super::RenderContext;
+use super::util::{display_width, truncate_to_width, pad_to_width};
 
 enum DisplaySlot {
     Real(usize),
@@ -39,11 +40,23 @@ pub(super) fn render_panel(
 
     let path_str = panel.path.to_string_lossy();
     let max_title = area.width.saturating_sub(4) as usize;
-    let title_chars: Vec<char> = path_str.chars().collect();
-    let title = if title_chars.len() > max_title {
-        let start = title_chars.len() - max_title + 1;
-        let tail: String = title_chars[start..].iter().collect();
-        format!("\u{2026}{tail}")
+    let title_w = display_width(&path_str);
+    let title = if title_w > max_title {
+        // Trim from the left to show the most relevant (rightmost) part
+        let target = max_title.saturating_sub(1); // 1 for …
+        let mut start_byte = 0;
+        let mut col = 0;
+        // Walk from the end backwards to find the cutoff
+        let chars: Vec<(usize, char)> = path_str.char_indices().collect();
+        for &(byte_idx, c) in chars.iter().rev() {
+            let w = unicode_width::UnicodeWidthChar::width(c).unwrap_or(0);
+            if col + w > target {
+                start_byte = byte_idx + c.len_utf8();
+                break;
+            }
+            col += w;
+        }
+        format!("\u{2026}{}", &path_str[start_byte..])
     } else {
         path_str.into_owned()
     };
@@ -98,14 +111,11 @@ pub(super) fn render_panel(
                 } else {
                     ph.name.clone()
                 };
-                let name_chars = display.chars().count();
-                let name_col = if name_chars > name_width {
-                    let truncated: String =
-                        display.chars().take(name_width.saturating_sub(1)).collect();
-                    format!("{truncated}\u{2026}")
+                let name_w = display_width(&display);
+                let name_col = if name_w > name_width {
+                    truncate_to_width(&display, name_width)
                 } else {
-                    let pad = name_width.saturating_sub(name_chars);
-                    format!("{display}{}", " ".repeat(pad))
+                    pad_to_width(&display, name_width)
                 };
                 let line = Line::from(vec![
                     Span::styled("\u{25cc}", ghost_style),
@@ -126,16 +136,11 @@ pub(super) fn render_panel(
                 } else {
                     entry.name.clone()
                 };
-                let name_chars = display_name.chars().count();
-                let name_col = if name_chars > name_width {
-                    let truncated: String = display_name
-                        .chars()
-                        .take(name_width.saturating_sub(1))
-                        .collect();
-                    format!("{truncated}\u{2026}")
+                let name_w = display_width(&display_name);
+                let name_col = if name_w > name_width {
+                    truncate_to_width(&display_name, name_width)
                 } else {
-                    let pad = name_width.saturating_sub(name_chars);
-                    format!("{display_name}{}", " ".repeat(pad))
+                    pad_to_width(&display_name, name_width)
                 };
 
                 let size_str = if entry.is_dir {
@@ -164,7 +169,7 @@ pub(super) fn render_panel(
 
                 let is_cursor = i == panel.selected && !panel.loading;
                 let is_active_cursor = is_cursor && is_active;
-                let in_reg = ctx.register.is_some_and(|r| r.entries.iter().any(|e| e.path == entry.path));
+                let in_reg = ctx.register_paths.contains(&entry.path);
                 let reg_color = ctx.register.and_then(|r| {
                     if in_reg {
                         Some(match r.op {

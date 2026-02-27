@@ -109,6 +109,7 @@ impl App {
     }
 
     fn update_preview_search_matches(&mut self) {
+        const MAX_MATCHES: usize = 10_000;
         self.preview_search_matches.clear();
         self.preview_search_current = 0;
         let query = self.preview_search_query.to_lowercase();
@@ -116,11 +117,14 @@ impl App {
             return;
         }
         if let Some(ref p) = self.file_preview {
-            for (line_idx, line) in p.lines.iter().enumerate() {
+            'outer: for (line_idx, line) in p.lines.iter().enumerate() {
                 let line_lower = line.to_lowercase();
                 let mut start = 0;
                 while let Some(pos) = line_lower[start..].find(&query) {
                     self.preview_search_matches.push((line_idx, start + pos));
+                    if self.preview_search_matches.len() >= MAX_MATCHES {
+                        break 'outer;
+                    }
                     start += pos + query.len();
                 }
             }

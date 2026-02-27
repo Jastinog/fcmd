@@ -1,9 +1,10 @@
 use std::cmp::Ordering;
 
-/// Natural sort comparison on byte slices (case-insensitive).
+/// Natural sort comparison on byte slices (case-insensitive, UTF-8 aware).
 ///
 /// Based on Martin Pool's strnatcmp algorithm. Compares strings so that
 /// embedded numbers are sorted numerically: "file2" < "file10".
+/// Non-ASCII bytes are decoded as UTF-8 codepoints for correct comparison.
 pub fn natsort(left: &[u8], right: &[u8]) -> Ordering {
     let mut li = 0;
     let mut ri = 0;
@@ -30,7 +31,8 @@ pub fn natsort(left: &[u8], right: &[u8]) -> Ordering {
                     if ord != Ordering::Equal {
                         return ord;
                     }
-                } else {
+                } else if lb.is_ascii() && rb.is_ascii() {
+                    // Fast path for ASCII
                     let la = lb.to_ascii_lowercase();
                     let ra = rb.to_ascii_lowercase();
                     match la.cmp(&ra) {
@@ -39,7 +41,43 @@ pub fn natsort(left: &[u8], right: &[u8]) -> Ordering {
                     }
                     li += 1;
                     ri += 1;
+                } else {
+                    // Decode UTF-8 codepoints for correct multi-byte comparison
+                    let (lch, llen) = decode_utf8_char(&left[li..]);
+                    let (rch, rlen) = decode_utf8_char(&right[ri..]);
+                    let lo: char = lch.to_lowercase().next().unwrap_or(lch);
+                    let ro: char = rch.to_lowercase().next().unwrap_or(rch);
+                    match lo.cmp(&ro) {
+                        Ordering::Equal => {}
+                        ord => return ord,
+                    }
+                    li += llen;
+                    ri += rlen;
                 }
+            }
+        }
+    }
+}
+
+/// Decode one UTF-8 character from a byte slice. Returns (char, byte_length).
+/// Falls back to U+FFFD for invalid sequences.
+fn decode_utf8_char(bytes: &[u8]) -> (char, usize) {
+    match std::str::from_utf8(bytes) {
+        Ok(s) => match s.chars().next() {
+            Some(c) => (c, c.len_utf8()),
+            None => ('\u{FFFD}', 1),
+        },
+        Err(e) => {
+            let valid_len = e.valid_up_to();
+            if valid_len > 0 {
+                let s = &bytes[..valid_len];
+                let s = unsafe { std::str::from_utf8_unchecked(s) };
+                match s.chars().next() {
+                    Some(c) => (c, c.len_utf8()),
+                    None => ('\u{FFFD}', 1),
+                }
+            } else {
+                ('\u{FFFD}', 1)
             }
         }
     }
@@ -174,6 +212,22 @@ mod tests {
         assert_eq!(
             sorted(vec!["v1.10.0", "v1.2.0", "v1.9.0", "v1.1.0"]),
             vec!["v1.1.0", "v1.2.0", "v1.9.0", "v1.10.0"]
+        );
+    }
+
+    #[test]
+    fn cyrillic_names() {
+        assert_eq!(
+            sorted(vec!["файл", "альфа", "бета"]),
+            vec!["альфа", "бета", "файл"]
+        );
+    }
+
+    #[test]
+    fn mixed_ascii_and_unicode() {
+        assert_eq!(
+            sorted(vec!["zzz", "ааа", "aaa"]),
+            vec!["aaa", "zzz", "ааа"]
         );
     }
 }

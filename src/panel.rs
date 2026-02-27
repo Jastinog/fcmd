@@ -279,13 +279,6 @@ impl Panel {
         self.move_up();
     }
 
-    /// Select entry by name after refresh.
-    pub fn select_by_name(&mut self, name: &str) {
-        if let Some(pos) = self.entries.iter().position(|e| e.name == name) {
-            self.selected = pos;
-        }
-    }
-
     pub fn adjust_scroll(&mut self, visible_height: usize) {
         if visible_height == 0 {
             return;
@@ -367,7 +360,7 @@ pub struct DirLoadRequest {
     pub show_hidden: bool,
     pub sort_mode: SortMode,
     pub sort_reverse: bool,
-    pub dir_sizes: HashMap<PathBuf, u64>,
+    pub dir_sizes: std::sync::Arc<HashMap<PathBuf, u64>>,
     pub panel_idx: usize,
     pub tab_index: usize,
     pub select_name: Option<String>,

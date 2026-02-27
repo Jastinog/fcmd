@@ -30,24 +30,51 @@ pub fn format_duration(d: std::time::Duration) -> String {
 }
 
 pub fn glob_match(pattern: &str, text: &str) -> bool {
-    let mut p: Vec<char> = pattern.chars().flat_map(|c| c.to_lowercase()).collect();
+    let p: Vec<char> = pattern.chars().flat_map(|c| c.to_lowercase()).collect();
     let t: Vec<char> = text.chars().flat_map(|c| c.to_lowercase()).collect();
-    // Collapse consecutive '*' to avoid exponential backtracking
-    p.dedup_by(|a, b| *a == '*' && *b == '*');
-    glob_match_inner(&p, &t)
+    glob_match_iter(&p, &t)
 }
 
-fn glob_match_inner(pattern: &[char], text: &[char]) -> bool {
-    match (pattern.first(), text.first()) {
-        (None, None) => true,
-        (Some('*'), _) => {
-            glob_match_inner(&pattern[1..], text)
-                || (!text.is_empty() && glob_match_inner(pattern, &text[1..]))
+/// Iterative glob matching with O(n*m) worst case (no exponential backtracking).
+fn glob_match_iter(pattern: &[char], text: &[char]) -> bool {
+    let mut pi = 0; // pattern index
+    let mut ti = 0; // text index
+    let mut star_pi = usize::MAX; // last '*' position in pattern
+    let mut star_ti = 0; // text position when last '*' was hit
+
+    while ti < text.len() {
+        if pi < pattern.len() && pattern[pi] == '*' {
+            // Record '*' and try matching zero characters
+            star_pi = pi;
+            star_ti = ti;
+            pi += 1;
+            // Skip consecutive '*'
+            while pi < pattern.len() && pattern[pi] == '*' {
+                pi += 1;
+            }
+        } else if pi < pattern.len() && (pattern[pi] == '?' || pattern[pi] == text[ti]) {
+            pi += 1;
+            ti += 1;
+        } else if star_pi != usize::MAX {
+            // Backtrack: advance the text position past the '*' by one more char
+            star_ti += 1;
+            ti = star_ti;
+            pi = star_pi + 1;
+            // Skip consecutive '*'
+            while pi < pattern.len() && pattern[pi] == '*' {
+                pi += 1;
+            }
+        } else {
+            return false;
         }
-        (Some('?'), Some(_)) => glob_match_inner(&pattern[1..], &text[1..]),
-        (Some(a), Some(b)) if *a == *b => glob_match_inner(&pattern[1..], &text[1..]),
-        _ => false,
     }
+
+    // Skip trailing '*'
+    while pi < pattern.len() && pattern[pi] == '*' {
+        pi += 1;
+    }
+
+    pi == pattern.len()
 }
 
 #[cfg(test)]

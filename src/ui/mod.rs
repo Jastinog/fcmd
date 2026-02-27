@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 
 use ratatui::{
@@ -29,6 +29,7 @@ pub struct RenderContext<'a> {
     pub visual_marks: &'a HashMap<PathBuf, u8>,
     pub dir_sizes: &'a HashMap<PathBuf, u64>,
     pub register: Option<&'a Register>,
+    pub register_paths: HashSet<PathBuf>,
     pub git_statuses: &'a HashMap<PathBuf, char>,
     pub theme: &'a Theme,
     pub is_select_mode: bool,
@@ -106,10 +107,16 @@ pub fn render(f: &mut Frame, app: &mut App) {
         tree::render_tree(f, app, area);
     }
 
+    let register_paths: HashSet<PathBuf> = app
+        .register
+        .as_ref()
+        .map(|r| r.entries.iter().map(|e| e.path.clone()).collect())
+        .unwrap_or_default();
     let ctx = RenderContext {
         visual_marks: &app.visual_marks,
         dir_sizes: &app.dir_sizes,
         register: app.register.as_ref(),
+        register_paths,
         git_statuses: &app.git_statuses,
         theme: &app.theme,
         is_select_mode: app.mode == Mode::Select,

@@ -479,7 +479,7 @@ impl App {
         let show_hidden = panel.show_hidden;
         let sort_mode = panel.sort_mode;
         let sort_reverse = panel.sort_reverse;
-        let dir_sizes = self.dir_sizes.clone();
+        let dir_sizes = std::sync::Arc::new(self.dir_sizes.clone());
         let tab_index = self.active_tab;
 
         let tx = self.dir_load_tx.clone();

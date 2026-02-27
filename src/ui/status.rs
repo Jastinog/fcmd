@@ -10,6 +10,7 @@ use crate::app::{App, Mode};
 use crate::panel::SortMode;
 
 use super::{SEP_LEFT, SEP_RIGHT};
+use super::util::display_width;
 
 pub(super) fn render_status(f: &mut Frame, app: &App, area: Rect) {
     let t = &app.theme;
@@ -28,7 +29,7 @@ pub(super) fn render_status(f: &mut Frame, app: &App, area: Rect) {
             Span::styled(SEP_RIGHT, Style::default().fg(t.red).bg(t.status_bg)),
         ];
 
-        let used: usize = spans.iter().map(|s| s.content.chars().count()).sum();
+        let used: usize = spans.iter().map(|s| display_width(&s.content)).sum();
         let remaining = (area.width as usize).saturating_sub(used);
         if remaining > 0 {
             spans.push(Span::styled(
@@ -129,7 +130,8 @@ pub(super) fn render_status(f: &mut Frame, app: &App, area: Rect) {
     let mut right_parts: Vec<(String, Color, Color)> = Vec::new();
 
     // Position segment (rightmost)
-    let pos_text = format!(" {}/{} ", panel.selected + 1, panel.entries.len());
+    let pos_display = if panel.entries.is_empty() { 0 } else { panel.selected + 1 };
+    let pos_text = format!(" {}/{} ", pos_display, panel.entries.len());
     right_parts.push((pos_text, t.bg, t.blue));
 
     // Sort segment (always visible)
@@ -200,7 +202,7 @@ pub(super) fn render_status(f: &mut Frame, app: &App, area: Rect) {
         ));
     }
 
-    let right_used: usize = right_spans.iter().map(|s| s.content.chars().count()).sum();
+    let right_used: usize = right_spans.iter().map(|s| display_width(&s.content)).sum();
 
     // ── Info segment (capped so right segments stay fixed) ────────────────
     let info_text = if !app.status_message.is_empty() {
@@ -229,18 +231,12 @@ pub(super) fn render_status(f: &mut Frame, app: &App, area: Rect) {
     };
 
     // Cap info width so right segments always stay at the right edge
-    let mode_width = mode_str.chars().count() + 2 + 1; // " MODE " + SEP_RIGHT
+    let mode_width = display_width(mode_str) + 2 + 1; // " MODE " + SEP_RIGHT
     let info_sep_width = 1;
     let max_info = width.saturating_sub(mode_width + info_sep_width + right_used);
 
-    let info_chars: Vec<char> = info_text.chars().collect();
-    let info_display = if info_chars.len() > max_info {
-        if max_info > 1 {
-            let truncated: String = info_chars[..max_info - 1].iter().collect();
-            format!("{truncated}\u{2026}")
-        } else {
-            String::new()
-        }
+    let info_display = if display_width(&info_text) > max_info {
+        super::util::truncate_to_width(&info_text, max_info)
     } else {
         info_text
     };
@@ -252,7 +248,7 @@ pub(super) fn render_status(f: &mut Frame, app: &App, area: Rect) {
     let info_sep = Span::styled(SEP_RIGHT, Style::default().fg(t.bg_light).bg(t.status_bg));
 
     // Calculate fill to push right segments to the edge
-    let left_used: usize = mode_width + info_display.chars().count() + info_sep_width;
+    let left_used: usize = mode_width + display_width(&info_display) + info_sep_width;
     let fill = width.saturating_sub(left_used + right_used);
 
     let mut all_spans = vec![mode_span, mode_sep, info_span, info_sep];
