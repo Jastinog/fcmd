@@ -217,3 +217,162 @@ impl App {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn poll_find_noop_when_no_find_state() {
+        let entries = make_test_entries(&["a.txt"]);
+        let mut app = App::new_for_test(entries);
+        assert!(app.find_state.is_none());
+        app.poll_find(); // should not panic
+    }
+
+    #[tokio::test]
+    async fn poll_tasks_noop_when_empty() {
+        let entries = make_test_entries(&["a.txt"]);
+        let mut app = App::new_for_test(entries);
+        app.poll_tasks(); // should not panic
+        assert!(app.task_notification.is_none());
+    }
+
+    #[tokio::test]
+    async fn poll_du_noop_when_no_progress() {
+        let entries = make_test_entries(&["a.txt"]);
+        let mut app = App::new_for_test(entries);
+        assert!(app.du_progress.is_none());
+        app.poll_du(); // should not panic
+    }
+
+    #[tokio::test]
+    async fn poll_git_noop_when_no_progress() {
+        let entries = make_test_entries(&["a.txt"]);
+        let mut app = App::new_for_test(entries);
+        assert!(app.git_progress.is_none());
+        app.poll_git(); // should not panic
+    }
+
+    #[tokio::test]
+    async fn poll_git_handles_closed_channel() {
+        let entries = make_test_entries(&["a.txt"]);
+        let mut app = App::new_for_test(entries);
+        let (tx, rx) = tokio::sync::oneshot::channel::<GitMsg>();
+        drop(tx); // close channel
+        app.git_progress = Some(GitProgress { rx });
+        app.poll_git();
+        assert!(app.git_progress.is_none());
+    }
+
+    #[tokio::test]
+    async fn poll_git_receives_finished() {
+        let entries = make_test_entries(&["a.txt"]);
+        let mut app = App::new_for_test(entries);
+        let (tx, rx) = tokio::sync::oneshot::channel();
+        app.git_progress = Some(GitProgress { rx });
+
+        let mut statuses = HashMap::new();
+        statuses.insert(PathBuf::from("/repo/file.rs"), 'M');
+        let roots = [Some(PathBuf::from("/repo")), None, None];
+        let checked = [Some(PathBuf::from("/test")), Some(PathBuf::from("/test")), Some(PathBuf::from("/test"))];
+        tx.send(GitMsg::Finished {
+            statuses: statuses.clone(),
+            roots: roots.clone(),
+            checked_dirs: checked.clone(),
+        }).unwrap();
+
+        app.poll_git();
+        assert!(app.git_progress.is_none());
+        assert_eq!(app.git_statuses.get(&PathBuf::from("/repo/file.rs")), Some(&'M'));
+        assert_eq!(app.git_roots, roots);
+    }
+
+    #[tokio::test]
+    async fn start_du_no_dirs_shows_message() {
+        // Only ".." entry — no subdirectories
+        let entries = make_test_entries(&["file.txt"]);
+        let mut app = App::new_for_test(entries);
+        app.start_du();
+        assert!(app.du_progress.is_none());
+        assert!(app.status_message.contains("No subdirectories"));
+    }
+
+    #[tokio::test]
+    async fn start_du_already_running_shows_message() {
+        let entries = make_test_entries(&["subdir/"]);
+        let mut app = App::new_for_test(entries);
+        // Start first DU
+        app.start_du();
+        assert!(app.du_progress.is_some());
+        // Second start should show "already in progress"
+        app.start_du();
+        assert!(app.status_message.contains("already in progress"));
+    }
+
+    #[tokio::test]
+    async fn poll_du_receives_finished() {
+        let entries = make_test_entries(&["subdir/"]);
+        let mut app = App::new_for_test(entries);
+        let (tx, rx) = tokio::sync::mpsc::channel(8);
+        app.du_progress = Some(DuProgress {
+            rx,
+            started_at: Instant::now(),
+        });
+
+        tx.send(DuMsg::Finished {
+            sizes: vec![(PathBuf::from("/test/subdir"), 4096)],
+        }).await.unwrap();
+
+        app.poll_du();
+        assert!(app.du_progress.is_none());
+        assert_eq!(app.dir_sizes.get(&PathBuf::from("/test/subdir")), Some(&4096));
+        assert!(app.status_message.contains("measured"));
+    }
+
+    #[tokio::test]
+    async fn poll_du_progress_updates_status() {
+        let entries = make_test_entries(&["subdir/"]);
+        let mut app = App::new_for_test(entries);
+        let (tx, rx) = tokio::sync::mpsc::channel(8);
+        app.du_progress = Some(DuProgress {
+            rx,
+            started_at: Instant::now(),
+        });
+
+        tx.send(DuMsg::Progress {
+            done: 0,
+            total: 3,
+            current: "subdir".into(),
+        }).await.unwrap();
+
+        // Don't finish yet — just progress
+        app.poll_du();
+        assert!(app.du_progress.is_some());
+        assert!(app.status_message.contains("Calculating sizes"));
+    }
+
+    #[tokio::test]
+    async fn poll_dir_sizes_load_noop_when_none() {
+        let entries = make_test_entries(&["a.txt"]);
+        let mut app = App::new_for_test(entries);
+        assert!(app.dir_sizes_load_rx.is_none());
+        app.poll_dir_sizes_load(); // should not panic
+    }
+
+    #[tokio::test]
+    async fn poll_dir_sizes_load_receives_data() {
+        let entries = make_test_entries(&["a.txt"]);
+        let mut app = App::new_for_test(entries);
+        let (tx, rx) = tokio::sync::oneshot::channel();
+        app.dir_sizes_load_rx = Some(rx);
+
+        let mut sizes = HashMap::new();
+        sizes.insert(PathBuf::from("/test/subdir"), 1024u64);
+        tx.send(vec![(PathBuf::from("/test"), sizes)]).unwrap();
+
+        app.poll_dir_sizes_load();
+        assert!(app.dir_sizes_load_rx.is_none());
+        assert_eq!(app.dir_sizes.get(&PathBuf::from("/test/subdir")), Some(&1024));
+    }
+}

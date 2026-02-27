@@ -224,3 +224,170 @@ impl App {
         self.refresh_git_status();
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn targeted_path_types_returns_selected() {
+        let entries = make_test_entries(&["a.txt", "subdir/"]);
+        let mut app = App::new_for_test(entries);
+        app.active_panel_mut().selected = 1; // a.txt
+        let paths = app.targeted_path_types();
+        assert_eq!(paths.len(), 1);
+        assert_eq!(paths[0].0, PathBuf::from("/test/a.txt"));
+        assert!(!paths[0].1); // not a dir
+    }
+
+    #[tokio::test]
+    async fn targeted_path_types_dir_entry() {
+        let entries = make_test_entries(&["subdir/"]);
+        let mut app = App::new_for_test(entries);
+        app.active_panel_mut().selected = 1; // subdir
+        let paths = app.targeted_path_types();
+        assert_eq!(paths.len(), 1);
+        assert!(paths[0].1); // is a dir
+    }
+
+    #[tokio::test]
+    async fn request_delete_paths_empty_shows_message() {
+        let entries = make_test_entries(&["a.txt"]);
+        let mut app = App::new_for_test(entries);
+        app.request_delete_paths(vec![]);
+        assert!(app.status_message.contains("Nothing to delete"));
+        assert_ne!(app.mode, Mode::Confirm);
+    }
+
+    #[tokio::test]
+    async fn request_permanent_delete_paths_sets_permanent() {
+        let entries = make_test_entries(&["a.txt"]);
+        let mut app = App::new_for_test(entries);
+        let items = vec![(PathBuf::from("/test/a.txt"), false)];
+        app.request_permanent_delete_paths(items);
+        assert!(app.confirm_permanent);
+        assert_eq!(app.mode, Mode::Confirm);
+    }
+
+    #[tokio::test]
+    async fn execute_delete_spawns_task_and_returns_normal() {
+        let entries = make_test_entries(&["a.txt"]);
+        let mut app = App::new_for_test(entries);
+        app.confirm_paths = vec![(PathBuf::from("/tmp/nonexistent_test_file"), false)];
+        app.confirm_permanent = true;
+        app.mode = Mode::Confirm;
+        app.execute_delete();
+        assert_eq!(app.mode, Mode::Normal);
+        assert!(app.confirm_paths.is_empty());
+        // Task should be added
+        assert_eq!(app.task_manager.tasks().len(), 1);
+    }
+
+    #[tokio::test]
+    async fn yank_targeted_empty_shows_message() {
+        let entries = make_test_entries(&["a.txt"]);
+        let mut app = App::new_for_test(entries);
+        app.active_panel_mut().selected = 0; // ".." — skipped
+        app.yank_targeted();
+        assert!(app.status_message.contains("Nothing to yank"));
+    }
+
+    #[tokio::test]
+    async fn yank_targeted_with_file() {
+        let entries = make_test_entries(&["a.txt", "b.txt"]);
+        let mut app = App::new_for_test(entries);
+        app.active_panel_mut().selected = 1; // a.txt
+        app.yank_targeted();
+        assert!(app.register.is_some());
+        assert_eq!(app.register.as_ref().unwrap().entries.len(), 1);
+        assert!(app.status_message.contains("Yanked 1"));
+    }
+
+    #[tokio::test]
+    async fn copy_to_other_panel_dual_yanks_and_pastes() {
+        let entries = make_test_entries(&["a.txt"]);
+        let mut app = App::new_for_test(entries);
+        app.layout = PanelLayout::Dual;
+        app.active_panel_mut().selected = 1;
+        app.copy_to_other_panel();
+        // Register should be set
+        assert!(app.register.is_some());
+        // Task manager should have a task
+        assert!(!app.task_manager.tasks().is_empty());
+    }
+
+    #[tokio::test]
+    async fn move_to_other_panel_dual_with_file() {
+        let entries = make_test_entries(&["a.txt"]);
+        let mut app = App::new_for_test(entries);
+        app.layout = PanelLayout::Dual;
+        app.active_panel_mut().selected = 1;
+        app.move_to_other_panel();
+        assert!(app.register.is_some());
+        assert_eq!(app.register.as_ref().unwrap().op, RegisterOp::Cut);
+        assert!(app.status_message.contains("Moving 1"));
+    }
+
+    #[tokio::test]
+    async fn paste_to_current_panel() {
+        let entries = make_test_entries(&["a.txt"]);
+        let mut app = App::new_for_test(entries);
+        app.register = Some(Register {
+            entries: vec![crate::ops::RegisterEntry {
+                path: PathBuf::from("/test/a.txt"),
+                is_dir: false,
+            }],
+            op: RegisterOp::Yank,
+        });
+        app.paste(false); // paste to current
+        assert!(!app.task_manager.tasks().is_empty());
+    }
+
+    #[tokio::test]
+    async fn undo_with_records_spawns_op() {
+        let entries = make_test_entries(&["a.txt"]);
+        let mut app = App::new_for_test(entries);
+        app.undo_stack.push(vec![crate::ops::OpRecord::Copied {
+            _src: PathBuf::from("/test/src.txt"),
+            dst: PathBuf::from("/tmp/undo_test_nonexistent"),
+        }]);
+        app.undo();
+        // file_op_rx should be set
+        assert!(app.file_op_rx.is_some());
+    }
+
+    #[tokio::test]
+    async fn reload_active_panel_removes_cache() {
+        let entries = make_test_entries(&["a.txt"]);
+        let mut app = App::new_for_test(entries);
+        let path = app.active_panel().path.clone();
+        // Insert into cache
+        app.dir_cache.insert(path.clone(), crate::panel::DirCacheEntry {
+            entries: vec![],
+            show_hidden: false,
+            sort_mode: SortMode::Name,
+            sort_reverse: false,
+        });
+        assert!(app.dir_cache.get(&path).is_some());
+        app.reload_active_panel();
+        assert!(app.dir_cache.get(&path).is_none());
+    }
+
+    #[tokio::test]
+    async fn refresh_panels_sets_tree_dirty() {
+        let entries = make_test_entries(&["a.txt"]);
+        let mut app = App::new_for_test(entries);
+        app.tree_dirty = false;
+        app.refresh_panels();
+        assert!(app.tree_dirty);
+    }
+
+    #[tokio::test]
+    async fn refresh_panels_select_sets_tree_dirty() {
+        let entries = make_test_entries(&["a.txt", "b.txt"]);
+        let mut app = App::new_for_test(entries);
+        app.tree_dirty = false;
+        app.refresh_panels_select(Some("b.txt".into()));
+        assert!(app.tree_dirty);
+    }
+}

@@ -109,3 +109,119 @@ impl App {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+
+    fn key(code: KeyCode) -> KeyEvent {
+        KeyEvent::new(code, KeyModifiers::NONE)
+    }
+
+    #[tokio::test]
+    async fn search_char_appends_and_jumps() {
+        let entries = make_test_entries(&["apple.txt", "banana.txt", "cherry.txt"]);
+        let mut app = App::new_for_test(entries);
+        app.mode = Mode::Search;
+        app.search_saved_cursor = 0;
+        app.handle_search(key(KeyCode::Char('b')));
+        assert_eq!(app.search_query, "b");
+        // Should jump to "banana.txt" (index 2)
+        assert_eq!(app.active_panel().selected, 2);
+    }
+
+    #[tokio::test]
+    async fn search_backspace_pops() {
+        let entries = make_test_entries(&["apple.txt", "banana.txt"]);
+        let mut app = App::new_for_test(entries);
+        app.mode = Mode::Search;
+        app.search_saved_cursor = 0;
+        app.search_query = "ban".into();
+        app.handle_search(key(KeyCode::Backspace));
+        assert_eq!(app.search_query, "ba");
+    }
+
+    #[tokio::test]
+    async fn search_backspace_empty_restores_cursor() {
+        let entries = make_test_entries(&["apple.txt", "banana.txt"]);
+        let mut app = App::new_for_test(entries);
+        app.mode = Mode::Search;
+        app.search_saved_cursor = 1;
+        app.search_query = "a".into();
+        app.active_panel_mut().selected = 2;
+        app.handle_search(key(KeyCode::Backspace));
+        assert!(app.search_query.is_empty());
+        assert_eq!(app.active_panel().selected, 1); // restored
+    }
+
+    #[tokio::test]
+    async fn search_esc_restores_cursor_and_clears() {
+        let entries = make_test_entries(&["apple.txt"]);
+        let mut app = App::new_for_test(entries);
+        app.mode = Mode::Search;
+        app.search_saved_cursor = 0;
+        app.search_query = "apple".into();
+        app.active_panel_mut().selected = 1;
+        app.handle_search(key(KeyCode::Esc));
+        assert_eq!(app.mode, Mode::Normal);
+        assert_eq!(app.active_panel().selected, 0);
+        assert!(app.search_query.is_empty());
+    }
+
+    #[tokio::test]
+    async fn search_enter_keeps_position() {
+        let entries = make_test_entries(&["apple.txt", "banana.txt"]);
+        let mut app = App::new_for_test(entries);
+        app.mode = Mode::Search;
+        app.search_saved_cursor = 0;
+        app.search_query = "banana".into();
+        app.active_panel_mut().selected = 2;
+        app.handle_search(key(KeyCode::Enter));
+        assert_eq!(app.mode, Mode::Normal);
+        assert_eq!(app.active_panel().selected, 2); // stays at found position
+    }
+
+    #[tokio::test]
+    async fn search_enter_empty_restores_cursor() {
+        let entries = make_test_entries(&["apple.txt"]);
+        let mut app = App::new_for_test(entries);
+        app.mode = Mode::Search;
+        app.search_saved_cursor = 0;
+        app.active_panel_mut().selected = 1;
+        app.handle_search(key(KeyCode::Enter));
+        assert_eq!(app.mode, Mode::Normal);
+        assert_eq!(app.active_panel().selected, 0);
+    }
+
+    #[tokio::test]
+    async fn search_next_wraps_around() {
+        let entries = make_test_entries(&["a.txt", "ab.txt", "abc.txt"]);
+        let mut app = App::new_for_test(entries);
+        app.search_query = "a".into();
+        app.active_panel_mut().selected = 3; // "abc.txt"
+        app.search_next();
+        // Should wrap to "a.txt" (index 1) since ".." at 0 doesn't match
+        assert_eq!(app.active_panel().selected, 1);
+    }
+
+    #[tokio::test]
+    async fn search_prev_wraps_backward() {
+        let entries = make_test_entries(&["a.txt", "ab.txt", "abc.txt"]);
+        let mut app = App::new_for_test(entries);
+        app.search_query = "a".into();
+        app.active_panel_mut().selected = 1; // "a.txt"
+        app.search_prev();
+        // Should find "abc.txt" (index 3) going backward
+        assert_eq!(app.active_panel().selected, 3);
+    }
+
+    #[tokio::test]
+    async fn search_no_match_shows_status() {
+        let entries = make_test_entries(&["a.txt"]);
+        let mut app = App::new_for_test(entries);
+        app.search_query = "zzz".into();
+        app.search_next();
+        assert!(app.status_message.contains("No match"));
+    }
+}

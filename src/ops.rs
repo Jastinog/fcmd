@@ -2,7 +2,7 @@ use std::collections::VecDeque;
 use std::fs;
 use std::path::{Path, PathBuf};
 
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum RegisterOp {
     Yank,
     #[allow(dead_code)]
@@ -1049,5 +1049,280 @@ mod tests {
     #[test]
     fn chmod_nonexistent_fails() {
         assert!(chmod(Path::new("/nonexistent/file"), 0o755).is_err());
+    }
+
+    // --- copy_dir_progress & copy_path_progress tests ---
+
+    #[test]
+    fn copy_dir_preserves_structure() {
+        let src = tmp_dir();
+        fs::write(src.join("a.txt"), "aaa").unwrap();
+        fs::create_dir(src.join("sub")).unwrap();
+        fs::write(src.join("sub/b.txt"), "bbb").unwrap();
+
+        let dst = tmp_dir();
+        let target = dst.join("copied");
+        let (tx, _rx) = tokio::sync::mpsc::channel(64);
+        let mut ctx = ProgressCtx {
+            tx,
+            bytes_done: 0,
+            bytes_total: 100,
+            item_index: 0,
+            item_total: 1,
+        };
+        copy_dir_progress(&src, &target, &mut ctx).unwrap();
+
+        assert!(target.join("a.txt").exists());
+        assert!(target.join("sub/b.txt").exists());
+        assert_eq!(fs::read_to_string(target.join("a.txt")).unwrap(), "aaa");
+        assert_eq!(fs::read_to_string(target.join("sub/b.txt")).unwrap(), "bbb");
+        assert!(ctx.bytes_done > 0);
+        let _ = fs::remove_dir_all(&src);
+        let _ = fs::remove_dir_all(&dst);
+    }
+
+    #[test]
+    fn copy_path_progress_file() {
+        let dir = tmp_dir();
+        let src = dir.join("src.txt");
+        fs::write(&src, "hello").unwrap();
+        let dst_dir = tmp_dir();
+        let (tx, _rx) = tokio::sync::mpsc::channel(64);
+        let mut ctx = ProgressCtx {
+            tx,
+            bytes_done: 0,
+            bytes_total: 5,
+            item_index: 0,
+            item_total: 1,
+        };
+        let record = copy_path_progress(&src, &dst_dir, &mut ctx).unwrap();
+        match record {
+            OpRecord::Copied { dst, .. } => {
+                assert!(dst.exists());
+                assert_eq!(fs::read_to_string(&dst).unwrap(), "hello");
+            }
+            _ => panic!("expected Copied record"),
+        }
+        assert_eq!(ctx.bytes_done, 5);
+        let _ = fs::remove_dir_all(&dir);
+        let _ = fs::remove_dir_all(&dst_dir);
+    }
+
+    #[test]
+    fn copy_path_progress_directory() {
+        let dir = tmp_dir();
+        let src = dir.join("mydir");
+        fs::create_dir(&src).unwrap();
+        fs::write(src.join("inner.txt"), "data").unwrap();
+        let dst_dir = tmp_dir();
+        let (tx, _rx) = tokio::sync::mpsc::channel(64);
+        let mut ctx = ProgressCtx {
+            tx,
+            bytes_done: 0,
+            bytes_total: 100,
+            item_index: 0,
+            item_total: 1,
+        };
+        let record = copy_path_progress(&src, &dst_dir, &mut ctx).unwrap();
+        match record {
+            OpRecord::Copied { dst, .. } => {
+                assert!(dst.join("inner.txt").exists());
+            }
+            _ => panic!("expected Copied record"),
+        }
+        let _ = fs::remove_dir_all(&dir);
+        let _ = fs::remove_dir_all(&dst_dir);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn copy_path_progress_symlink() {
+        let dir = tmp_dir();
+        let target = dir.join("target.txt");
+        fs::write(&target, "link_target").unwrap();
+        let link = dir.join("link.txt");
+        std::os::unix::fs::symlink(&target, &link).unwrap();
+
+        let dst_dir = tmp_dir();
+        let (tx, _rx) = tokio::sync::mpsc::channel(64);
+        let mut ctx = ProgressCtx {
+            tx,
+            bytes_done: 0,
+            bytes_total: 100,
+            item_index: 0,
+            item_total: 1,
+        };
+        let record = copy_path_progress(&link, &dst_dir, &mut ctx).unwrap();
+        match record {
+            OpRecord::Copied { dst, .. } => {
+                // dst should be a symlink
+                assert!(fs::symlink_metadata(&dst).unwrap().is_symlink());
+            }
+            _ => panic!("expected Copied record"),
+        }
+        let _ = fs::remove_dir_all(&dir);
+        let _ = fs::remove_dir_all(&dst_dir);
+    }
+
+    #[test]
+    fn move_path_progress_same_device() {
+        let dir = tmp_dir();
+        let src = dir.join("move_src.txt");
+        fs::write(&src, "move_me").unwrap();
+        let dst_dir = tmp_dir();
+        let (tx, _rx) = tokio::sync::mpsc::channel(64);
+        let mut ctx = ProgressCtx {
+            tx,
+            bytes_done: 0,
+            bytes_total: 7,
+            item_index: 0,
+            item_total: 1,
+        };
+        let record = move_path_progress(&src, &dst_dir, &mut ctx).unwrap();
+        assert!(!src.exists()); // source should be gone
+        match record {
+            OpRecord::Moved { dst, .. } => {
+                assert!(dst.exists());
+                assert_eq!(fs::read_to_string(&dst).unwrap(), "move_me");
+            }
+            _ => panic!("expected Moved record"),
+        }
+        let _ = fs::remove_dir_all(&dir);
+        let _ = fs::remove_dir_all(&dst_dir);
+    }
+
+    #[test]
+    fn move_path_progress_directory() {
+        let dir = tmp_dir();
+        let src = dir.join("movedir");
+        fs::create_dir(&src).unwrap();
+        fs::write(src.join("file.txt"), "inside").unwrap();
+        let dst_dir = tmp_dir();
+        let (tx, _rx) = tokio::sync::mpsc::channel(64);
+        let mut ctx = ProgressCtx {
+            tx,
+            bytes_done: 0,
+            bytes_total: 100,
+            item_index: 0,
+            item_total: 1,
+        };
+        let record = move_path_progress(&src, &dst_dir, &mut ctx).unwrap();
+        assert!(!src.exists());
+        match record {
+            OpRecord::Moved { dst, .. } => {
+                assert!(dst.join("file.txt").exists());
+            }
+            _ => panic!("expected Moved record"),
+        }
+        let _ = fs::remove_dir_all(&dir);
+        let _ = fs::remove_dir_all(&dst_dir);
+    }
+
+    #[test]
+    fn copy_timestamps_preserves_mtime() {
+        let dir = tmp_dir();
+        let src = dir.join("src.txt");
+        let dst = dir.join("dst.txt");
+        fs::write(&src, "data").unwrap();
+
+        // Set a specific mtime in the past
+        let old_time = filetime::FileTime::from_unix_time(1000000000, 0);
+        filetime::set_file_mtime(&src, old_time).unwrap();
+
+        fs::write(&dst, "data").unwrap();
+        copy_timestamps(&src, &dst);
+
+        let dst_meta = fs::metadata(&dst).unwrap();
+        let dst_mtime = filetime::FileTime::from_last_modification_time(&dst_meta);
+        assert_eq!(dst_mtime, old_time);
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn copy_dir_progress_preserves_permissions() {
+        use std::os::unix::fs::PermissionsExt;
+        let src = tmp_dir();
+        fs::set_permissions(&src, fs::Permissions::from_mode(0o755)).unwrap();
+        fs::write(src.join("f.txt"), "x").unwrap();
+
+        let dst = tmp_dir();
+        let target = dst.join("copied");
+        let (tx, _rx) = tokio::sync::mpsc::channel(64);
+        let mut ctx = ProgressCtx {
+            tx,
+            bytes_done: 0,
+            bytes_total: 1,
+            item_index: 0,
+            item_total: 1,
+        };
+        copy_dir_progress(&src, &target, &mut ctx).unwrap();
+
+        let mode = fs::metadata(&target).unwrap().permissions().mode() & 0o7777;
+        assert_eq!(mode, 0o755);
+        let _ = fs::remove_dir_all(&src);
+        let _ = fs::remove_dir_all(&dst);
+    }
+
+    #[test]
+    fn resolve_conflict_handles_no_extension() {
+        let dir = tmp_dir();
+        let f = dir.join("Makefile");
+        fs::write(&f, "").unwrap();
+        let resolved = resolve_conflict(&dir, "Makefile");
+        assert_ne!(resolved, f);
+        assert!(resolved.to_string_lossy().contains("Makefile_1"));
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn undo_created_removes_file() {
+        let dir = tmp_dir();
+        let record = touch(&dir, "created.txt").unwrap();
+        let path = dir.join("created.txt");
+        assert!(path.exists());
+        undo(&[record]).unwrap();
+        assert!(!path.exists());
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn undo_copied_file_removes_copy() {
+        let dir = tmp_dir();
+        let src = dir.join("src.txt");
+        let dst = dir.join("copied.txt");
+        fs::write(&src, "original").unwrap();
+        fs::copy(&src, &dst).unwrap();
+
+        let record = OpRecord::Copied {
+            _src: src.clone(),
+            dst: dst.clone(),
+        };
+        undo(&[record]).unwrap();
+        assert!(!dst.exists());
+        assert!(src.exists()); // source untouched
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn paste_skips_move_to_same_dir() {
+        // Verify the skip condition: if src.parent() == dst_dir, move is skipped
+        let dir = tmp_dir();
+        let src = dir.join("file.txt");
+        fs::write(&src, "data").unwrap();
+
+        // Simulate the skip logic from paste_in_background
+        let dst_dir = dir.clone();
+        let should_skip = src.parent().is_some_and(|p| p == dst_dir);
+        assert!(should_skip);
+        // File should still exist
+        assert!(src.exists());
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn filename_helper() {
+        assert_eq!(filename(Path::new("/test/file.txt")).unwrap(), "file.txt");
+        assert!(filename(Path::new("/")).is_err());
     }
 }

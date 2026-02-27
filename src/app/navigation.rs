@@ -583,4 +583,203 @@ mod tests {
         assert_eq!(app.tabs.len(), 1);
         assert!(app.status_message.contains("Cannot close"));
     }
+
+    #[tokio::test]
+    async fn new_tab_creates_and_switches() {
+        let entries = crate::app::make_test_entries(&["a.txt"]);
+        let mut app = App::new_for_test(entries);
+        assert_eq!(app.tabs.len(), 1);
+        app.new_tab();
+        assert_eq!(app.tabs.len(), 2);
+        assert_eq!(app.active_tab, 1);
+        assert!(app.status_message.contains("Tab 2"));
+    }
+
+    #[tokio::test]
+    async fn close_tab_removes_and_clamps() {
+        let entries = crate::app::make_test_entries(&["a.txt"]);
+        let mut app = App::new_for_test(entries);
+        app.new_tab();
+        app.new_tab();
+        assert_eq!(app.tabs.len(), 3);
+        assert_eq!(app.active_tab, 2);
+        app.close_tab();
+        assert_eq!(app.tabs.len(), 2);
+        assert_eq!(app.active_tab, 1); // clamped
+    }
+
+    #[tokio::test]
+    async fn next_tab_prev_tab_wrapping() {
+        let entries = crate::app::make_test_entries(&["a.txt"]);
+        let mut app = App::new_for_test(entries);
+        app.new_tab();
+        app.new_tab();
+        app.active_tab = 0;
+        app.next_tab();
+        assert_eq!(app.active_tab, 1);
+        app.next_tab();
+        assert_eq!(app.active_tab, 2);
+        app.next_tab();
+        assert_eq!(app.active_tab, 0); // wraps
+        app.prev_tab();
+        assert_eq!(app.active_tab, 2); // wraps back
+    }
+
+    #[tokio::test]
+    async fn single_tab_next_prev_noop() {
+        let entries = crate::app::make_test_entries(&["a.txt"]);
+        let mut app = App::new_for_test(entries);
+        app.next_tab();
+        assert_eq!(app.active_tab, 0);
+        app.prev_tab();
+        assert_eq!(app.active_tab, 0);
+    }
+
+    #[tokio::test]
+    async fn toggle_hidden_toggles_all_panels() {
+        let entries = crate::app::make_test_entries(&["a.txt"]);
+        let mut app = App::new_for_test(entries);
+        assert!(!app.active_panel().show_hidden);
+        app.toggle_hidden();
+        // All panels should have hidden=true
+        for panel in &app.tabs[0].panels {
+            assert!(panel.show_hidden);
+        }
+        assert!(app.status_message.contains("shown"));
+        app.toggle_hidden();
+        for panel in &app.tabs[0].panels {
+            assert!(!panel.show_hidden);
+        }
+        assert!(app.status_message.contains("hidden"));
+    }
+
+    #[tokio::test]
+    async fn focus_next_from_tree_to_panel() {
+        let entries = crate::app::make_test_entries(&["a.txt"]);
+        let mut app = App::new_for_test(entries);
+        app.show_tree = true;
+        app.tree_focused = true;
+        app.focus_next();
+        assert!(!app.tree_focused);
+        assert_eq!(app.tab().active, 0);
+    }
+
+    #[tokio::test]
+    async fn focus_prev_from_panel_to_tree() {
+        let entries = crate::app::make_test_entries(&["a.txt"]);
+        let mut app = App::new_for_test(entries);
+        app.show_tree = true;
+        app.tree_focused = false;
+        app.tab_mut().active = 0;
+        app.focus_prev();
+        assert!(app.tree_focused);
+    }
+
+    #[tokio::test]
+    async fn focus_prev_tree_already_focused_noop() {
+        let entries = crate::app::make_test_entries(&["a.txt"]);
+        let mut app = App::new_for_test(entries);
+        app.show_tree = true;
+        app.tree_focused = true;
+        app.focus_prev();
+        assert!(app.tree_focused); // stays
+    }
+
+    #[tokio::test]
+    async fn exit_mode_on_tab_switch_visual() {
+        let entries = crate::app::make_test_entries(&["a.txt", "b.txt"]);
+        let mut app = App::new_for_test(entries);
+        app.new_tab();
+        app.active_tab = 0;
+        app.mode = Mode::Visual;
+        app.active_panel_mut().visual_anchor = Some(0);
+        app.next_tab();
+        assert_eq!(app.mode, Mode::Normal);
+    }
+
+    #[tokio::test]
+    async fn exit_mode_on_tab_switch_select() {
+        let entries = crate::app::make_test_entries(&["a.txt"]);
+        let mut app = App::new_for_test(entries);
+        app.new_tab();
+        app.active_tab = 0;
+        app.mode = Mode::Select;
+        app.next_tab();
+        assert_eq!(app.mode, Mode::Normal);
+    }
+
+    #[tokio::test]
+    async fn navigate_cached_resets_panel_state() {
+        let entries = crate::app::make_test_entries(&["a.txt", "b.txt"]);
+        let mut app = App::new_for_test(entries);
+        app.active_panel_mut().selected = 2;
+        app.active_panel_mut().marked.insert(PathBuf::from("/test/a.txt"));
+        app.navigate_cached(PathBuf::from("/new_dir"), 0, None);
+        assert_eq!(app.active_panel().selected, 0);
+        assert!(app.active_panel().marked.is_empty());
+        assert_eq!(app.active_panel().path, PathBuf::from("/new_dir"));
+    }
+
+    #[tokio::test]
+    async fn navigate_cached_applies_sort_prefs() {
+        let entries = crate::app::make_test_entries(&["a.txt"]);
+        let mut app = App::new_for_test(entries);
+        let target = PathBuf::from("/sorted_dir");
+        app.dir_sorts.insert(target.clone(), (SortMode::Size, true));
+        app.navigate_cached(target, 0, None);
+        assert_eq!(app.active_panel().sort_mode, SortMode::Size);
+        assert!(app.active_panel().sort_reverse);
+    }
+
+    #[tokio::test]
+    async fn refresh_current_panel_marks_tree_dirty() {
+        let entries = crate::app::make_test_entries(&["a.txt"]);
+        let mut app = App::new_for_test(entries);
+        app.tree_dirty = false;
+        app.refresh_current_panel();
+        assert!(app.tree_dirty);
+    }
+
+    #[tokio::test]
+    async fn update_preview_skips_same_path() {
+        let entries = crate::app::make_test_entries(&["a.txt"]);
+        let mut app = App::new_for_test(entries);
+        app.preview_mode = true;
+        app.active_panel_mut().selected = 1;
+        let path = app.active_panel().selected_entry().map(|e| e.path.clone());
+        app.preview_path = path;
+        // Should be a no-op since path matches
+        app.update_preview();
+        // preview stays as-is (not replaced with loading_placeholder)
+    }
+
+    #[tokio::test]
+    async fn which_key_hints_with_pending_too_recent() {
+        let entries = crate::app::make_test_entries(&["a.txt"]);
+        let mut app = App::new_for_test(entries);
+        app.pending_key = Some(' ');
+        app.pending_key_time = Some(Instant::now()); // just now, < 400ms
+        assert!(app.which_key_hints().is_none());
+    }
+
+    #[tokio::test]
+    async fn which_key_hints_with_pending_after_delay() {
+        let entries = crate::app::make_test_entries(&["a.txt"]);
+        let mut app = App::new_for_test(entries);
+        app.pending_key = Some(' ');
+        app.pending_key_time = Some(Instant::now() - std::time::Duration::from_millis(500));
+        let hints = app.which_key_hints();
+        assert!(hints.is_some());
+        let hints = hints.unwrap();
+        assert!(!hints.is_empty());
+    }
+
+    #[tokio::test]
+    async fn which_key_unknown_pending_returns_none() {
+        let entries = crate::app::make_test_entries(&["a.txt"]);
+        let mut app = App::new_for_test(entries);
+        app.pending_key = Some('z'); // no mapping
+        app.pending_key_time = Some(Instant::now() - std::time::Duration::from_millis(500));
+        assert!(app.which_key_hints().is_none());
+    }
 }

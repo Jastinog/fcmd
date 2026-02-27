@@ -98,3 +98,125 @@ impl App {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn toggle_visual_mark_cycles_levels() {
+        let entries = make_test_entries(&["a.txt"]);
+        let mut app = App::new_for_test(entries);
+        app.active_panel_mut().selected = 1; // a.txt
+        let path = PathBuf::from("/test/a.txt");
+
+        // First toggle → level 1
+        app.toggle_visual_mark();
+        assert_eq!(app.visual_marks.get(&path), Some(&1));
+
+        // Second toggle → level 2
+        app.toggle_visual_mark();
+        assert_eq!(app.visual_marks.get(&path), Some(&2));
+
+        // Third toggle → level 3
+        app.toggle_visual_mark();
+        assert_eq!(app.visual_marks.get(&path), Some(&3));
+
+        // Fourth toggle → removed (cycles back to 0)
+        app.toggle_visual_mark();
+        assert!(!app.visual_marks.contains_key(&path));
+        assert!(app.status_message.contains("Unmarked"));
+    }
+
+    #[tokio::test]
+    async fn toggle_visual_mark_skips_dotdot() {
+        let entries = make_test_entries(&["a.txt"]);
+        let mut app = App::new_for_test(entries);
+        app.active_panel_mut().selected = 0; // ".."
+        app.toggle_visual_mark();
+        assert!(app.visual_marks.is_empty());
+    }
+
+    #[tokio::test]
+    async fn jump_next_visual_mark_finds_marked() {
+        let entries = make_test_entries(&["a.txt", "b.txt", "c.txt"]);
+        let mut app = App::new_for_test(entries);
+        app.visual_marks.insert(PathBuf::from("/test/c.txt"), 1);
+        app.active_panel_mut().selected = 0;
+        app.jump_next_visual_mark();
+        assert_eq!(app.active_panel().selected, 3); // c.txt
+    }
+
+    #[tokio::test]
+    async fn jump_next_visual_mark_wraps() {
+        let entries = make_test_entries(&["a.txt", "b.txt"]);
+        let mut app = App::new_for_test(entries);
+        app.visual_marks.insert(PathBuf::from("/test/a.txt"), 2);
+        app.active_panel_mut().selected = 2; // b.txt, past the marked one
+        app.jump_next_visual_mark();
+        assert_eq!(app.active_panel().selected, 1); // wraps to a.txt
+    }
+
+    #[tokio::test]
+    async fn jump_next_visual_mark_none_shows_message() {
+        let entries = make_test_entries(&["a.txt"]);
+        let mut app = App::new_for_test(entries);
+        app.jump_next_visual_mark();
+        assert!(app.status_message.contains("No marks"));
+    }
+
+    #[tokio::test]
+    async fn select_all_marks_all_non_dotdot() {
+        let entries = make_test_entries(&["a.txt", "b.txt", "c.txt"]);
+        let mut app = App::new_for_test(entries);
+        app.select_all();
+        assert_eq!(app.active_panel().marked.len(), 3);
+        assert!(!app.active_panel().marked.contains(&PathBuf::from("/")));
+        assert!(app.status_message.contains("Selected 3"));
+    }
+
+    #[tokio::test]
+    async fn select_all_and_enter_select_mode() {
+        let entries = make_test_entries(&["a.txt"]);
+        let mut app = App::new_for_test(entries);
+        app.select_all_and_enter_select();
+        assert_eq!(app.mode, Mode::Select);
+        assert_eq!(app.active_panel().marked.len(), 1);
+    }
+
+    #[tokio::test]
+    async fn unselect_all_clears() {
+        let entries = make_test_entries(&["a.txt", "b.txt"]);
+        let mut app = App::new_for_test(entries);
+        app.select_all();
+        app.unselect_all();
+        assert!(app.active_panel().marked.is_empty());
+        assert!(app.status_message.contains("cleared"));
+    }
+
+    #[tokio::test]
+    async fn set_mark_stores_path() {
+        let entries = make_test_entries(&["a.txt"]);
+        let mut app = App::new_for_test(entries);
+        app.set_mark('a');
+        assert_eq!(app.marks.get(&'a'), Some(&PathBuf::from("/test")));
+        assert!(app.status_message.contains("Mark 'a' set"));
+    }
+
+    #[tokio::test]
+    async fn goto_mark_not_set_shows_message() {
+        let entries = make_test_entries(&["a.txt"]);
+        let mut app = App::new_for_test(entries);
+        app.goto_mark('z');
+        assert!(app.status_message.contains("Mark 'z' not set"));
+    }
+
+    #[tokio::test]
+    async fn goto_mark_set_spawns_nav_check() {
+        let entries = make_test_entries(&["a.txt"]);
+        let mut app = App::new_for_test(entries);
+        app.marks.insert('a', PathBuf::from("/tmp"));
+        app.goto_mark('a');
+        assert!(app.nav_check_rx.is_some());
+    }
+}

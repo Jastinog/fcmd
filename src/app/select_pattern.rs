@@ -135,3 +135,185 @@ impl App {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+
+    fn key(code: KeyCode) -> KeyEvent {
+        KeyEvent::new(code, KeyModifiers::NONE)
+    }
+
+    #[tokio::test]
+    async fn enter_select_pattern_sets_star_default() {
+        let entries = make_test_entries(&["a.txt"]);
+        let mut app = App::new_for_test(entries);
+        app.enter_select_pattern();
+        assert_eq!(app.mode, Mode::SelectPattern);
+        assert_eq!(app.rename_input, "*");
+    }
+
+    #[tokio::test]
+    async fn select_pattern_enter_matches_all() {
+        let entries = make_test_entries(&["a.txt", "b.rs", "c.txt"]);
+        let mut app = App::new_for_test(entries);
+        app.mode = Mode::SelectPattern;
+        app.rename_input = "*.txt".into();
+        app.handle_select_pattern(key(KeyCode::Enter));
+        assert_eq!(app.mode, Mode::Select);
+        assert_eq!(app.active_panel().marked.len(), 2); // a.txt, c.txt
+        assert!(app.status_message.contains("Selected 2"));
+    }
+
+    #[tokio::test]
+    async fn select_pattern_no_match_returns_normal() {
+        let entries = make_test_entries(&["a.txt"]);
+        let mut app = App::new_for_test(entries);
+        app.mode = Mode::SelectPattern;
+        app.rename_input = "*.xyz".into();
+        app.handle_select_pattern(key(KeyCode::Enter));
+        assert_eq!(app.mode, Mode::Normal);
+        assert!(app.status_message.contains("No matches"));
+    }
+
+    #[tokio::test]
+    async fn select_pattern_empty_exits() {
+        let entries = make_test_entries(&["a.txt"]);
+        let mut app = App::new_for_test(entries);
+        app.mode = Mode::SelectPattern;
+        app.rename_input = String::new();
+        app.handle_select_pattern(key(KeyCode::Enter));
+        assert_eq!(app.mode, Mode::Normal);
+    }
+
+    #[tokio::test]
+    async fn select_pattern_esc_exits() {
+        let entries = make_test_entries(&["a.txt"]);
+        let mut app = App::new_for_test(entries);
+        app.mode = Mode::SelectPattern;
+        app.rename_input = "*.txt".into();
+        app.handle_select_pattern(key(KeyCode::Esc));
+        assert_eq!(app.mode, Mode::Normal);
+    }
+
+    #[tokio::test]
+    async fn select_pattern_char_appends() {
+        let entries = make_test_entries(&["a.txt"]);
+        let mut app = App::new_for_test(entries);
+        app.mode = Mode::SelectPattern;
+        app.rename_input = "*.tx".into();
+        app.handle_select_pattern(key(KeyCode::Char('t')));
+        assert_eq!(app.rename_input, "*.txt");
+    }
+
+    #[tokio::test]
+    async fn select_pattern_backspace_pops() {
+        let entries = make_test_entries(&["a.txt"]);
+        let mut app = App::new_for_test(entries);
+        app.mode = Mode::SelectPattern;
+        app.rename_input = "*.txt".into();
+        app.handle_select_pattern(key(KeyCode::Backspace));
+        assert_eq!(app.rename_input, "*.tx");
+    }
+
+    #[tokio::test]
+    async fn select_pattern_backspace_empty_exits() {
+        let entries = make_test_entries(&["a.txt"]);
+        let mut app = App::new_for_test(entries);
+        app.mode = Mode::SelectPattern;
+        app.rename_input = String::new();
+        app.handle_select_pattern(key(KeyCode::Backspace));
+        assert_eq!(app.mode, Mode::Normal);
+    }
+
+    #[tokio::test]
+    async fn enter_unselect_pattern_sets_star() {
+        let entries = make_test_entries(&["a.txt"]);
+        let mut app = App::new_for_test(entries);
+        app.enter_unselect_pattern();
+        assert_eq!(app.mode, Mode::UnselectPattern);
+        assert_eq!(app.rename_input, "*");
+    }
+
+    #[tokio::test]
+    async fn unselect_pattern_removes_matching() {
+        let entries = make_test_entries(&["a.txt", "b.rs", "c.txt"]);
+        let mut app = App::new_for_test(entries);
+        // Mark all
+        app.select_all();
+        assert_eq!(app.active_panel().marked.len(), 3);
+        app.mode = Mode::UnselectPattern;
+        app.rename_input = "*.txt".into();
+        app.handle_unselect_pattern(key(KeyCode::Enter));
+        // Only b.rs should remain
+        assert_eq!(app.active_panel().marked.len(), 1);
+        assert!(app.active_panel().marked.contains(&PathBuf::from("/test/b.rs")));
+        assert_eq!(app.mode, Mode::Select);
+        assert!(app.status_message.contains("Unselected 2"));
+    }
+
+    #[tokio::test]
+    async fn unselect_pattern_all_cleared_returns_normal() {
+        let entries = make_test_entries(&["a.txt"]);
+        let mut app = App::new_for_test(entries);
+        app.select_all();
+        app.mode = Mode::UnselectPattern;
+        app.rename_input = "*".into();
+        app.handle_unselect_pattern(key(KeyCode::Enter));
+        assert!(app.active_panel().marked.is_empty());
+        assert_eq!(app.mode, Mode::Normal);
+    }
+
+    #[tokio::test]
+    async fn unselect_pattern_esc_returns_to_select_if_marks() {
+        let entries = make_test_entries(&["a.txt"]);
+        let mut app = App::new_for_test(entries);
+        app.select_all();
+        app.mode = Mode::UnselectPattern;
+        app.handle_unselect_pattern(key(KeyCode::Esc));
+        assert_eq!(app.mode, Mode::Select); // has marks
+    }
+
+    #[tokio::test]
+    async fn unselect_pattern_esc_returns_normal_if_no_marks() {
+        let entries = make_test_entries(&["a.txt"]);
+        let mut app = App::new_for_test(entries);
+        app.mode = Mode::UnselectPattern;
+        app.handle_unselect_pattern(key(KeyCode::Esc));
+        assert_eq!(app.mode, Mode::Normal); // no marks
+    }
+
+    #[tokio::test]
+    async fn invert_selection_from_empty() {
+        let entries = make_test_entries(&["a.txt", "b.txt"]);
+        let mut app = App::new_for_test(entries);
+        app.invert_selection();
+        assert_eq!(app.active_panel().marked.len(), 2);
+        assert_eq!(app.mode, Mode::Select);
+    }
+
+    #[tokio::test]
+    async fn invert_selection_deselects_all() {
+        let entries = make_test_entries(&["a.txt", "b.txt"]);
+        let mut app = App::new_for_test(entries);
+        app.select_all();
+        app.invert_selection();
+        assert!(app.active_panel().marked.is_empty());
+        assert_eq!(app.mode, Mode::Normal);
+        assert!(app.status_message.contains("cleared"));
+    }
+
+    #[tokio::test]
+    async fn invert_selection_partial() {
+        let entries = make_test_entries(&["a.txt", "b.txt", "c.txt"]);
+        let mut app = App::new_for_test(entries);
+        app.active_panel_mut().marked.insert(PathBuf::from("/test/a.txt"));
+        app.invert_selection();
+        // a.txt deselected, b.txt and c.txt selected
+        assert_eq!(app.active_panel().marked.len(), 2);
+        assert!(!app.active_panel().marked.contains(&PathBuf::from("/test/a.txt")));
+        assert!(app.active_panel().marked.contains(&PathBuf::from("/test/b.txt")));
+        assert!(app.active_panel().marked.contains(&PathBuf::from("/test/c.txt")));
+    }
+}

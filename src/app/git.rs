@@ -185,3 +185,162 @@ fn git_priority(c: char) -> u8 {
         _ => 0,
     }
 }
+
+/// Parse a single line of `git status --porcelain=v1` into (status_char, relative_path).
+fn parse_status_line(line: &str, root: &std::path::Path) -> Option<(char, PathBuf)> {
+    if line.len() < 4 {
+        return None;
+    }
+    let x = line.as_bytes()[0] as char;
+    let y = line.as_bytes()[1] as char;
+    let rel_path = &line[3..];
+    let rel_path = if let Some(pos) = rel_path.find(" -> ") {
+        &rel_path[pos + 4..]
+    } else {
+        rel_path
+    };
+
+    let status = match (x, y) {
+        ('?', '?') => '?',
+        (_, 'M') => 'M',
+        (_, 'D') => 'D',
+        ('M', _) => 'M',
+        ('A', _) => 'A',
+        ('R', _) => 'R',
+        ('D', _) => 'D',
+        _ => 'M',
+    };
+
+    Some((status, root.join(rel_path)))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::path::Path;
+
+    #[test]
+    fn git_priority_ordering() {
+        assert!(git_priority('D') > git_priority('M'));
+        assert!(git_priority('M') > git_priority('A'));
+        assert!(git_priority('A') > git_priority('R'));
+        assert!(git_priority('R') > git_priority('?'));
+        assert!(git_priority('?') > git_priority('\0'));
+        assert_eq!(git_priority('X'), 0);
+    }
+
+    #[test]
+    fn parse_modified_file() {
+        let root = Path::new("/repo");
+        let (status, path) = parse_status_line(" M src/main.rs", root).unwrap();
+        assert_eq!(status, 'M');
+        assert_eq!(path, PathBuf::from("/repo/src/main.rs"));
+    }
+
+    #[test]
+    fn parse_added_file() {
+        let root = Path::new("/repo");
+        let (status, path) = parse_status_line("A  new_file.rs", root).unwrap();
+        assert_eq!(status, 'A');
+        assert_eq!(path, PathBuf::from("/repo/new_file.rs"));
+    }
+
+    #[test]
+    fn parse_deleted_file() {
+        let root = Path::new("/repo");
+        let (status, path) = parse_status_line(" D old.rs", root).unwrap();
+        assert_eq!(status, 'D');
+        assert_eq!(path, PathBuf::from("/repo/old.rs"));
+    }
+
+    #[test]
+    fn parse_untracked_file() {
+        let root = Path::new("/repo");
+        let (status, path) = parse_status_line("?? temp.txt", root).unwrap();
+        assert_eq!(status, '?');
+        assert_eq!(path, PathBuf::from("/repo/temp.txt"));
+    }
+
+    #[test]
+    fn parse_rename_uses_new_path() {
+        let root = Path::new("/repo");
+        let (status, path) = parse_status_line("R  old.rs -> new.rs", root).unwrap();
+        assert_eq!(status, 'R');
+        assert_eq!(path, PathBuf::from("/repo/new.rs"));
+    }
+
+    #[test]
+    fn parse_short_line_returns_none() {
+        let root = Path::new("/repo");
+        assert!(parse_status_line("XY", root).is_none());
+        assert!(parse_status_line("", root).is_none());
+    }
+
+    #[test]
+    fn parse_staged_modified() {
+        let root = Path::new("/repo");
+        let (status, _) = parse_status_line("M  staged.rs", root).unwrap();
+        assert_eq!(status, 'M');
+    }
+
+    #[test]
+    fn parse_staged_deleted() {
+        let root = Path::new("/repo");
+        let (status, _) = parse_status_line("D  removed.rs", root).unwrap();
+        assert_eq!(status, 'D');
+    }
+
+    #[test]
+    fn parent_propagation_priority() {
+        // Simulate parent propagation: higher priority wins
+        let mut statuses = HashMap::new();
+        let parent = PathBuf::from("/repo/src");
+
+        // First file: modified
+        let existing = statuses.get(&parent).copied().unwrap_or('\0');
+        if git_priority('M') > git_priority(existing) {
+            statuses.insert(parent.clone(), 'M');
+        }
+        assert_eq!(statuses[&parent], 'M');
+
+        // Second file: untracked — lower priority, should NOT override
+        let existing = statuses.get(&parent).copied().unwrap_or('\0');
+        if git_priority('?') > git_priority(existing) {
+            statuses.insert(parent.clone(), '?');
+        }
+        assert_eq!(statuses[&parent], 'M');
+
+        // Third file: deleted — higher priority, should override
+        let existing = statuses.get(&parent).copied().unwrap_or('\0');
+        if git_priority('D') > git_priority(existing) {
+            statuses.insert(parent.clone(), 'D');
+        }
+        assert_eq!(statuses[&parent], 'D');
+    }
+
+    #[tokio::test]
+    async fn ensure_git_status_skips_when_root_matches() {
+        let entries = crate::app::make_test_entries(&["a.txt"]);
+        let mut app = App::new_for_test(entries);
+        // Set git root for all visible panels so no refresh is needed
+        for i in 0..app.layout.count() {
+            app.git_roots[i] = Some(PathBuf::from("/test"));
+            app.git_checked_dirs[i] = Some(PathBuf::from("/test"));
+        }
+        app.ensure_git_status();
+        assert!(app.git_progress.is_none());
+    }
+
+    #[tokio::test]
+    async fn refresh_git_skips_if_already_in_progress() {
+        let entries = crate::app::make_test_entries(&["a.txt"]);
+        let mut app = App::new_for_test(entries);
+        app.refresh_git_status();
+        assert!(app.git_progress.is_some());
+        // Second call should be a no-op
+        app.git_checked_dirs = [None, None, None]; // reset to detect re-assignment
+        app.refresh_git_status();
+        // Should not have re-assigned checked_dirs since progress is in flight
+        assert_eq!(app.git_checked_dirs, [None, None, None]);
+    }
+}

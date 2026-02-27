@@ -100,3 +100,128 @@ impl App {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::find::FindState;
+
+    fn key(code: KeyCode) -> KeyEvent {
+        KeyEvent::new(code, KeyModifiers::NONE)
+    }
+
+    fn ctrl(c: char) -> KeyEvent {
+        KeyEvent::new(KeyCode::Char(c), KeyModifiers::CONTROL)
+    }
+
+    #[tokio::test]
+    async fn handle_find_esc_closes() {
+        let entries = make_test_entries(&["a.txt"]);
+        let mut app = App::new_for_test(entries);
+        app.find_state = Some(FindState::new_test(
+            std::path::Path::new("/test"),
+            &[("a.rs", false)],
+        ));
+        app.mode = Mode::Find;
+        app.handle_find(key(KeyCode::Esc));
+        assert_eq!(app.mode, Mode::Normal);
+        assert!(app.find_state.is_none());
+    }
+
+    #[tokio::test]
+    async fn handle_find_char_appends_to_query() {
+        let entries = make_test_entries(&["a.txt"]);
+        let mut app = App::new_for_test(entries);
+        app.find_state = Some(FindState::new_test(
+            std::path::Path::new("/test"),
+            &[("main.rs", false), ("lib.rs", false)],
+        ));
+        app.mode = Mode::Find;
+        app.handle_find(key(KeyCode::Char('m')));
+        assert_eq!(app.find_state.as_ref().unwrap().query, "m");
+    }
+
+    #[tokio::test]
+    async fn handle_find_backspace_pops() {
+        let entries = make_test_entries(&["a.txt"]);
+        let mut app = App::new_for_test(entries);
+        let mut fs = FindState::new_test(
+            std::path::Path::new("/test"),
+            &[("file.rs", false)],
+        );
+        fs.query = "abc".into();
+        app.find_state = Some(fs);
+        app.mode = Mode::Find;
+        app.handle_find(key(KeyCode::Backspace));
+        assert_eq!(app.find_state.as_ref().unwrap().query, "ab");
+    }
+
+    #[tokio::test]
+    async fn handle_find_up_down_navigation() {
+        let entries = make_test_entries(&["a.txt"]);
+        let mut app = App::new_for_test(entries);
+        let mut fs = FindState::new_test(
+            std::path::Path::new("/test"),
+            &[("a.rs", false), ("b.rs", false), ("c.rs", false)],
+        );
+        fs.update_filter();
+        app.find_state = Some(fs);
+        app.mode = Mode::Find;
+
+        app.handle_find(key(KeyCode::Down));
+        assert_eq!(app.find_state.as_ref().unwrap().selected, 1);
+
+        app.handle_find(key(KeyCode::Up));
+        assert_eq!(app.find_state.as_ref().unwrap().selected, 0);
+    }
+
+    #[tokio::test]
+    async fn handle_find_ctrl_j_k_navigation() {
+        let entries = make_test_entries(&["a.txt"]);
+        let mut app = App::new_for_test(entries);
+        let mut fs = FindState::new_test(
+            std::path::Path::new("/test"),
+            &[("a.rs", false), ("b.rs", false)],
+        );
+        fs.update_filter();
+        app.find_state = Some(fs);
+        app.mode = Mode::Find;
+
+        app.handle_find(ctrl('j'));
+        assert_eq!(app.find_state.as_ref().unwrap().selected, 1);
+
+        app.handle_find(ctrl('k'));
+        assert_eq!(app.find_state.as_ref().unwrap().selected, 0);
+    }
+
+    #[tokio::test]
+    async fn handle_find_tab_switches_scope() {
+        let entries = make_test_entries(&["a.txt"]);
+        let mut app = App::new_for_test(entries);
+        let fs = FindState::new_test(
+            std::path::Path::new("/test"),
+            &[("a.rs", false)],
+        );
+        app.find_state = Some(fs);
+        app.mode = Mode::Find;
+        app.handle_find(key(KeyCode::Tab));
+        // Scope should have switched
+        let new_scope = app.find_state.as_ref().unwrap().scope;
+        assert_eq!(new_scope, FindScope::Global);
+    }
+
+    #[tokio::test]
+    async fn accept_find_empty_is_noop() {
+        let entries = make_test_entries(&["a.txt"]);
+        let mut app = App::new_for_test(entries);
+        // Find state with no entries selected
+        app.find_state = Some(FindState::new_test(
+            std::path::Path::new("/test"),
+            &[],
+        ));
+        app.mode = Mode::Find;
+        app.handle_find(key(KeyCode::Enter));
+        assert_eq!(app.mode, Mode::Normal);
+        assert!(app.find_state.is_none());
+    }
+}

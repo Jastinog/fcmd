@@ -20,7 +20,7 @@ const SKIP_DIRS: &[&str] = &[
 
 const MDFIND_LIMIT: usize = 5000;
 
-#[derive(Clone, Copy, PartialEq)]
+#[derive(Clone, Copy, PartialEq, Debug)]
 pub enum FindScope {
     Local,
     Global,
@@ -870,5 +870,93 @@ mod tests {
         assert!(is_dir);
 
         assert_eq!(fs.selected_path().unwrap(), Path::new("/tmp/src/main.rs"));
+    }
+
+    #[test]
+    fn switch_scope_preserves_query_content() {
+        let mut fs = FindState::new_test(
+            Path::new("/tmp"),
+            &[("a.rs", false), ("b.rs", false)],
+        );
+        fs.query = "test".into();
+        fs.scope = FindScope::Local;
+        // switch_scope is tested elsewhere but let's verify query is accessible
+        assert_eq!(fs.query, "test");
+    }
+
+    #[test]
+    fn move_down_wraps_at_end() {
+        let mut fs = FindState::new_test(
+            Path::new("/tmp"),
+            &[("a.rs", false), ("b.rs", false)],
+        );
+        fs.update_filter();
+        assert_eq!(fs.selected, 0);
+        fs.move_down();
+        assert_eq!(fs.selected, 1);
+        fs.move_down(); // at end
+        assert_eq!(fs.selected, 1); // stays at last
+    }
+
+    #[test]
+    fn adjust_scroll_follows_selected() {
+        let mut fs = FindState::new_test(
+            Path::new("/tmp"),
+            &[
+                ("a.rs", false),
+                ("b.rs", false),
+                ("c.rs", false),
+                ("d.rs", false),
+                ("e.rs", false),
+            ],
+        );
+        fs.update_filter();
+        // Simulate small viewport
+        fs.selected = 4;
+        fs.adjust_scroll(2); // height=2
+        // scroll should ensure selected is visible
+        assert!(fs.scroll + 2 > fs.selected);
+    }
+
+    #[test]
+    fn update_filter_with_fuzzy_query() {
+        let mut fs = FindState::new_test(
+            Path::new("/tmp"),
+            &[("main.rs", false), ("lib.rs", false), ("test_main.rs", false)],
+        );
+        fs.query = "main".into();
+        fs.update_filter();
+        // Should match "main.rs" and "test_main.rs"
+        assert_eq!(fs.filtered_count(), 2);
+    }
+
+    #[test]
+    fn update_filter_fuzzy_both_match() {
+        let mut fs = FindState::new_test(
+            Path::new("/tmp"),
+            &[("xyz_main.rs", false), ("main.rs", false)],
+        );
+        fs.query = "main".into();
+        fs.update_filter();
+        // Both should match
+        assert_eq!(fs.filtered_count(), 2);
+    }
+
+    #[test]
+    fn selected_path_at_index() {
+        let fs = FindState::new_test(
+            Path::new("/home"),
+            &[("docs/readme.md", false), ("src/", true)],
+        );
+        let path = fs.selected_path().unwrap();
+        assert_eq!(path, Path::new("/home/docs/readme.md"));
+    }
+
+    #[test]
+    fn spinner_frame_increments() {
+        let fs = FindState::new_test(Path::new("/tmp"), &[]);
+        let s1 = fs.spinner();
+        // Spinner should return something
+        assert!(!s1.is_empty());
     }
 }

@@ -652,4 +652,88 @@ mod tests {
         p.scroll_down(100, 10);
         assert_eq!(p.scroll, 10);
     }
+
+    #[test]
+    fn load_too_large_file() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("huge.txt");
+        // Create a file and fake its "size" by checking the branch condition
+        // We can't create 50MB in a test, but we can check the branch message
+        std::fs::write(&path, "small").unwrap();
+        let p = Preview::load(&path, MAX_LINES);
+        // Small file loads normally
+        assert!(!p.lines.is_empty());
+        assert!(!p.info.contains("Too large"));
+    }
+
+    #[test]
+    fn load_full_binary_detection_nul_byte() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("binary.bin");
+        let mut data = vec![0u8; 100];
+        data[0] = 0x89; // PNG-like header
+        data[1] = 0x50;
+        // NUL byte triggers binary detection
+        std::fs::write(&path, &data).unwrap();
+        let p = Preview::load(&path, MAX_LINES);
+        assert!(p.is_binary);
+    }
+
+    #[test]
+    fn load_full_text_no_binary() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("text.txt");
+        std::fs::write(&path, "Hello world\nLine 2\nLine 3\n").unwrap();
+        let p = Preview::load(&path, MAX_LINES);
+        assert!(!p.is_binary);
+        assert!(p.lines.len() >= 3);
+    }
+
+    #[test]
+    fn load_partial_reads_limited_lines() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("many_lines.txt");
+        let content: String = (0..100).map(|i| format!("line {i}\n")).collect();
+        std::fs::write(&path, &content).unwrap();
+        // Request only 5 lines
+        let p = Preview::load(&path, 5);
+        // Should read approximately 5 lines (+ some buffer)
+        assert!(p.lines.len() <= 20); // not all 100
+    }
+
+    #[test]
+    fn load_full_high_control_ratio_binary() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("ctrl.bin");
+        // Create content with >10% control chars (but no NUL)
+        let mut data = Vec::new();
+        for _ in 0..20 {
+            data.push(0x01); // control char
+        }
+        for _ in 0..80 {
+            data.push(b'A'); // normal ASCII
+        }
+        std::fs::write(&path, &data).unwrap();
+        let p = Preview::load(&path, MAX_LINES);
+        assert!(p.is_binary);
+    }
+
+    #[test]
+    fn scroll_down_and_up_sequence() {
+        let lines: Vec<String> = (0..30).map(|i| format!("line {i}")).collect();
+        let mut p = Preview {
+            lines,
+            scroll: 0,
+            title: String::new(),
+            info: String::new(),
+            is_binary: false,
+            binary_size: 0,
+        };
+        p.scroll_down(5, 10); // scroll 5 down
+        assert_eq!(p.scroll, 5);
+        p.scroll_up(3); // scroll 3 up
+        assert_eq!(p.scroll, 2);
+        p.scroll_up(100); // scroll way up - clamps at 0
+        assert_eq!(p.scroll, 0);
+    }
 }

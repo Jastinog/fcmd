@@ -10,6 +10,7 @@ pub struct DuProgress {
     pub started_at: Instant,
 }
 
+#[derive(Debug)]
 pub enum GitMsg {
     Finished {
         statuses: HashMap<PathBuf, char>,
