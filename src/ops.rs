@@ -112,18 +112,28 @@ impl ProgressCtx {
 
 fn copy_dir_progress(src: &Path, dst: &Path, ctx: &mut ProgressCtx) -> std::io::Result<()> {
     fs::create_dir_all(dst)?;
+    // Preserve source directory permissions
+    if let Ok(src_meta) = fs::metadata(src) {
+        let _ = fs::set_permissions(dst, src_meta.permissions());
+    }
     for entry in fs::read_dir(src)? {
         let entry = entry?;
         let target = dst.join(entry.file_name());
-        if entry.file_type()?.is_dir() {
+        let ft = entry.file_type()?;
+        if ft.is_symlink() {
+            copy_symlink(&entry.path(), &target)?;
+        } else if ft.is_dir() {
             copy_dir_progress(&entry.path(), &target, ctx)?;
         } else {
             let size = entry.metadata().map(|m| m.len()).unwrap_or(0);
             fs::copy(entry.path(), &target)?;
+            copy_timestamps(&entry.path(), &target);
             ctx.bytes_done += size;
             ctx.report();
         }
     }
+    // Preserve directory timestamps (after all contents are copied)
+    copy_timestamps(src, dst);
     Ok(())
 }
 
@@ -134,12 +144,17 @@ fn copy_path_progress(
 ) -> std::io::Result<OpRecord> {
     let name = filename(src)?;
     let dst = resolve_conflict(dst_dir, &name);
-    if src.is_dir() {
+    let meta = fs::symlink_metadata(src)?;
+    if meta.is_symlink() {
+        copy_symlink(src, &dst)?;
+        ctx.report();
+    } else if meta.is_dir() {
         ctx.report();
         copy_dir_progress(src, &dst, ctx)?;
     } else {
-        let size = fs::metadata(src).map(|m| m.len()).unwrap_or(0);
+        let size = meta.len();
         fs::copy(src, &dst)?;
+        copy_timestamps(src, &dst);
         ctx.bytes_done += size;
         ctx.report();
     }
@@ -156,7 +171,8 @@ fn move_path_progress(
 ) -> std::io::Result<OpRecord> {
     let name = filename(src)?;
     let dst = resolve_conflict(dst_dir, &name);
-    let src_size = path_size(src);
+    let meta = fs::symlink_metadata(src)?;
+    let src_size = if meta.is_symlink() { meta.len() } else { path_size(src) };
     match fs::rename(src, &dst) {
         Ok(()) => {
             // Same filesystem rename — instant, credit all bytes
@@ -165,7 +181,10 @@ fn move_path_progress(
         }
         Err(ref e) if is_cross_device(e) => {
             // Cross-device: copy then remove
-            if src.is_dir() {
+            if meta.is_symlink() {
+                copy_symlink(src, &dst)?;
+                fs::remove_file(src)?;
+            } else if meta.is_dir() {
                 ctx.report();
                 copy_dir_progress(src, &dst, ctx)?;
                 fs::remove_dir_all(src)?;
@@ -403,6 +422,33 @@ pub fn chown(_path: &Path, _uid: Option<u32>, _gid: Option<u32>) -> std::io::Res
 }
 
 // --- Helpers ---
+
+fn copy_timestamps(src: &Path, dst: &Path) {
+    if let Ok(meta) = fs::metadata(src) {
+        let mtime = filetime::FileTime::from_last_modification_time(&meta);
+        let atime = filetime::FileTime::from_last_access_time(&meta);
+        let _ = filetime::set_file_times(dst, atime, mtime);
+    }
+}
+
+fn copy_symlink(src: &Path, dst: &Path) -> std::io::Result<()> {
+    let link_target = fs::read_link(src)?;
+    #[cfg(unix)]
+    {
+        std::os::unix::fs::symlink(&link_target, dst)?;
+    }
+    #[cfg(not(unix))]
+    {
+        // On non-unix, fall back to copying the resolved target
+        let resolved = src.parent().unwrap_or(Path::new(".")).join(&link_target);
+        if resolved.is_dir() {
+            fs::create_dir_all(dst)?;
+        } else {
+            fs::copy(src, dst)?;
+        }
+    }
+    Ok(())
+}
 
 fn filename(p: &Path) -> std::io::Result<String> {
     p.file_name()

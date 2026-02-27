@@ -18,9 +18,9 @@ impl App {
 
         for event in events {
             match event {
-                TaskEvent::PasteFinished { records, error } => {
+                TaskEvent::PasteFinished { records, error, is_copy } => {
                     self.undo_stack.push(records);
-                    if error.is_none() {
+                    if error.is_none() && !is_copy {
                         self.register = None;
                     }
                     needs_refresh = true;

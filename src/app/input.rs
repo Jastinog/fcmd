@@ -22,13 +22,16 @@ impl App {
         match key.code {
             KeyCode::Char('q') => self.should_quit = true,
             KeyCode::Esc => {
-                self.register = None;
                 self.active_panel_mut().marked.clear();
             }
 
             // Selection with Shift+arrows → enters Select mode
             KeyCode::Down if shift => self.enter_select_and_mark(),
             KeyCode::Up if shift => self.enter_select_and_mark_up(),
+            KeyCode::Char('A') if !ctrl => self.select_all_and_enter_select(),
+            KeyCode::Char('+') => self.enter_select_pattern(),
+            KeyCode::Char('-') if !ctrl => self.enter_unselect_pattern(),
+            KeyCode::Char('*') => self.invert_selection(),
 
             // Focus & navigation
             KeyCode::Char('l') if ctrl => self.focus_next(),

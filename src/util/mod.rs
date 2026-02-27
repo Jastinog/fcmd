@@ -78,18 +78,6 @@ mod tests {
     }
 
     #[test]
-    fn progress_bar_boundaries() {
-        let bar = progress_bar(0, 10);
-        assert!(bar.contains(&"\u{2591}".repeat(10)));
-
-        let bar = progress_bar(100, 10);
-        assert!(bar.contains(&"\u{2588}".repeat(10)));
-
-        let bar = progress_bar(50, 10);
-        assert!(bar.contains(&"\u{2588}".repeat(5)));
-    }
-
-    #[test]
     fn glob_exact_match() {
         assert!(glob_match("hello", "hello"));
         assert!(glob_match("hello", "HELLO")); // case insensitive

@@ -72,6 +72,11 @@ impl App {
         self.status_message = format!("Selected {count} items");
     }
 
+    pub(super) fn select_all_and_enter_select(&mut self) {
+        self.select_all();
+        self.mode = Mode::Select;
+    }
+
     pub(super) fn unselect_all(&mut self) {
         self.active_panel_mut().marked.clear();
         self.status_message = "Selection cleared".into();

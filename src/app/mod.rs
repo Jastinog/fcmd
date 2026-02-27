@@ -27,6 +27,7 @@ mod preview_mode;
 mod rename;
 pub(crate) mod task_manager;
 mod search;
+mod select_pattern;
 mod tree;
 mod visual;
 
@@ -53,6 +54,8 @@ pub enum Mode {
     Chmod,
     Chown,
     Info,
+    SelectPattern,
+    UnselectPattern,
 }
 
 #[derive(PartialEq, Eq, Clone, Copy)]
@@ -758,6 +761,8 @@ impl App {
             Mode::Chmod => self.handle_chmod(key),
             Mode::Chown => self.handle_chown(key),
             Mode::Info => self.handle_info(key),
+            Mode::SelectPattern => self.handle_select_pattern(key),
+            Mode::UnselectPattern => self.handle_unselect_pattern(key),
         }
 
         self.update_preview();

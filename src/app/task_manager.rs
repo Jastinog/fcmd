@@ -53,6 +53,7 @@ pub enum TaskEvent {
     PasteFinished {
         records: Vec<OpRecord>,
         error: Option<String>,
+        is_copy: bool,
     },
     DeleteFinished,
 }
@@ -205,6 +206,7 @@ impl TaskManager {
                         events.push(TaskEvent::PasteFinished {
                             records,
                             error,
+                            is_copy,
                         });
                     }
                 }

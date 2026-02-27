@@ -32,6 +32,8 @@ pub(in crate::ui) fn render_input_popup(f: &mut Frame, app: &App, area: Rect) {
             let ctx = app.bookmark_rename_old.clone();
             (" 󰃀 Rename Bookmark ", t.yellow, ctx)
         }
+        Mode::SelectPattern => (" 󰒅 Select ", t.green, None),
+        Mode::UnselectPattern => (" 󰒅 Unselect ", t.red, None),
         _ => (" 󰝒 New ", t.cyan, None),
     };
 
@@ -132,6 +134,16 @@ pub(in crate::ui) fn render_input_popup(f: &mut Frame, app: &App, area: Rect) {
             Span::styled(" cancel  ", Style::default().fg(t.fg_dim)),
             Span::styled("name/", Style::default().fg(accent)),
             Span::styled(" = dir", Style::default().fg(t.fg_dim)),
+        ]),
+        Mode::SelectPattern | Mode::UnselectPattern => Line::from(vec![
+            Span::styled(" \u{23ce}", Style::default().fg(accent)),
+            Span::styled(" select  ", Style::default().fg(t.fg_dim)),
+            Span::styled("esc", Style::default().fg(accent)),
+            Span::styled(" cancel  ", Style::default().fg(t.fg_dim)),
+            Span::styled("*", Style::default().fg(accent)),
+            Span::styled(" any  ", Style::default().fg(t.fg_dim)),
+            Span::styled("?", Style::default().fg(accent)),
+            Span::styled(" char", Style::default().fg(t.fg_dim)),
         ]),
         _ => Line::from(vec![
             Span::styled(" \u{23ce}", Style::default().fg(accent)),

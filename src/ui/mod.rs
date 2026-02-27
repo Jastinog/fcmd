@@ -165,7 +165,7 @@ pub fn render(f: &mut Frame, app: &mut App) {
         overlays::render_bookmarks(f, app, full_area);
     }
 
-    if matches!(app.mode, Mode::Rename | Mode::Create | Mode::BookmarkAdd | Mode::BookmarkRename) {
+    if matches!(app.mode, Mode::Rename | Mode::Create | Mode::BookmarkAdd | Mode::BookmarkRename | Mode::SelectPattern | Mode::UnselectPattern) {
         overlays::render_input_popup(f, app, full_area);
     }
 
