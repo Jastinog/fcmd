@@ -457,3 +457,130 @@ impl App {
         ]
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+
+    #[tokio::test]
+    async fn toggle_tree_enables_and_focuses() {
+        let entries = crate::app::make_test_entries(&["a.txt"]);
+        let mut app = App::new_for_test(entries);
+        assert!(!app.show_tree);
+        assert!(!app.tree_focused);
+        app.toggle_tree();
+        assert!(app.show_tree);
+        assert!(app.tree_focused);
+        app.toggle_tree();
+        assert!(!app.show_tree);
+        assert!(!app.tree_focused);
+    }
+
+    #[tokio::test]
+    async fn toggle_sort_reverse_flips() {
+        let entries = crate::app::make_test_entries(&["a.txt"]);
+        let mut app = App::new_for_test(entries);
+        assert!(!app.active_panel().sort_reverse);
+        app.toggle_sort_reverse();
+        assert!(app.active_panel().sort_reverse);
+        app.toggle_sort_reverse();
+        assert!(!app.active_panel().sort_reverse);
+    }
+
+    #[tokio::test]
+    async fn set_sort_updates_mode() {
+        let entries = crate::app::make_test_entries(&["a.txt"]);
+        let mut app = App::new_for_test(entries);
+        app.set_sort(SortMode::Extension);
+        assert_eq!(app.active_panel().sort_mode, SortMode::Extension);
+        assert!(app.status_message.contains("Sort:"));
+    }
+
+    #[tokio::test]
+    async fn set_layout_updates() {
+        let entries = crate::app::make_test_entries(&["a.txt"]);
+        let mut app = App::new_for_test(entries);
+        app.set_layout(PanelLayout::Triple);
+        assert_eq!(app.layout, PanelLayout::Triple);
+        assert!(app.status_message.contains("triple"));
+    }
+
+    #[tokio::test]
+    async fn toggle_transparent_flips() {
+        let entries = crate::app::make_test_entries(&["a.txt"]);
+        let mut app = App::new_for_test(entries);
+        assert!(!app.transparent);
+        app.toggle_transparent();
+        assert!(app.transparent);
+        assert!(app.status_message.contains("transparent"));
+        app.toggle_transparent();
+        assert!(!app.transparent);
+        assert!(app.status_message.contains("opaque"));
+    }
+
+    #[tokio::test]
+    async fn request_open_editor_sets_path() {
+        let entries = crate::app::make_test_entries(&["a.txt"]);
+        let mut app = App::new_for_test(entries);
+        app.request_open_editor(PathBuf::from("/test/a.txt"));
+        assert_eq!(app.open_editor, Some(PathBuf::from("/test/a.txt")));
+    }
+
+    #[tokio::test]
+    async fn request_open_editor_closes_preview() {
+        let entries = crate::app::make_test_entries(&["a.txt"]);
+        let mut app = App::new_for_test(entries);
+        app.mode = Mode::Preview;
+        app.file_preview = Some(Preview::loading_placeholder(&PathBuf::from("/x")));
+        app.file_preview_path = Some(PathBuf::from("/x"));
+        app.request_open_editor(PathBuf::from("/test/a.txt"));
+        assert_eq!(app.mode, Mode::Normal);
+        assert!(app.file_preview.is_none());
+    }
+
+    #[tokio::test]
+    async fn update_preview_clears_when_disabled() {
+        let entries = crate::app::make_test_entries(&["a.txt"]);
+        let mut app = App::new_for_test(entries);
+        app.preview_mode = false;
+        app.preview = Some(Preview::loading_placeholder(&PathBuf::from("/x")));
+        app.update_preview();
+        assert!(app.preview.is_none());
+        assert!(app.preview_path.is_none());
+    }
+
+    #[tokio::test]
+    async fn save_current_sort_removes_default() {
+        let entries = crate::app::make_test_entries(&["a.txt"]);
+        let mut app = App::new_for_test(entries);
+        // Set non-default sort
+        app.active_panel_mut().sort_mode = SortMode::Size;
+        app.active_panel_mut().sort_reverse = true;
+        app.save_current_sort();
+        assert!(app.dir_sorts.contains_key(&PathBuf::from("/test")));
+
+        // Set back to default
+        app.active_panel_mut().sort_mode = SortMode::Name;
+        app.active_panel_mut().sort_reverse = false;
+        app.save_current_sort();
+        assert!(!app.dir_sorts.contains_key(&PathBuf::from("/test")));
+    }
+
+    #[tokio::test]
+    async fn which_key_hints_without_pending() {
+        let entries = crate::app::make_test_entries(&["a.txt"]);
+        let app = App::new_for_test(entries);
+        assert!(app.which_key_hints().is_none());
+    }
+
+    #[tokio::test]
+    async fn close_tab_single_tab_noop() {
+        let entries = crate::app::make_test_entries(&["a.txt"]);
+        let mut app = App::new_for_test(entries);
+        assert_eq!(app.tabs.len(), 1);
+        app.close_tab();
+        assert_eq!(app.tabs.len(), 1);
+        assert!(app.status_message.contains("Cannot close"));
+    }
+}

@@ -290,3 +290,230 @@ impl App {
         self.mode = Mode::Create;
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+
+    #[tokio::test]
+    async fn handle_normal_q_quits() {
+        let entries = crate::app::make_test_entries(&["a.txt"]);
+        let mut app = App::new_for_test(entries);
+        app.handle_normal(KeyEvent::new(KeyCode::Char('q'), KeyModifiers::NONE));
+        assert!(app.should_quit);
+    }
+
+    #[tokio::test]
+    async fn handle_normal_f1_opens_help() {
+        let entries = crate::app::make_test_entries(&["a.txt"]);
+        let mut app = App::new_for_test(entries);
+        app.handle_normal(KeyEvent::new(KeyCode::F(1), KeyModifiers::NONE));
+        assert_eq!(app.mode, Mode::Help);
+    }
+
+    #[tokio::test]
+    async fn handle_normal_slash_enters_search() {
+        let entries = crate::app::make_test_entries(&["a.txt"]);
+        let mut app = App::new_for_test(entries);
+        app.handle_normal(KeyEvent::new(KeyCode::Char('/'), KeyModifiers::NONE));
+        assert_eq!(app.mode, Mode::Search);
+    }
+
+    #[tokio::test]
+    async fn handle_normal_colon_enters_command() {
+        let entries = crate::app::make_test_entries(&["a.txt"]);
+        let mut app = App::new_for_test(entries);
+        app.handle_normal(KeyEvent::new(KeyCode::Char(':'), KeyModifiers::NONE));
+        assert_eq!(app.mode, Mode::Command);
+    }
+
+    #[tokio::test]
+    async fn handle_normal_v_enters_visual() {
+        let entries = crate::app::make_test_entries(&["a.txt", "b.txt"]);
+        let mut app = App::new_for_test(entries);
+        app.active_panel_mut().selected = 1;
+        app.handle_normal(KeyEvent::new(KeyCode::Char('v'), KeyModifiers::NONE));
+        assert_eq!(app.mode, Mode::Visual);
+        assert_eq!(app.active_panel().visual_anchor, Some(1));
+    }
+
+    #[tokio::test]
+    async fn handle_normal_j_moves_down() {
+        let entries = crate::app::make_test_entries(&["a.txt", "b.txt"]);
+        let mut app = App::new_for_test(entries);
+        app.active_panel_mut().selected = 0;
+        app.handle_normal(KeyEvent::new(KeyCode::Char('j'), KeyModifiers::NONE));
+        assert_eq!(app.active_panel().selected, 1);
+    }
+
+    #[tokio::test]
+    async fn handle_normal_k_moves_up() {
+        let entries = crate::app::make_test_entries(&["a.txt", "b.txt"]);
+        let mut app = App::new_for_test(entries);
+        app.active_panel_mut().selected = 2;
+        app.handle_normal(KeyEvent::new(KeyCode::Char('k'), KeyModifiers::NONE));
+        assert_eq!(app.active_panel().selected, 1);
+    }
+
+    #[tokio::test]
+    async fn handle_normal_G_goes_bottom() {
+        let entries = crate::app::make_test_entries(&["a.txt", "b.txt", "c.txt"]);
+        let mut app = App::new_for_test(entries);
+        app.handle_normal(KeyEvent::new(KeyCode::Char('G'), KeyModifiers::NONE));
+        assert_eq!(app.active_panel().selected, 3); // "..", a, b, c → last is 3
+    }
+
+    #[tokio::test]
+    async fn handle_normal_tab_cycles_panel() {
+        let entries = crate::app::make_test_entries(&["a.txt"]);
+        let mut app = App::new_for_test(entries);
+        assert_eq!(app.tab().active, 0);
+        app.handle_normal(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE));
+        assert_eq!(app.tab().active, 1);
+    }
+
+    #[tokio::test]
+    async fn handle_normal_esc_clears_marks() {
+        let entries = crate::app::make_test_entries(&["a.txt", "b.txt"]);
+        let mut app = App::new_for_test(entries);
+        app.select_all();
+        assert!(!app.active_panel().marked.is_empty());
+        app.handle_normal(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
+        assert!(app.active_panel().marked.is_empty());
+    }
+
+    #[tokio::test]
+    async fn handle_normal_a_enters_create() {
+        let entries = crate::app::make_test_entries(&["a.txt"]);
+        let mut app = App::new_for_test(entries);
+        app.handle_normal(KeyEvent::new(KeyCode::Char('a'), KeyModifiers::NONE));
+        assert_eq!(app.mode, Mode::Create);
+    }
+
+    #[tokio::test]
+    async fn handle_normal_i_enters_info() {
+        let entries = crate::app::make_test_entries(&["a.txt"]);
+        let mut app = App::new_for_test(entries);
+        app.active_panel_mut().selected = 1; // select "a.txt" (not "..")
+        app.handle_normal(KeyEvent::new(KeyCode::Char('i'), KeyModifiers::NONE));
+        assert_eq!(app.mode, Mode::Info);
+    }
+
+    #[tokio::test]
+    async fn handle_normal_tree_focused_delegates() {
+        let entries = crate::app::make_test_entries(&["a.txt"]);
+        let mut app = App::new_for_test(entries);
+        app.show_tree = true;
+        app.tree_focused = true;
+        app.tree_data = vec![crate::tree::TreeLine {
+            prefix: String::new(),
+            name: "test".into(),
+            path: PathBuf::from("/test"),
+            is_dir: true,
+            is_current: true,
+            is_on_path: true,
+            is_expanded: false,
+            depth: 0,
+        }];
+        // 'q' should reach tree handler and set should_quit
+        app.handle_normal(KeyEvent::new(KeyCode::Char('q'), KeyModifiers::NONE));
+        assert!(app.should_quit);
+    }
+
+    // ── Pending sequence tests ───────────────────────────────────────
+
+    #[tokio::test]
+    async fn pending_gg_goes_top() {
+        let entries = crate::app::make_test_entries(&["a.txt", "b.txt", "c.txt"]);
+        let mut app = App::new_for_test(entries);
+        app.active_panel_mut().selected = 3;
+
+        // First 'g' sets pending
+        app.handle_normal(KeyEvent::new(KeyCode::Char('g'), KeyModifiers::NONE));
+        assert_eq!(app.pending_key, Some('g'));
+
+        // Second 'g' triggers go_top
+        app.handle_normal(KeyEvent::new(KeyCode::Char('g'), KeyModifiers::NONE));
+        assert_eq!(app.active_panel().selected, 0);
+    }
+
+    #[tokio::test]
+    async fn pending_sn_sets_sort_name() {
+        let entries = crate::app::make_test_entries(&["a.txt"]);
+        let mut app = App::new_for_test(entries);
+        app.active_panel_mut().sort_mode = SortMode::Size;
+        app.handle_normal(KeyEvent::new(KeyCode::Char('s'), KeyModifiers::NONE));
+        app.handle_normal(KeyEvent::new(KeyCode::Char('n'), KeyModifiers::NONE));
+        assert_eq!(app.active_panel().sort_mode, SortMode::Name);
+    }
+
+    #[tokio::test]
+    async fn pending_ss_sets_sort_size() {
+        let entries = crate::app::make_test_entries(&["a.txt"]);
+        let mut app = App::new_for_test(entries);
+        app.handle_normal(KeyEvent::new(KeyCode::Char('s'), KeyModifiers::NONE));
+        app.handle_normal(KeyEvent::new(KeyCode::Char('s'), KeyModifiers::NONE));
+        assert_eq!(app.active_panel().sort_mode, SortMode::Size);
+    }
+
+    #[tokio::test]
+    async fn enter_visual_sets_anchor() {
+        let entries = crate::app::make_test_entries(&["a.txt", "b.txt"]);
+        let mut app = App::new_for_test(entries);
+        app.active_panel_mut().selected = 2;
+        app.enter_visual();
+        assert_eq!(app.mode, Mode::Visual);
+        assert_eq!(app.active_panel().visual_anchor, Some(2));
+    }
+
+    #[tokio::test]
+    async fn enter_search_saves_cursor() {
+        let entries = crate::app::make_test_entries(&["a.txt"]);
+        let mut app = App::new_for_test(entries);
+        app.active_panel_mut().selected = 1;
+        app.enter_search();
+        assert_eq!(app.mode, Mode::Search);
+        assert_eq!(app.search_saved_cursor, 1);
+        assert!(app.search_query.is_empty());
+    }
+
+    #[tokio::test]
+    async fn enter_command_clears_input() {
+        let entries = crate::app::make_test_entries(&["a.txt"]);
+        let mut app = App::new_for_test(entries);
+        app.command_input = "old".into();
+        app.enter_command();
+        assert_eq!(app.mode, Mode::Command);
+        assert!(app.command_input.is_empty());
+    }
+
+    #[tokio::test]
+    async fn enter_rename_prefills_name() {
+        let entries = crate::app::make_test_entries(&["hello.txt"]);
+        let mut app = App::new_for_test(entries);
+        app.active_panel_mut().selected = 1; // "hello.txt"
+        app.enter_rename();
+        assert_eq!(app.mode, Mode::Rename);
+        assert_eq!(app.rename_input, "hello.txt");
+    }
+
+    #[tokio::test]
+    async fn enter_rename_skips_dotdot() {
+        let entries = crate::app::make_test_entries(&["a.txt"]);
+        let mut app = App::new_for_test(entries);
+        app.active_panel_mut().selected = 0; // ".."
+        app.enter_rename();
+        assert_eq!(app.mode, Mode::Normal); // stayed Normal
+    }
+
+    #[tokio::test]
+    async fn enter_create_clears_input() {
+        let entries = crate::app::make_test_entries(&["a.txt"]);
+        let mut app = App::new_for_test(entries);
+        app.rename_input = "old".into();
+        app.enter_create();
+        assert_eq!(app.mode, Mode::Create);
+        assert!(app.rename_input.is_empty());
+    }
+}

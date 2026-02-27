@@ -229,3 +229,174 @@ impl App {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+
+    fn app_with_bookmarks() -> App {
+        let entries = crate::app::make_test_entries(&["a.txt"]);
+        let mut app = App::new_for_test(entries);
+        app.add_bookmark("alpha", PathBuf::from("/a"));
+        app.add_bookmark("beta", PathBuf::from("/b"));
+        app.add_bookmark("gamma", PathBuf::from("/c"));
+        app
+    }
+
+    #[tokio::test]
+    async fn handle_bookmarks_j_k_navigation() {
+        let mut app = app_with_bookmarks();
+        app.mode = Mode::Bookmarks;
+        app.bookmark_cursor = 0;
+
+        app.handle_bookmarks(KeyEvent::new(KeyCode::Char('j'), KeyModifiers::NONE));
+        assert_eq!(app.bookmark_cursor, 1);
+        app.handle_bookmarks(KeyEvent::new(KeyCode::Char('j'), KeyModifiers::NONE));
+        assert_eq!(app.bookmark_cursor, 2);
+        // Clamped at max
+        app.handle_bookmarks(KeyEvent::new(KeyCode::Char('j'), KeyModifiers::NONE));
+        assert_eq!(app.bookmark_cursor, 2);
+
+        app.handle_bookmarks(KeyEvent::new(KeyCode::Char('k'), KeyModifiers::NONE));
+        assert_eq!(app.bookmark_cursor, 1);
+    }
+
+    #[tokio::test]
+    async fn handle_bookmarks_G_g() {
+        let mut app = app_with_bookmarks();
+        app.mode = Mode::Bookmarks;
+
+        app.handle_bookmarks(KeyEvent::new(KeyCode::Char('G'), KeyModifiers::NONE));
+        assert_eq!(app.bookmark_cursor, 2);
+
+        app.handle_bookmarks(KeyEvent::new(KeyCode::Char('g'), KeyModifiers::NONE));
+        assert_eq!(app.bookmark_cursor, 0);
+    }
+
+    #[tokio::test]
+    async fn handle_bookmarks_esc_exits() {
+        let mut app = app_with_bookmarks();
+        app.mode = Mode::Bookmarks;
+        app.handle_bookmarks(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
+        assert_eq!(app.mode, Mode::Normal);
+    }
+
+    #[tokio::test]
+    async fn handle_bookmarks_d_deletes() {
+        let mut app = app_with_bookmarks();
+        app.mode = Mode::Bookmarks;
+        app.bookmark_cursor = 0; // "alpha"
+        app.handle_bookmarks(KeyEvent::new(KeyCode::Char('d'), KeyModifiers::NONE));
+        assert_eq!(app.bookmarks.len(), 2);
+        assert!(app.status_message.contains("removed"));
+    }
+
+    #[tokio::test]
+    async fn handle_bookmarks_d_last_exits() {
+        let entries = crate::app::make_test_entries(&["a.txt"]);
+        let mut app = App::new_for_test(entries);
+        app.add_bookmark("only", PathBuf::from("/only"));
+        app.mode = Mode::Bookmarks;
+        app.bookmark_cursor = 0;
+        app.handle_bookmarks(KeyEvent::new(KeyCode::Char('d'), KeyModifiers::NONE));
+        assert!(app.bookmarks.is_empty());
+        assert_eq!(app.mode, Mode::Normal);
+    }
+
+    #[tokio::test]
+    async fn handle_bookmarks_empty_exits() {
+        let entries = crate::app::make_test_entries(&["a.txt"]);
+        let mut app = App::new_for_test(entries);
+        app.mode = Mode::Bookmarks;
+        // No bookmarks → should exit immediately
+        app.handle_bookmarks(KeyEvent::new(KeyCode::Char('j'), KeyModifiers::NONE));
+        assert_eq!(app.mode, Mode::Normal);
+    }
+
+    #[tokio::test]
+    async fn handle_bookmark_add_char_and_esc() {
+        let entries = crate::app::make_test_entries(&["a.txt"]);
+        let mut app = App::new_for_test(entries);
+        app.mode = Mode::BookmarkAdd;
+        app.rename_input.clear();
+        app.bookmark_add_path = Some(PathBuf::from("/test"));
+
+        app.handle_bookmark_add(KeyEvent::new(KeyCode::Char('x'), KeyModifiers::NONE));
+        assert_eq!(app.rename_input, "x");
+
+        app.handle_bookmark_add(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
+        assert_eq!(app.mode, Mode::Normal);
+        assert!(app.rename_input.is_empty());
+        assert!(app.bookmark_add_path.is_none());
+    }
+
+    #[tokio::test]
+    async fn handle_bookmark_add_enter_creates() {
+        let entries = crate::app::make_test_entries(&["a.txt"]);
+        let mut app = App::new_for_test(entries);
+        app.mode = Mode::BookmarkAdd;
+        app.rename_input = "test_bm".into();
+        app.bookmark_add_path = Some(PathBuf::from("/test/dir"));
+
+        app.handle_bookmark_add(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+        assert_eq!(app.mode, Mode::Normal);
+        assert_eq!(app.bookmarks.len(), 1);
+        assert_eq!(app.bookmarks[0].0, "test_bm");
+    }
+
+    #[tokio::test]
+    async fn handle_bookmark_add_empty_enter_noop() {
+        let entries = crate::app::make_test_entries(&["a.txt"]);
+        let mut app = App::new_for_test(entries);
+        app.mode = Mode::BookmarkAdd;
+        app.rename_input.clear();
+        app.handle_bookmark_add(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+        assert_eq!(app.mode, Mode::Normal);
+        assert!(app.bookmarks.is_empty());
+    }
+
+    #[tokio::test]
+    async fn handle_bookmark_rename_enter() {
+        let mut app = app_with_bookmarks();
+        app.mode = Mode::BookmarkRename;
+        app.bookmark_rename_old = Some("alpha".into());
+        app.rename_input = "alpha_new".into();
+
+        app.handle_bookmark_rename(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+        assert_eq!(app.mode, Mode::Normal);
+        assert!(app.bookmarks.iter().any(|(n, _)| n == "alpha_new"));
+        assert!(!app.bookmarks.iter().any(|(n, _)| n == "alpha"));
+    }
+
+    #[tokio::test]
+    async fn handle_bookmark_rename_esc() {
+        let mut app = app_with_bookmarks();
+        app.mode = Mode::BookmarkRename;
+        app.bookmark_rename_old = Some("alpha".into());
+        app.rename_input = "new_name".into();
+        app.handle_bookmark_rename(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
+        assert_eq!(app.mode, Mode::Normal);
+        assert!(app.bookmark_rename_old.is_none());
+        // Original bookmark still there
+        assert!(app.bookmarks.iter().any(|(n, _)| n == "alpha"));
+    }
+
+    #[tokio::test]
+    async fn add_bookmark_prompt_non_dir_rejected() {
+        let entries = crate::app::make_test_entries(&["a.txt"]);
+        let mut app = App::new_for_test(entries);
+        app.active_panel_mut().selected = 1; // "a.txt" (file, not dir)
+        app.add_bookmark_prompt();
+        assert_eq!(app.mode, Mode::Normal); // stayed Normal
+        assert!(app.status_message.contains("directory"));
+    }
+
+    #[tokio::test]
+    async fn rename_bookmark_nonexistent() {
+        let entries = crate::app::make_test_entries(&["a.txt"]);
+        let mut app = App::new_for_test(entries);
+        app.rename_bookmark("nonexistent", "new");
+        assert!(app.status_message.contains("not found"));
+    }
+}

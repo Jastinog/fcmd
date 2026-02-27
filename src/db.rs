@@ -644,4 +644,64 @@ mod tests {
         db.save_session(&[], 0).unwrap();
         assert_eq!(db.load_theme(), Some("dracula".into()));
     }
+
+    #[test]
+    fn transparent_save_load() {
+        let db = Db::init_in_memory().unwrap();
+
+        // Default is false
+        assert!(!db.load_transparent());
+
+        db.save_transparent(true).unwrap();
+        assert!(db.load_transparent());
+
+        db.save_transparent(false).unwrap();
+        assert!(!db.load_transparent());
+    }
+
+    #[test]
+    fn git_statuses_save_load() {
+        let db = Db::init_in_memory().unwrap();
+
+        let mut statuses = HashMap::new();
+        statuses.insert(PathBuf::from("/src/main.rs"), 'M');
+        statuses.insert(PathBuf::from("/src/lib.rs"), 'A');
+        statuses.insert(PathBuf::from("/README.md"), '?');
+
+        db.save_git_statuses(&statuses).unwrap();
+        let loaded = db.load_git_statuses().unwrap();
+
+        assert_eq!(loaded.len(), 3);
+        assert_eq!(loaded[&PathBuf::from("/src/main.rs")], 'M');
+        assert_eq!(loaded[&PathBuf::from("/src/lib.rs")], 'A');
+        assert_eq!(loaded[&PathBuf::from("/README.md")], '?');
+    }
+
+    #[test]
+    fn git_statuses_overwrite() {
+        let db = Db::init_in_memory().unwrap();
+
+        let mut s1 = HashMap::new();
+        s1.insert(PathBuf::from("/a"), 'M');
+        s1.insert(PathBuf::from("/b"), 'A');
+        db.save_git_statuses(&s1).unwrap();
+
+        // Overwrite with different set
+        let mut s2 = HashMap::new();
+        s2.insert(PathBuf::from("/c"), 'D');
+        db.save_git_statuses(&s2).unwrap();
+
+        let loaded = db.load_git_statuses().unwrap();
+        assert_eq!(loaded.len(), 1);
+        assert_eq!(loaded[&PathBuf::from("/c")], 'D');
+    }
+
+    #[test]
+    fn session_save_preserves_transparent() {
+        let db = Db::init_in_memory().unwrap();
+
+        db.save_transparent(true).unwrap();
+        db.save_session(&[], 0).unwrap();
+        assert!(db.load_transparent());
+    }
 }

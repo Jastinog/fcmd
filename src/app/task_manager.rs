@@ -306,3 +306,158 @@ impl TaskManager {
         result
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn new_starts_empty() {
+        let tm = TaskManager::new();
+        assert!(tm.tasks().is_empty());
+        assert_eq!(tm.active_count(), 0);
+    }
+
+    #[test]
+    fn add_copy_returns_unique_ids() {
+        let mut tm = TaskManager::new();
+        let (_tx1, rx1) = mpsc::channel(1);
+        let (_tx2, rx2) = mpsc::channel(1);
+        let id1 = tm.add_copy(rx1, PathBuf::from("/dst"), vec![]);
+        let id2 = tm.add_copy(rx2, PathBuf::from("/dst"), vec![]);
+        assert_ne!(id1, id2);
+        assert_eq!(tm.tasks().len(), 2);
+        assert_eq!(tm.active_count(), 2);
+    }
+
+    #[test]
+    fn add_move_creates_task() {
+        let mut tm = TaskManager::new();
+        let (_tx, rx) = mpsc::channel(1);
+        let id = tm.add_move(rx, PathBuf::from("/dst"), vec![]);
+        assert_eq!(tm.tasks().len(), 1);
+        assert_eq!(tm.tasks()[0].id, id);
+        assert!(matches!(tm.tasks()[0].state, TaskState::Running { .. }));
+    }
+
+    #[test]
+    fn add_delete_creates_task() {
+        let mut tm = TaskManager::new();
+        let (_tx, rx) = mpsc::channel(1);
+        let _id = tm.add_delete(rx, false);
+        assert_eq!(tm.tasks().len(), 1);
+        assert_eq!(tm.active_count(), 1);
+    }
+
+    #[test]
+    fn remove_finished_clears_completed() {
+        let mut tm = TaskManager::new();
+        let (_tx, rx) = mpsc::channel(1);
+        tm.add_copy(rx, PathBuf::from("/dst"), vec![]);
+        // Manually mark as finished
+        tm.tasks[0].state = TaskState::Finished {
+            success: true,
+            summary: "done".into(),
+        };
+        assert_eq!(tm.active_count(), 0);
+        tm.remove_finished();
+        assert!(tm.tasks().is_empty());
+    }
+
+    #[test]
+    fn remove_finished_keeps_running() {
+        let mut tm = TaskManager::new();
+        let (_tx1, rx1) = mpsc::channel(1);
+        let (_tx2, rx2) = mpsc::channel(1);
+        tm.add_copy(rx1, PathBuf::from("/dst"), vec![]);
+        tm.add_move(rx2, PathBuf::from("/dst"), vec![]);
+        // Mark first as finished
+        tm.tasks[0].state = TaskState::Finished {
+            success: true,
+            summary: "done".into(),
+        };
+        tm.remove_finished();
+        assert_eq!(tm.tasks().len(), 1);
+        assert!(matches!(tm.tasks()[0].state, TaskState::Running { .. }));
+    }
+
+    #[test]
+    fn phantoms_for_returns_matching() {
+        let mut tm = TaskManager::new();
+        let (_tx, rx) = mpsc::channel(1);
+        let phantoms = vec![PhantomEntry {
+            name: "copied.txt".into(),
+            is_dir: false,
+        }];
+        tm.add_copy(rx, PathBuf::from("/dst"), phantoms);
+
+        let result = tm.phantoms_for(std::path::Path::new("/dst"));
+        assert_eq!(result.len(), 1);
+        assert_eq!(result[0].name, "copied.txt");
+
+        // Different dir returns empty
+        let result = tm.phantoms_for(std::path::Path::new("/other"));
+        assert!(result.is_empty());
+    }
+
+    #[test]
+    fn phantoms_for_ignores_finished() {
+        let mut tm = TaskManager::new();
+        let (_tx, rx) = mpsc::channel(1);
+        let phantoms = vec![PhantomEntry {
+            name: "f.txt".into(),
+            is_dir: false,
+        }];
+        tm.add_copy(rx, PathBuf::from("/dst"), phantoms);
+        tm.tasks[0].state = TaskState::Finished {
+            success: true,
+            summary: "done".into(),
+        };
+
+        let result = tm.phantoms_for(std::path::Path::new("/dst"));
+        assert!(result.is_empty());
+    }
+
+    #[tokio::test]
+    async fn poll_all_copy_finished() {
+        let mut tm = TaskManager::new();
+        let (tx, rx) = mpsc::channel(4);
+        tm.add_copy(rx, PathBuf::from("/dst"), vec![]);
+
+        // Send finished message
+        tx.send(ProgressMsg::Finished {
+            records: vec![],
+            error: None,
+            bytes_total: 100,
+        })
+        .await
+        .unwrap();
+
+        let events = tm.poll_all();
+        assert_eq!(events.len(), 1);
+        assert!(matches!(
+            events[0],
+            TaskEvent::PasteFinished { is_copy: true, .. }
+        ));
+        assert!(matches!(tm.tasks()[0].state, TaskState::Finished { .. }));
+    }
+
+    #[tokio::test]
+    async fn poll_all_delete_finished() {
+        let mut tm = TaskManager::new();
+        let (tx, rx) = mpsc::channel(4);
+        tm.add_delete(rx, false);
+
+        tx.send(DeleteMsg::Finished {
+            deleted: 3,
+            errors: vec![],
+            permanent: false,
+        })
+        .await
+        .unwrap();
+
+        let events = tm.poll_all();
+        assert_eq!(events.len(), 1);
+        assert!(matches!(events[0], TaskEvent::DeleteFinished));
+    }
+}
