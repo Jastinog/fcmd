@@ -157,7 +157,7 @@ pub fn render(f: &mut Frame, app: &mut App) {
 
     // Overlays on top of everything
     if app.mode == Mode::Help {
-        overlays::render_help(f, &app.theme, full_area);
+        overlays::render_help(f, app, full_area);
     }
 
     if matches!(app.mode, Mode::Preview | Mode::PreviewSearch) {

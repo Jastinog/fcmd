@@ -152,6 +152,7 @@ pub struct App {
     pub confirm_paths: Vec<(PathBuf, bool)>, // (path, is_dir)
     pub confirm_scroll: usize,
     pub confirm_permanent: bool,
+    pub help_scroll: usize,
     // Search
     pub search_query: String,
     pub search_saved_cursor: usize,
@@ -341,6 +342,7 @@ impl App {
             confirm_paths: Vec::new(),
             confirm_scroll: 0,
             confirm_permanent: false,
+            help_scroll: 0,
             search_query: String::new(),
             search_saved_cursor: 0,
             marks: HashMap::new(),
@@ -861,6 +863,7 @@ impl App {
             confirm_paths: Vec::new(),
             confirm_scroll: 0,
             confirm_permanent: false,
+            help_scroll: 0,
             search_query: String::new(),
             search_saved_cursor: 0,
             marks: HashMap::new(),

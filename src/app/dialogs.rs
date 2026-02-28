@@ -91,7 +91,30 @@ impl App {
     pub(super) fn handle_help(&mut self, key: KeyEvent) {
         match key.code {
             KeyCode::Esc | KeyCode::Char('q') | KeyCode::Enter | KeyCode::F(1) => {
+                self.help_scroll = 0;
                 self.mode = Mode::Normal;
+            }
+            KeyCode::Char('j') | KeyCode::Down => {
+                self.help_scroll = self.help_scroll.saturating_add(1);
+            }
+            KeyCode::Char('k') | KeyCode::Up => {
+                self.help_scroll = self.help_scroll.saturating_sub(1);
+            }
+            KeyCode::Char('d') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                let half = self.visible_height / 2;
+                self.help_scroll = self.help_scroll.saturating_add(half);
+            }
+            KeyCode::Char('u') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                let half = self.visible_height / 2;
+                self.help_scroll = self.help_scroll.saturating_sub(half);
+            }
+            KeyCode::Char('G') => {
+                // Go to bottom — render will clamp to actual max
+                self.help_scroll = usize::MAX;
+            }
+            KeyCode::Char('g') => {
+                // Go to top
+                self.help_scroll = 0;
             }
             _ => {}
         }
