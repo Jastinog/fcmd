@@ -204,7 +204,13 @@ impl App {
                 }
             }
 
-            _ => {}
+            _ => {
+                if let KeyCode::Char(c) = key.code {
+                    if !c.is_ascii() {
+                        self.status_message = "\u{f11c} Switch to English layout".into();
+                    }
+                }
+            }
         }
     }
 
