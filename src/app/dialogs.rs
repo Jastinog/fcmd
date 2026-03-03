@@ -121,13 +121,13 @@ impl App {
     }
 
     pub(super) fn enter_theme_picker(&mut self) {
-        if self.theme_dark_list.is_empty() && self.theme_light_list.is_empty() {
+        if self.theme_groups.is_empty() {
             self.mode = Mode::ThemePicker;
             let (tx, rx) = tokio::sync::oneshot::channel();
             self.file_op_rx = Some(rx);
             tokio::task::spawn_blocking(move || {
-                let (dark, light) = Theme::list_available_classified();
-                let _ = tx.send(super::FileOpResult::ThemeList { dark, light });
+                let groups = Theme::list_grouped();
+                let _ = tx.send(super::FileOpResult::ThemeList { groups });
             });
             return;
         }
@@ -138,26 +138,109 @@ impl App {
     }
 
     pub(super) fn handle_theme_picker(&mut self, key: KeyEvent) {
-        let col = self.theme_col;
-        let list_len = self.theme_col_len(col);
         match key.code {
             KeyCode::Char('j') | KeyCode::Down => {
-                if list_len > 0 {
-                    self.theme_cursors[col] = (self.theme_cursors[col] + 1).min(list_len - 1);
+                if self.theme_active_col == 0 {
+                    let max = self.theme_groups.len().saturating_sub(1);
+                    self.theme_group_cursor = (self.theme_group_cursor + 1).min(max);
+                    self.theme_item_cursor = 0;
+                    self.theme_item_scroll = 0;
+                    self.adjust_theme_scroll();
+                    self.spawn_theme_load();
+                } else {
+                    let group_len = self.current_group_len();
+                    if group_len > 0 {
+                        self.theme_item_cursor =
+                            (self.theme_item_cursor + 1).min(group_len - 1);
+                        self.adjust_theme_scroll();
+                        self.spawn_theme_load();
+                    }
+                }
+            }
+            KeyCode::Char('k') | KeyCode::Up => {
+                if self.theme_active_col == 0 {
+                    self.theme_group_cursor = self.theme_group_cursor.saturating_sub(1);
+                    self.theme_item_cursor = 0;
+                    self.theme_item_scroll = 0;
+                    self.adjust_theme_scroll();
+                    self.spawn_theme_load();
+                } else {
+                    self.theme_item_cursor = self.theme_item_cursor.saturating_sub(1);
                     self.adjust_theme_scroll();
                     self.spawn_theme_load();
                 }
             }
-            KeyCode::Char('k') | KeyCode::Up => {
-                self.theme_cursors[col] = self.theme_cursors[col].saturating_sub(1);
+            KeyCode::Char('d') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                let half = self.theme_half_page();
+                if self.theme_active_col == 0 {
+                    let max = self.theme_groups.len().saturating_sub(1);
+                    self.theme_group_cursor = (self.theme_group_cursor + half).min(max);
+                    self.theme_item_cursor = 0;
+                    self.theme_item_scroll = 0;
+                } else {
+                    let max = self.current_group_len().saturating_sub(1);
+                    self.theme_item_cursor = (self.theme_item_cursor + half).min(max);
+                }
                 self.adjust_theme_scroll();
                 self.spawn_theme_load();
             }
-            KeyCode::Tab | KeyCode::BackTab => {
-                let other = 1 - col;
-                if self.theme_col_len(other) > 0 {
-                    self.theme_col = other;
-                    self.spawn_theme_load();
+            KeyCode::Char('u') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                let half = self.theme_half_page();
+                if self.theme_active_col == 0 {
+                    self.theme_group_cursor = self.theme_group_cursor.saturating_sub(half);
+                    self.theme_item_cursor = 0;
+                    self.theme_item_scroll = 0;
+                } else {
+                    self.theme_item_cursor = self.theme_item_cursor.saturating_sub(half);
+                }
+                self.adjust_theme_scroll();
+                self.spawn_theme_load();
+            }
+            KeyCode::Char('g') => {
+                if self.theme_active_col == 0 {
+                    self.theme_group_cursor = 0;
+                    self.theme_group_scroll = 0;
+                    self.theme_item_cursor = 0;
+                    self.theme_item_scroll = 0;
+                } else {
+                    self.theme_item_cursor = 0;
+                    self.theme_item_scroll = 0;
+                }
+                self.spawn_theme_load();
+            }
+            KeyCode::Char('G') => {
+                if self.theme_active_col == 0 {
+                    self.theme_group_cursor = self.theme_groups.len().saturating_sub(1);
+                    self.theme_item_cursor = 0;
+                    self.theme_item_scroll = 0;
+                } else {
+                    self.theme_item_cursor = self.current_group_len().saturating_sub(1);
+                }
+                self.adjust_theme_scroll();
+                self.spawn_theme_load();
+            }
+            KeyCode::Char('l') | KeyCode::Right => {
+                if self.theme_active_col == 0 && self.current_group_len() > 0 {
+                    self.theme_active_col = 1;
+                }
+            }
+            KeyCode::Char('h') | KeyCode::Left => {
+                if self.theme_active_col == 1 {
+                    self.theme_active_col = 0;
+                }
+            }
+            KeyCode::Tab => {
+                if self.theme_active_col == 0 {
+                    if self.current_group_len() > 0 {
+                        self.theme_active_col = 1;
+                    }
+                } else {
+                    self.theme_active_col = 0;
+                }
+            }
+            KeyCode::BackTab => {
+                if self.theme_active_col == 1 {
+                    self.theme_active_col = 0;
                 }
             }
             KeyCode::Enter => {
@@ -173,12 +256,23 @@ impl App {
                 self.status_message = format!("Theme: {name}");
                 self.mode = Mode::Normal;
             }
+            KeyCode::Char('t') => {
+                self.theme_show_light = !self.theme_show_light;
+                self.theme_item_cursor = 0;
+                self.theme_item_scroll = 0;
+                self.spawn_theme_load();
+            }
             KeyCode::Esc | KeyCode::Char('q') => {
                 self.theme_preview = None;
                 self.mode = Mode::Normal;
             }
             _ => {}
         }
+    }
+
+    fn theme_half_page(&self) -> usize {
+        let list_h = (self.visible_height * 70 / 100).saturating_sub(4).max(1);
+        (list_h / 2).max(1)
     }
 
     pub(super) fn spawn_theme_load(&mut self) {
@@ -192,47 +286,75 @@ impl App {
     }
 
     fn adjust_theme_scroll(&mut self) {
-        let col = self.theme_col;
         let max_h = (self.visible_height * 70 / 100).max(2);
         let list_h = max_h.saturating_sub(4).max(1);
-        if self.theme_cursors[col] < self.theme_scrolls[col] {
-            self.theme_scrolls[col] = self.theme_cursors[col];
-        } else if self.theme_cursors[col] >= self.theme_scrolls[col] + list_h {
-            self.theme_scrolls[col] = self.theme_cursors[col] - list_h + 1;
+        if self.theme_active_col == 0 {
+            if self.theme_group_cursor < self.theme_group_scroll {
+                self.theme_group_scroll = self.theme_group_cursor;
+            } else if self.theme_group_cursor >= self.theme_group_scroll + list_h {
+                self.theme_group_scroll = self.theme_group_cursor - list_h + 1;
+            }
+        } else {
+            if self.theme_item_cursor < self.theme_item_scroll {
+                self.theme_item_scroll = self.theme_item_cursor;
+            } else if self.theme_item_cursor >= self.theme_item_scroll + list_h {
+                self.theme_item_scroll = self.theme_item_cursor - list_h + 1;
+            }
         }
     }
 
-    fn theme_col_len(&self, col: usize) -> usize {
-        if col == 0 { self.theme_dark_list.len() } else { self.theme_light_list.len() }
+    fn current_group_themes(&self) -> &[String] {
+        let Some(group) = self.theme_groups.get(self.theme_group_cursor) else {
+            return &[];
+        };
+        if self.theme_show_light {
+            &group.light_themes
+        } else {
+            &group.dark_themes
+        }
+    }
+
+    fn current_group_len(&self) -> usize {
+        self.current_group_themes().len()
     }
 
     fn current_theme_name(&self) -> Option<&str> {
-        let list = if self.theme_col == 0 { &self.theme_dark_list } else { &self.theme_light_list };
-        list.get(self.theme_cursors[self.theme_col]).map(|s| s.as_str())
+        self.current_group_themes()
+            .get(self.theme_item_cursor)
+            .map(|s| s.as_str())
     }
 
-    /// Position cursors on the active theme after loading lists.
+    /// Position cursors on the active theme after loading groups.
     pub(super) fn position_theme_cursors(&mut self) {
         let active = self.theme_active_name.as_deref();
-        // Try to find active theme in dark list
         if let Some(name) = active {
-            if let Some(pos) = self.theme_dark_list.iter().position(|n| n == name) {
-                self.theme_col = 0;
-                self.theme_cursors[0] = pos;
-                self.theme_scrolls[0] = pos.saturating_sub(5);
-                return;
-            }
-            if let Some(pos) = self.theme_light_list.iter().position(|n| n == name) {
-                self.theme_col = 1;
-                self.theme_cursors[1] = pos;
-                self.theme_scrolls[1] = pos.saturating_sub(5);
-                return;
+            for (gi, group) in self.theme_groups.iter().enumerate() {
+                if let Some(ti) = group.dark_themes.iter().position(|n| n == name) {
+                    self.theme_group_cursor = gi;
+                    self.theme_group_scroll = gi.saturating_sub(5);
+                    self.theme_item_cursor = ti;
+                    self.theme_item_scroll = ti.saturating_sub(5);
+                    self.theme_active_col = 1;
+                    self.theme_show_light = false;
+                    return;
+                }
+                if let Some(ti) = group.light_themes.iter().position(|n| n == name) {
+                    self.theme_group_cursor = gi;
+                    self.theme_group_scroll = gi.saturating_sub(5);
+                    self.theme_item_cursor = ti;
+                    self.theme_item_scroll = ti.saturating_sub(5);
+                    self.theme_active_col = 1;
+                    self.theme_show_light = true;
+                    return;
+                }
             }
         }
-        // Fallback: first dark theme
-        self.theme_col = 0;
-        self.theme_cursors = [0; 2];
-        self.theme_scrolls = [0; 2];
+        self.theme_group_cursor = 0;
+        self.theme_group_scroll = 0;
+        self.theme_item_cursor = 0;
+        self.theme_item_scroll = 0;
+        self.theme_active_col = 0;
+        self.theme_show_light = false;
     }
 }
 
@@ -310,28 +432,54 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn position_theme_cursors_finds_dark() {
+    async fn position_theme_cursors_finds_in_group() {
+        use crate::theme::ThemeGroup;
         let entries = crate::app::make_test_entries(&["a.txt"]);
         let mut app = App::new_for_test(entries);
-        app.theme_dark_list = vec!["gruvbox".into(), "dracula".into(), "nord".into()];
-        app.theme_light_list = vec!["solarized".into()];
+        app.theme_groups = vec![
+            ThemeGroup {
+                name: "Classic",
+                dark_themes: vec!["gruvbox".into(), "dracula".into(), "nord".into()],
+                light_themes: vec!["solarized".into()],
+            },
+            ThemeGroup {
+                name: "Tokyo",
+                dark_themes: vec!["tokyo-night".into()],
+                light_themes: vec!["github-light".into()],
+            },
+        ];
         app.theme_active_name = Some("dracula".into());
 
         app.position_theme_cursors();
-        assert_eq!(app.theme_col, 0);
-        assert_eq!(app.theme_cursors[0], 1);
+        assert_eq!(app.theme_group_cursor, 0);
+        assert_eq!(app.theme_item_cursor, 1);
+        assert_eq!(app.theme_active_col, 1);
+        assert!(!app.theme_show_light);
     }
 
     #[tokio::test]
-    async fn position_theme_cursors_finds_light() {
+    async fn position_theme_cursors_finds_in_second_group() {
+        use crate::theme::ThemeGroup;
         let entries = crate::app::make_test_entries(&["a.txt"]);
         let mut app = App::new_for_test(entries);
-        app.theme_dark_list = vec!["gruvbox".into()];
-        app.theme_light_list = vec!["solarized".into(), "github-light".into()];
-        app.theme_active_name = Some("github-light".into());
+        app.theme_groups = vec![
+            ThemeGroup {
+                name: "Classic",
+                dark_themes: vec!["gruvbox".into()],
+                light_themes: vec!["solarized".into()],
+            },
+            ThemeGroup {
+                name: "Tokyo",
+                dark_themes: vec!["tokyo-night".into()],
+                light_themes: vec!["github-light".into(), "dayfox".into()],
+            },
+        ];
+        app.theme_active_name = Some("dayfox".into());
 
         app.position_theme_cursors();
-        assert_eq!(app.theme_col, 1);
-        assert_eq!(app.theme_cursors[1], 1);
+        assert_eq!(app.theme_group_cursor, 1);
+        assert_eq!(app.theme_item_cursor, 1);
+        assert_eq!(app.theme_active_col, 1);
+        assert!(app.theme_show_light);
     }
 }

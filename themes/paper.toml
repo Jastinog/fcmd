@@ -1,0 +1,23 @@
+# Paper — warm cream paper, classic print
+
+bg = "#FAF4E8"
+bg_light = "#F0E8D0"
+fg = "#2C2018"
+fg_dim = "#8C7860"
+
+red = "#CC2200"
+green = "#2A6832"
+yellow = "#8B6914"
+blue = "#1A4A8C"
+magenta = "#7A2080"
+cyan = "#1A6868"
+orange = "#CC5500"
+
+border_active = "blue"
+border_inactive = "#C0A888"
+status_bg = "#E8DCC4"
+cursor_line = "#EEE0C0"
+
+dir_color = "blue"
+symlink_color = "cyan"
+file_color = "fg"

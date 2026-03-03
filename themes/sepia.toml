@@ -1,0 +1,23 @@
+# Sepia — vintage photograph tones
+
+bg = "#F4E4C0"
+bg_light = "#E8D4A8"
+fg = "#3C2010"
+fg_dim = "#8C6840"
+
+red = "#8B2020"
+green = "#2A5020"
+yellow = "#8B6000"
+blue = "#1A3A6C"
+magenta = "#6C2050"
+cyan = "#1A5050"
+orange = "#884010"
+
+border_active = "blue"
+border_inactive = "#B08040"
+status_bg = "#DCC898"
+cursor_line = "#E8D4A8"
+
+dir_color = "blue"
+symlink_color = "orange"
+file_color = "fg"

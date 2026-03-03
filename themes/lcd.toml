@@ -1,0 +1,23 @@
+# LCD — classic monochrome LCD display
+
+bg = "#9AA888"
+bg_light = "#AABB98"
+fg = "#1A2810"
+fg_dim = "#485838"
+
+red = "#6A1010"
+green = "#163A0E"
+yellow = "#4A3C0A"
+blue = "#0E1C3A"
+magenta = "#3A0E38"
+cyan = "#0E3A38"
+orange = "#4A2A0A"
+
+border_active = "fg"
+border_inactive = "#607050"
+status_bg = "#8A9878"
+cursor_line = "#AABB98"
+
+dir_color = "blue"
+symlink_color = "cyan"
+file_color = "fg"

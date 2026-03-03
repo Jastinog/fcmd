@@ -1,0 +1,23 @@
+# Sublime Text Light — classic Sublime Text light colorscheme
+
+bg = "#F8F8F8"
+bg_light = "#EBEBEB"
+fg = "#3B3B3B"
+fg_dim = "#939393"
+
+red = "#C9353F"
+green = "#419E38"
+yellow = "#C09B1A"
+blue = "#3C6FB4"
+magenta = "#9B59B6"
+cyan = "#3B8CA7"
+orange = "#CC7A00"
+
+border_active = "blue"
+border_inactive = "#D0D0D0"
+status_bg = "#E8E8E8"
+cursor_line = "#F0F0F0"
+
+dir_color = "blue"
+symlink_color = "cyan"
+file_color = "fg"

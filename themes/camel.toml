@@ -1,0 +1,23 @@
+# Camel — camel hide and golden sand dunes
+
+bg = "#F8EAD0"
+bg_light = "#EEE0C0"
+fg = "#2C1A08"
+fg_dim = "#8A6A38"
+
+red = "#AA2008"
+green = "#2A6020"
+yellow = "#8A6008"
+blue = "#1A3A88"
+magenta = "#6A1A58"
+cyan = "#1A5060"
+orange = "#AA4808"
+
+border_active = "blue"
+border_inactive = "#C4A868"
+status_bg = "#E4D0A8"
+cursor_line = "#EEE0C0"
+
+dir_color = "blue"
+symlink_color = "orange"
+file_color = "fg"

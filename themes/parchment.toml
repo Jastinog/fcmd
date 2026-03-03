@@ -1,0 +1,23 @@
+# Parchment — aged manuscript parchment
+
+bg = "#FFF8DC"
+bg_light = "#FFF0C0"
+fg = "#3A2800"
+fg_dim = "#8C6820"
+
+red = "#AA2000"
+green = "#285020"
+yellow = "#8C6000"
+blue = "#1A3A8C"
+magenta = "#6A1A5A"
+cyan = "#1A5050"
+orange = "#AA4800"
+
+border_active = "blue"
+border_inactive = "#C8A840"
+status_bg = "#F0E098"
+cursor_line = "#FFF0C0"
+
+dir_color = "blue"
+symlink_color = "orange"
+file_color = "fg"

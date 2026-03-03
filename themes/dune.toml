@@ -1,0 +1,23 @@
+# Dune — spice world, inspired by Frank Herbert
+
+bg = "#0E0C08"
+bg_light = "#1C1810"
+fg = "#E8A040"
+fg_dim = "#8C6020"
+
+red = "#CC3018"
+green = "#5A8020"
+yellow = "#E8A040"
+blue = "#4468A8"
+magenta = "#884A60"
+cyan = "#2A7060"
+orange = "#CC7010"
+
+border_active = "orange"
+border_inactive = "#3A3010"
+status_bg = "#1A1408"
+cursor_line = "#1C1810"
+
+dir_color = "blue"
+symlink_color = "yellow"
+file_color = "fg"

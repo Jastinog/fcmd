@@ -1,0 +1,23 @@
+# Mirage — bleached desert horizon haze
+
+bg = "#FEFAF0"
+bg_light = "#F8F0E0"
+fg = "#2A2010"
+fg_dim = "#8A7A50"
+
+red = "#AA1818"
+green = "#285818"
+yellow = "#886010"
+blue = "#1A3888"
+magenta = "#681A58"
+cyan = "#1A5058"
+orange = "#AA4808"
+
+border_active = "blue"
+border_inactive = "#C8B880"
+status_bg = "#EEE4C8"
+cursor_line = "#F8F0E0"
+
+dir_color = "blue"
+symlink_color = "orange"
+file_color = "fg"

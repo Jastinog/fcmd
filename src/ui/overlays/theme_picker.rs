@@ -11,71 +11,40 @@ use crate::theme::Theme;
 
 pub(in crate::ui) fn render_theme_picker(f: &mut Frame, app: &App, area: Rect) {
     let t = &app.theme;
-    if app.theme_dark_list.is_empty() && app.theme_light_list.is_empty() {
+    if app.theme_groups.is_empty() {
         return;
     }
 
-    let popup = crate::ui::util::centered_rect(80, 75, area);
+    let popup = crate::ui::util::centered_rect(85, 80, area);
     f.render_widget(Clear, popup);
 
-    // Split into: dark list | light list | preview
+    // Split into: groups | themes | preview
     let panes = Layout::default()
         .direction(Direction::Horizontal)
         .constraints([
             Constraint::Percentage(20),
-            Constraint::Percentage(20),
-            Constraint::Percentage(60),
+            Constraint::Percentage(25),
+            Constraint::Percentage(55),
         ])
         .split(popup);
 
-    let active_name = app.theme_active_name.as_deref();
+    render_groups_column(f, t, panes[0], app);
+    render_themes_column(f, t, panes[1], app);
 
-    // Dark column
-    render_theme_column(
-        f, t, panes[0],
-        " \u{f0594} Dark ",
-        &app.theme_dark_list,
-        app.theme_cursors[0],
-        app.theme_scrolls[0],
-        active_name,
-        app.theme_col == 0,
-    );
-
-    // Light column
-    render_theme_column(
-        f, t, panes[1],
-        " \u{f0595} Light ",
-        &app.theme_light_list,
-        app.theme_cursors[1],
-        app.theme_scrolls[1],
-        active_name,
-        app.theme_col == 1,
-    );
-
-    // Preview
     if let Some(ref pt) = app.theme_preview {
         render_preview_panel(f, pt, panes[2]);
     }
 }
 
-fn render_theme_column(
-    f: &mut Frame,
-    t: &Theme,
-    area: Rect,
-    title: &str,
-    themes: &[String],
-    cursor: usize,
-    scroll: usize,
-    active_name: Option<&str>,
-    is_focused: bool,
-) {
+fn render_groups_column(f: &mut Frame, t: &Theme, area: Rect, app: &App) {
+    let is_focused = app.theme_active_col == 0;
     let border_color = if is_focused { t.cyan } else { t.border_inactive };
     let title_color = if is_focused { t.cyan } else { t.fg_dim };
 
     let block = Block::default()
         .borders(Borders::ALL)
         .border_style(Style::default().fg(border_color))
-        .title(title)
+        .title(" Groups ")
         .title_style(Style::default().fg(title_color))
         .style(Style::default().bg(t.bg));
 
@@ -86,109 +55,259 @@ fn render_theme_column(
         return;
     }
 
+    let groups = &app.theme_groups;
+    let cursor = app.theme_group_cursor;
+    let scroll = app.theme_group_scroll;
     let liw = inner.width as usize;
     let list_height = inner.height.saturating_sub(2) as usize;
-    let len = themes.len();
-
-    if len == 0 {
-        // Empty column message
-        let msg = "No themes";
-        let y = inner.y + inner.height / 2;
-        let x_pad = liw.saturating_sub(msg.len()) / 2;
-        let line = Line::from(Span::styled(
-            format!("{}{}", " ".repeat(x_pad), msg),
-            Style::default().fg(t.fg_dim),
-        ));
-        f.render_widget(Paragraph::new(line), Rect::new(inner.x, y, inner.width, 1));
-        return;
-    }
 
     let mut items: Vec<ListItem> = Vec::new();
-    for (i, name) in themes
+    for (i, group) in groups
         .iter()
         .enumerate()
-        .take(len.min(scroll + list_height))
+        .take(groups.len().min(scroll + list_height))
         .skip(scroll)
     {
         let is_cursor = is_focused && i == cursor;
-        let is_active = active_name.is_some_and(|an| an == name);
-
-        let marker = if is_cursor { "\u{25b8} " } else { "  " };
-        let max_name = liw.saturating_sub(marker.chars().count());
-        let name_display = if name.chars().count() > max_name {
-            let truncated: String = name.chars().take(max_name.saturating_sub(1)).collect();
-            format!("{truncated}\u{2026}")
+        let total = group.dark_themes.len() + group.light_themes.len();
+        let count_str = format!(" ({total})");
+        let name_max = liw.saturating_sub(2 + count_str.len());
+        let name_display: String = if group.name.chars().count() > name_max {
+            group.name
+                .chars()
+                .take(name_max.saturating_sub(1))
+                .chain(std::iter::once('\u{2026}'))
+                .collect()
         } else {
-            name.clone()
+            group.name.to_string()
         };
-        let pad = liw.saturating_sub(marker.chars().count() + name_display.chars().count());
+        let marker = if is_cursor { "\u{25b8} " } else { "  " };
+        let pad = liw.saturating_sub(
+            marker.chars().count() + name_display.chars().count() + count_str.chars().count(),
+        );
 
         if is_cursor {
-            let cursor_style = Style::default().fg(t.bg_text).bg(t.blue);
-            let line = Line::from(vec![
-                Span::styled(marker, cursor_style),
-                Span::styled(name_display, cursor_style),
-                Span::styled(" ".repeat(pad), cursor_style),
-            ]);
-            items.push(ListItem::new(line));
-        } else if is_active {
-            let line = Line::from(vec![
-                Span::styled(marker, Style::default().fg(t.green)),
-                Span::styled(name_display, Style::default().fg(t.green)),
+            let cs = Style::default().fg(t.bg_text).bg(t.blue);
+            items.push(ListItem::new(Line::from(vec![
+                Span::styled(marker, cs),
+                Span::styled(name_display, cs),
+                Span::styled(" ".repeat(pad), cs),
+                Span::styled(count_str, cs),
+            ])));
+        } else if !is_focused && i == cursor {
+            items.push(ListItem::new(Line::from(vec![
+                Span::styled(marker, Style::default().fg(t.cyan)),
+                Span::styled(name_display, Style::default().fg(t.cyan)),
                 Span::styled(" ".repeat(pad), Style::default()),
-            ]);
-            items.push(ListItem::new(line));
+                Span::styled(count_str, Style::default().fg(t.fg_dim)),
+            ])));
         } else {
-            let line = Line::from(vec![
+            items.push(ListItem::new(Line::from(vec![
                 Span::styled(marker, Style::default().fg(t.fg_dim)),
                 Span::styled(name_display, Style::default().fg(t.fg)),
                 Span::styled(" ".repeat(pad), Style::default()),
-            ]);
-            items.push(ListItem::new(line));
+                Span::styled(count_str, Style::default().fg(t.fg_dim)),
+            ])));
         }
     }
 
     let list_area = Rect::new(inner.x, inner.y, inner.width, list_height as u16);
     f.render_widget(List::new(items), list_area);
 
-    // Separator
-    let sep_y = inner.y + list_height as u16;
-    let sep_area = Rect::new(inner.x, sep_y, inner.width, 1);
-    f.render_widget(
-        Paragraph::new(Line::from(Span::styled(
-            "\u{2500}".repeat(liw),
-            Style::default().fg(t.border_inactive),
-        ))),
-        sep_area,
-    );
+    render_column_footer(f, t, inner, list_height, is_focused, "l items  g/G top/bot");
+}
 
-    // Hint line (only in focused column)
+fn render_themes_column(f: &mut Frame, t: &Theme, area: Rect, app: &App) {
+    let is_focused = app.theme_active_col == 1;
+    let border_color = if is_focused { t.cyan } else { t.border_inactive };
+    let title_color = if is_focused { t.cyan } else { t.fg_dim };
+
+    let group = app.theme_groups.get(app.theme_group_cursor);
+    let group_title = group.map(|g| g.name).unwrap_or("Themes");
+    let title = format!(" {group_title} ");
+
+    let block = Block::default()
+        .borders(Borders::ALL)
+        .border_style(Style::default().fg(border_color))
+        .title(title.as_str())
+        .title_style(Style::default().fg(title_color))
+        .style(Style::default().bg(t.bg));
+
+    let inner = block.inner(area);
+    f.render_widget(block, area);
+
+    if inner.height < 3 || inner.width < 6 {
+        return;
+    }
+
+    // Dark/Light toggle indicator line
+    let toggle_y = inner.y;
+    let liw = inner.width as usize;
+    if inner.height >= 3 {
+        let dark_label = "\u{f0594} Dark";   // moon icon
+        let light_label = "\u{f0595} Light"; // sun icon
+        if app.theme_show_light {
+            let spans = vec![
+                Span::styled(format!(" {dark_label}  "), Style::default().fg(t.fg_dim)),
+                Span::styled(format!("{light_label} "), Style::default().fg(t.yellow).bg(t.cursor_line)),
+                Span::styled(
+                    " ".repeat(liw.saturating_sub(dark_label.chars().count() + light_label.chars().count() + 5)),
+                    Style::default(),
+                ),
+            ];
+            f.render_widget(Paragraph::new(Line::from(spans)), Rect::new(inner.x, toggle_y, inner.width, 1));
+        } else {
+            let spans = vec![
+                Span::styled(format!(" {dark_label} "), Style::default().fg(t.blue).bg(t.cursor_line)),
+                Span::styled(format!("  {light_label} "), Style::default().fg(t.fg_dim)),
+                Span::styled(
+                    " ".repeat(liw.saturating_sub(dark_label.chars().count() + light_label.chars().count() + 5)),
+                    Style::default(),
+                ),
+            ];
+            f.render_widget(Paragraph::new(Line::from(spans)), Rect::new(inner.x, toggle_y, inner.width, 1));
+        }
+    }
+
+    let themes: &[String] = match group {
+        Some(g) => {
+            if app.theme_show_light { &g.light_themes } else { &g.dark_themes }
+        }
+        None => return,
+    };
+
+    let cursor = app.theme_item_cursor;
+    let scroll = app.theme_item_scroll;
+    let active_name = app.theme_active_name.as_deref();
+    // list area starts one row below (toggle indicator) and leaves 2 rows for footer
+    let list_start_y = inner.y + 1;
+    let list_height = inner.height.saturating_sub(3) as usize;
+
+    let mut items: Vec<ListItem> = Vec::new();
+    for (i, name) in themes
+        .iter()
+        .enumerate()
+        .take(themes.len().min(scroll + list_height))
+        .skip(scroll)
+    {
+        let is_cursor = is_focused && i == cursor;
+        let is_active = active_name.is_some_and(|an| an == name);
+        let marker = if is_cursor { "\u{25b8} " } else { "  " };
+        let name_max = liw.saturating_sub(marker.chars().count());
+        let name_display: String = if name.chars().count() > name_max {
+            name.chars()
+                .take(name_max.saturating_sub(1))
+                .chain(std::iter::once('\u{2026}'))
+                .collect()
+        } else {
+            let pad = name_max - name.chars().count();
+            format!("{name}{}", " ".repeat(pad))
+        };
+
+        if is_cursor {
+            let cs = Style::default().fg(t.bg_text).bg(t.blue);
+            items.push(ListItem::new(Line::from(vec![
+                Span::styled(marker, cs),
+                Span::styled(name_display, cs),
+            ])));
+        } else if is_active {
+            items.push(ListItem::new(Line::from(vec![
+                Span::styled(marker, Style::default().fg(t.green)),
+                Span::styled(name_display, Style::default().fg(t.green)),
+            ])));
+        } else {
+            items.push(ListItem::new(Line::from(vec![
+                Span::styled(marker, Style::default().fg(t.fg_dim)),
+                Span::styled(name_display, Style::default().fg(t.fg)),
+            ])));
+        }
+    }
+
+    let list_area = Rect::new(inner.x, list_start_y, inner.width, list_height as u16);
+    f.render_widget(List::new(items), list_area);
+
+    // Footer: separator + hints
+    let sep_y = list_start_y + list_height as u16;
+    if sep_y < inner.y + inner.height {
+        f.render_widget(
+            Paragraph::new(Line::from(Span::styled(
+                "\u{2500}".repeat(liw),
+                Style::default().fg(t.border_inactive),
+            ))),
+            Rect::new(inner.x, sep_y, inner.width, 1),
+        );
+    }
     let hint_y = inner.y + inner.height.saturating_sub(1);
-    let hint_area = Rect::new(inner.x, hint_y, inner.width, 1);
-    if is_focused {
-        let hint_line = Line::from(vec![
+    if is_focused && hint_y < inner.y + inner.height {
+        let spans = vec![
+            Span::styled("h", Style::default().fg(t.cyan)),
+            Span::styled(" groups  ", Style::default().fg(t.fg_dim)),
+            Span::styled("t", Style::default().fg(t.cyan)),
+            Span::styled(" toggle  ", Style::default().fg(t.fg_dim)),
             Span::styled("\u{23ce}", Style::default().fg(t.cyan)),
-            Span::styled(" ok ", Style::default().fg(t.fg_dim)),
-            Span::styled("tab", Style::default().fg(t.cyan)),
-            Span::styled(" col", Style::default().fg(t.fg_dim)),
-        ]);
-        f.render_widget(Paragraph::new(hint_line), hint_area);
+            Span::styled(" apply", Style::default().fg(t.fg_dim)),
+        ];
+        f.render_widget(Paragraph::new(Line::from(spans)), Rect::new(inner.x, hint_y, inner.width, 1));
+    }
+}
+
+/// Renders a separator line + hint line at the bottom of a column's inner area.
+fn render_column_footer(
+    f: &mut Frame,
+    t: &Theme,
+    inner: Rect,
+    list_height: usize,
+    is_focused: bool,
+    hint: &str,
+) {
+    let liw = inner.width as usize;
+    let sep_y = inner.y + list_height as u16;
+    if sep_y < inner.y + inner.height {
+        f.render_widget(
+            Paragraph::new(Line::from(Span::styled(
+                "\u{2500}".repeat(liw),
+                Style::default().fg(t.border_inactive),
+            ))),
+            Rect::new(inner.x, sep_y, inner.width, 1),
+        );
+    }
+
+    let hint_y = inner.y + inner.height.saturating_sub(1);
+    if is_focused && hint_y < inner.y + inner.height {
+        let parts: Vec<&str> = hint.splitn(2, "  ").collect();
+        let mut spans = Vec::new();
+        for (i, part) in parts.iter().enumerate() {
+            let mut sub = part.splitn(2, ' ');
+            if let Some(key) = sub.next() {
+                spans.push(Span::styled(key.to_string(), Style::default().fg(t.cyan)));
+            }
+            if let Some(desc) = sub.next() {
+                spans.push(Span::styled(
+                    format!(" {desc}"),
+                    Style::default().fg(t.fg_dim),
+                ));
+            }
+            if i + 1 < parts.len() {
+                spans.push(Span::styled("  ", Style::default()));
+            }
+        }
+        f.render_widget(
+            Paragraph::new(Line::from(spans)),
+            Rect::new(inner.x, hint_y, inner.width, 1),
+        );
     }
 }
 
 fn render_preview_panel(f: &mut Frame, pt: &Theme, area: Rect) {
     use crate::util::icons::file_icon;
 
-    // The preview shows a miniature file manager: panel border + file list + status bar
     if area.height < 5 || area.width < 16 {
         return;
     }
 
-    // Split area: panel (all except last row) + status bar (last row)
     let panel_area = Rect::new(area.x, area.y, area.width, area.height - 1);
     let status_area = Rect::new(area.x, area.y + area.height - 1, area.width, 1);
 
-    // ── Panel with border ──
     let title = " ~/Projects ";
     let block = Block::default()
         .borders(Borders::ALL)
@@ -209,12 +328,12 @@ fn render_preview_panel(f: &mut Frame, pt: &Theme, area: Rect) {
         is_dir: bool,
         meta: &'static str,
         date: &'static str,
-        git: char,   // ' '=none, 'M'=modified, 'A'=added, '?'=untracked
-        mark: u8,    // 0=none, 1=green, 2=yellow
+        git: char,
+        mark: u8,
     }
 
     let entries: &[MockEntry] = &[
-        MockEntry { name: "..",         is_dir: true,  meta: "",     date: "",       git: ' ', mark: 0 },
+        MockEntry { name: "..",         is_dir: true,  meta: "",      date: "",       git: ' ', mark: 0 },
         MockEntry { name: "src",        is_dir: true,  meta: "<DIR>", date: "Feb 14", git: 'M', mark: 0 },
         MockEntry { name: "docs",       is_dir: true,  meta: "<DIR>", date: "Feb 10", git: ' ', mark: 1 },
         MockEntry { name: "tests",      is_dir: true,  meta: "<DIR>", date: "Jan 28", git: ' ', mark: 0 },
@@ -224,7 +343,7 @@ fn render_preview_panel(f: &mut Frame, pt: &Theme, area: Rect) {
         MockEntry { name: ".gitignore", is_dir: false, meta: "120",   date: "Jan 15", git: ' ', mark: 0 },
     ];
 
-    let cursor_row = 1usize; // "src/" row — active cursor
+    let cursor_row = 1usize;
     let iw = inner.width as usize;
 
     for (i, entry) in entries.iter().enumerate() {
@@ -240,7 +359,6 @@ fn render_preview_panel(f: &mut Frame, pt: &Theme, area: Rect) {
             entry.name.to_string()
         };
 
-        // Git indicator
         let (git_icon, git_color) = match entry.git {
             'M' => ("\u{f03eb}", Some(pt.yellow)),
             'A' => ("\u{f0415}", Some(pt.green)),
@@ -248,7 +366,6 @@ fn render_preview_panel(f: &mut Frame, pt: &Theme, area: Rect) {
             _ => (" ", None),
         };
 
-        // Visual mark
         let (vm_text, vm_color) = match entry.mark {
             1 => ("\u{258a}", Some(pt.green)),
             2 => ("\u{258a}", Some(pt.yellow)),
@@ -256,7 +373,6 @@ fn render_preview_panel(f: &mut Frame, pt: &Theme, area: Rect) {
             _ => (" ", None),
         };
 
-        // Compute column widths
         let git_w = 1;
         let sign_w = 1;
         let icon_w = icon.chars().count();
@@ -281,7 +397,6 @@ fn render_preview_panel(f: &mut Frame, pt: &Theme, area: Rect) {
         };
 
         if is_cursor {
-            // Active cursor: full row in blue bg with bg_text fg
             let cursor_style = Style::default().fg(pt.bg_text).bg(pt.blue);
             let git_style = match git_color {
                 Some(c) => Style::default().fg(pt.bg_text).bg(c),
@@ -299,10 +414,8 @@ fn render_preview_panel(f: &mut Frame, pt: &Theme, area: Rect) {
                 Span::styled(format!("{meta_date} "), cursor_style),
                 Span::styled(vm_text, vm_style),
             ]);
-            let row_area = Rect::new(inner.x, inner.y + i as u16, inner.width, 1);
-            f.render_widget(Paragraph::new(line), row_area);
+            f.render_widget(Paragraph::new(line), Rect::new(inner.x, inner.y + i as u16, inner.width, 1));
         } else {
-            // Normal row
             let name_color = if entry.is_dir { pt.dir_color } else { pt.file_color };
             let icon_color = if entry.is_dir { pt.dir_color } else { pt.fg_dim };
             let git_style = match git_color {
@@ -321,49 +434,45 @@ fn render_preview_panel(f: &mut Frame, pt: &Theme, area: Rect) {
                 Span::styled(format!("{meta_date} "), Style::default().fg(pt.fg_dim)),
                 Span::styled(vm_text, vm_style),
             ]);
-            let row_area = Rect::new(inner.x, inner.y + i as u16, inner.width, 1);
-            f.render_widget(Paragraph::new(line), row_area);
+            f.render_widget(Paragraph::new(line), Rect::new(inner.x, inner.y + i as u16, inner.width, 1));
         }
     }
 
-    // ── Mini status bar ──
+    // Mini status bar
     let sw = status_area.width as usize;
-    let sep_r = "\u{e0b0}"; //
-    let sep_l = "\u{e0b2}"; //
+    let sep_r = "\u{e0b0}";
+    let sep_l = "\u{e0b2}";
 
-    // Mode segment
     let mode_text = " \u{f018d} NORMAL ";
     let mode_span = Span::styled(mode_text, Style::default().fg(pt.bg_text).bg(pt.green));
     let mode_sep = Span::styled(sep_r, Style::default().fg(pt.green).bg(pt.bg_light));
 
-    // Info segment
     let info_text = " src/ \u{2502} 4 files, 3 dirs ";
 
-    // Right: position segment
     let pos_text = " 2/8 ";
     let pos_span = Span::styled(pos_text, Style::default().fg(pt.bg_text).bg(pt.blue));
     let pos_sep = Span::styled(sep_l, Style::default().fg(pt.blue).bg(pt.status_bg));
 
-    // Right: sort segment
     let sort_text = " Name \u{25bc} ";
     let sort_span = Span::styled(sort_text, Style::default().fg(pt.fg_dim).bg(pt.bg_light));
     let sort_sep = Span::styled(sep_l, Style::default().fg(pt.bg_light).bg(pt.status_bg));
 
-    let mode_w = mode_text.chars().count() + 1; // +sep
+    let mode_w = mode_text.chars().count() + 1;
     let right_w = pos_text.chars().count() + 1 + sort_text.chars().count() + 1;
 
-    // Cap info to available space
     let info_max = sw.saturating_sub(mode_w + 1 + right_w);
     let info_chars: Vec<char> = info_text.chars().collect();
     let info_display: String = if info_chars.len() > info_max {
-        info_chars[..info_max.saturating_sub(1)].iter().chain(std::iter::once(&'\u{2026}')).collect()
+        info_chars[..info_max.saturating_sub(1)]
+            .iter()
+            .chain(std::iter::once(&'\u{2026}'))
+            .collect()
     } else {
         info_text.to_string()
     };
     let info_span = Span::styled(&info_display, Style::default().fg(pt.fg).bg(pt.bg_light));
     let info_sep = Span::styled(sep_r, Style::default().fg(pt.bg_light).bg(pt.status_bg));
 
-    // Fill between info and right segments
     let left_used = mode_w + info_display.chars().count() + 1;
     let fill = sw.saturating_sub(left_used + right_w);
 

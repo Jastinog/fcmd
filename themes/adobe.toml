@@ -1,0 +1,23 @@
+# Adobe — sun-baked clay and earth walls
+
+bg = "#F0D8B8"
+bg_light = "#E4C8A0"
+fg = "#2A1808"
+fg_dim = "#8A6040"
+
+red = "#A82010"
+green = "#286020"
+yellow = "#886010"
+blue = "#1A388A"
+magenta = "#6C1A50"
+cyan = "#1A5050"
+orange = "#A84010"
+
+border_active = "blue"
+border_inactive = "#B89060"
+status_bg = "#D8C098"
+cursor_line = "#E4C8A0"
+
+dir_color = "blue"
+symlink_color = "orange"
+file_color = "fg"

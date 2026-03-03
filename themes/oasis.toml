@@ -1,0 +1,23 @@
+# Oasis — desert oasis, palms and still water
+
+bg = "#F2ECD8"
+bg_light = "#E8E0C4"
+fg = "#1A2810"
+fg_dim = "#6A7050"
+
+red = "#A81818"
+green = "#1A5A28"
+yellow = "#806010"
+blue = "#1A3878"
+magenta = "#601A50"
+cyan = "#1A5050"
+orange = "#A84010"
+
+border_active = "cyan"
+border_inactive = "#9AA878"
+status_bg = "#DCDAC0"
+cursor_line = "#E8E0C4"
+
+dir_color = "cyan"
+symlink_color = "orange"
+file_color = "fg"

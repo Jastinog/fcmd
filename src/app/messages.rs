@@ -124,12 +124,10 @@ pub enum FileOpResult {
     ThemeLoad {
         name: String,
         theme: Option<Theme>,
-        dark_list: Vec<String>,
-        light_list: Vec<String>,
+        groups: Vec<crate::theme::ThemeGroup>,
     },
     ThemeList {
-        dark: Vec<String>,
-        light: Vec<String>,
+        groups: Vec<crate::theme::ThemeGroup>,
     },
     Clipboard {
         label: String,

@@ -1,23 +1,22 @@
-# Amber — warm amber terminal aesthetic
-# by classic CRT
+# Amber — amber phosphor CRT monitor
 
-bg = "#0A0800"
-bg_light = "#141005"
+bg = "#0C0800"
+bg_light = "#1A1200"
 fg = "#FFB000"
-fg_dim = "#8A6000"
+fg_dim = "#996600"
 
-red = "#FF5533"
-green = "#CCAA00"
-yellow = "#FFCC00"
+red = "#FF4400"
+green = "#CCBB00"
+yellow = "#FFD000"
 blue = "#CC8800"
-magenta = "#DD8855"
-cyan = "#CCBB55"
-orange = "#FF9900"
+magenta = "#FF7700"
+cyan = "#FFCC00"
+orange = "#FF8800"
 
 border_active = "fg"
-border_inactive = "#2A2000"
-status_bg = "#050400"
-cursor_line = "#1A1400"
+border_inactive = "#3A2800"
+status_bg = "#180E00"
+cursor_line = "#221400"
 
 dir_color = "yellow"
 symlink_color = "cyan"

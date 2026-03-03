@@ -1,23 +1,22 @@
-# Blueprint — engineering blueprint-inspired dark theme
-# by custom
+# Blueprint — technical engineering blueprint paper
 
-bg = "#0A1628"
-bg_light = "#112240"
-fg = "#C0D0E8"
-fg_dim = "#4A6080"
+bg = "#E4EEFF"
+bg_light = "#D4E4FF"
+fg = "#0A1E5E"
+fg_dim = "#4A5E8E"
 
-red = "#FF5555"
-green = "#50FA7B"
-yellow = "#F1FA8C"
-blue = "#5EB8FF"
-magenta = "#A8A0D8"
-cyan = "#68D5FF"
-orange = "#FFB86C"
+red = "#CC2222"
+green = "#0A5E2A"
+yellow = "#8B6000"
+blue = "#0A1E5E"
+magenta = "#5E0A5E"
+cyan = "#0A4A5E"
+orange = "#8B3A00"
 
 border_active = "blue"
-border_inactive = "#1E3A5F"
-status_bg = "#06101E"
-cursor_line = "#132E55"
+border_inactive = "#8898CC"
+status_bg = "#C8D8F8"
+cursor_line = "#D0E0FF"
 
 dir_color = "blue"
 symlink_color = "cyan"

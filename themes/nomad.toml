@@ -1,0 +1,23 @@
+# Nomad — desert night sky and campfire warmth
+
+bg = "#0A0C18"
+bg_light = "#141828"
+fg = "#E8C880"
+fg_dim = "#807050"
+
+red = "#CC3020"
+green = "#508820"
+yellow = "#E0A830"
+blue = "#4A60B0"
+magenta = "#804878"
+cyan = "#3A8080"
+orange = "#CC7820"
+
+border_active = "yellow"
+border_inactive = "#2A2840"
+status_bg = "#0E1020"
+cursor_line = "#141828"
+
+dir_color = "cyan"
+symlink_color = "yellow"
+file_color = "fg"

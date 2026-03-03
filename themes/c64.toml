@@ -1,0 +1,23 @@
+# C64 — Commodore 64 inspired
+
+bg = "#2C2279"
+bg_light = "#403BA8"
+fg = "#8C85E8"
+fg_dim = "#5A55A8"
+
+red = "#B44040"
+green = "#5ABA5A"
+yellow = "#BABA5A"
+blue = "#7070E0"
+magenta = "#BA5ABA"
+cyan = "#5ABABA"
+orange = "#BA7A3A"
+
+border_active = "cyan"
+border_inactive = "#3A3590"
+status_bg = "#1E1A60"
+cursor_line = "#403BA8"
+
+dir_color = "cyan"
+symlink_color = "yellow"
+file_color = "fg"

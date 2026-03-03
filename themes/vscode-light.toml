@@ -1,0 +1,24 @@
+# VS Code Light+ — Microsoft's default light theme
+# code.visualstudio.com
+
+bg = "#FFFFFF"
+bg_light = "#F3F3F3"
+fg = "#333333"
+fg_dim = "#717171"
+
+red = "#A31515"
+green = "#008000"
+yellow = "#795E26"
+blue = "#0070C1"
+magenta = "#AF00DB"
+cyan = "#267F99"
+orange = "#E07400"
+
+border_active = "blue"
+border_inactive = "#CCCCCC"
+status_bg = "#EBEBEB"
+cursor_line = "#E8F0FE"
+
+dir_color = "blue"
+symlink_color = "cyan"
+file_color = "fg"

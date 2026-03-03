@@ -1,0 +1,23 @@
+# Canyon — red canyon walls at night
+
+bg = "#180C08"
+bg_light = "#281810"
+fg = "#E8A880"
+fg_dim = "#906050"
+
+red = "#CC3010"
+green = "#5A8A28"
+yellow = "#D4A030"
+blue = "#4A70B8"
+magenta = "#904A70"
+cyan = "#3A8070"
+orange = "#CC5A20"
+
+border_active = "orange"
+border_inactive = "#4A2810"
+status_bg = "#201008"
+cursor_line = "#281810"
+
+dir_color = "orange"
+symlink_color = "cyan"
+file_color = "fg"

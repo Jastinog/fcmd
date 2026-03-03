@@ -205,11 +205,13 @@ pub struct App {
     // Theme
     pub transparent: bool,
     pub theme: Theme,
-    pub theme_dark_list: Vec<String>,
-    pub theme_light_list: Vec<String>,
-    pub theme_col: usize,
-    pub theme_cursors: [usize; 2],
-    pub theme_scrolls: [usize; 2],
+    pub theme_groups: Vec<crate::theme::ThemeGroup>,
+    pub theme_group_cursor: usize,
+    pub theme_group_scroll: usize,
+    pub theme_item_cursor: usize,
+    pub theme_item_scroll: usize,
+    pub theme_active_col: usize, // 0 = groups column, 1 = items column
+    pub theme_show_light: bool,  // true = showing light themes, false = dark
     pub theme_active_name: Option<String>,
     pub theme_preview: Option<Theme>,
     // Per-directory sort preferences
@@ -381,11 +383,13 @@ impl App {
             tree_select_path: None,
             transparent,
             theme,
-            theme_dark_list: Vec::new(),
-            theme_light_list: Vec::new(),
-            theme_col: 0,
-            theme_cursors: [0; 2],
-            theme_scrolls: [0; 2],
+            theme_groups: Vec::new(),
+            theme_group_cursor: 0,
+            theme_group_scroll: 0,
+            theme_item_cursor: 0,
+            theme_item_scroll: 0,
+            theme_active_col: 0,
+            theme_show_light: false,
             theme_active_name,
             theme_preview: None,
             bookmarks,
@@ -683,12 +687,11 @@ impl App {
                     self.mode = Mode::Chmod;
                 }
             }
-            FileOpResult::ThemeLoad { name, theme, dark_list, light_list } => match theme {
+            FileOpResult::ThemeLoad { name, theme, groups } => match theme {
                 Some(t) => {
                     self.theme = t;
                     self.apply_transparency();
-                    self.theme_dark_list = dark_list;
-                    self.theme_light_list = light_list;
+                    self.theme_groups = groups;
                     self.theme_active_name = Some(name.clone());
                     let n = name.clone();
                     self.db_spawn(move |db| { let _ = db.save_theme(&n); });
@@ -696,20 +699,23 @@ impl App {
                 }
                 None => self.status_message = format!("Theme not found: {name}"),
             },
-            FileOpResult::ThemeList { dark, light } => {
+            FileOpResult::ThemeList { groups } => {
                 if self.mode == Mode::ThemePicker {
-                    if dark.is_empty() && light.is_empty() {
+                    if groups.is_empty() {
                         self.status_message = "No themes found".into();
                         self.mode = Mode::Normal;
                     } else {
-                        self.theme_dark_list = dark;
-                        self.theme_light_list = light;
+                        self.theme_groups = groups;
                         self.position_theme_cursors();
                         self.spawn_theme_load();
                     }
                 } else {
-                    let mut all: Vec<String> = dark.into_iter().chain(light).collect();
+                    let mut all: Vec<String> = groups
+                        .into_iter()
+                        .flat_map(|g| g.dark_themes.into_iter().chain(g.light_themes))
+                        .collect();
                     all.sort();
+                    all.dedup();
                     if all.is_empty() {
                         self.status_message = "No themes found".into();
                     } else {
@@ -902,11 +908,13 @@ impl App {
             tree_select_path: None,
             transparent: false,
             theme: Theme::default_theme(),
-            theme_dark_list: Vec::new(),
-            theme_light_list: Vec::new(),
-            theme_col: 0,
-            theme_cursors: [0; 2],
-            theme_scrolls: [0; 2],
+            theme_groups: Vec::new(),
+            theme_group_cursor: 0,
+            theme_group_scroll: 0,
+            theme_item_cursor: 0,
+            theme_item_scroll: 0,
+            theme_active_col: 0,
+            theme_show_light: false,
             theme_active_name: None,
             theme_preview: None,
             bookmarks: Vec::new(),
@@ -1556,25 +1564,35 @@ mod tests {
 
     #[tokio::test]
     async fn handle_theme_picker_jk_moves_cursor() {
+        use crate::theme::ThemeGroup;
         let entries = make_test_entries(&["a.txt"]);
         let mut app = App::new_for_test(entries);
         app.mode = Mode::ThemePicker;
-        app.theme_dark_list = vec!["a".into(), "b".into(), "c".into()];
-        app.theme_light_list = vec!["x".into(), "y".into()];
-        app.theme_col = 0;
-        app.theme_cursors = [0; 2];
+        app.theme_groups = vec![
+            ThemeGroup {
+                name: "Test",
+                dark_themes: vec!["a".into(), "b".into(), "c".into()],
+                light_themes: vec![],
+            },
+            ThemeGroup {
+                name: "Light",
+                dark_themes: vec![],
+                light_themes: vec!["x".into(), "y".into()],
+            },
+        ];
+        app.theme_active_col = 1; // start in items column
 
-        // j moves down in dark column
+        // j moves down in items column
         app.handle_theme_picker(KeyEvent::new(KeyCode::Char('j'), KeyModifiers::NONE));
-        assert_eq!(app.theme_cursors[0], 1);
+        assert_eq!(app.theme_item_cursor, 1);
 
         // k moves up
         app.handle_theme_picker(KeyEvent::new(KeyCode::Char('k'), KeyModifiers::NONE));
-        assert_eq!(app.theme_cursors[0], 0);
+        assert_eq!(app.theme_item_cursor, 0);
 
-        // Tab switches to light column
+        // Tab switches to groups column
         app.handle_theme_picker(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE));
-        assert_eq!(app.theme_col, 1);
+        assert_eq!(app.theme_active_col, 0);
     }
 
     // ── Visual mode handler tests ────────────────────────────────

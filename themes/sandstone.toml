@@ -1,0 +1,23 @@
+# Sandstone — warm sandstone rock in sunlight
+
+bg = "#F5E6C8"
+bg_light = "#EAD8B0"
+fg = "#3A2010"
+fg_dim = "#8C6840"
+
+red = "#AA2010"
+green = "#286028"
+yellow = "#8A5C10"
+blue = "#1A3A80"
+magenta = "#702060"
+cyan = "#1A5858"
+orange = "#AA4810"
+
+border_active = "blue"
+border_inactive = "#C0A060"
+status_bg = "#E0CCA0"
+cursor_line = "#EAD8B0"
+
+dir_color = "blue"
+symlink_color = "orange"
+file_color = "fg"

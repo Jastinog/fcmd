@@ -1,0 +1,23 @@
+# BBS — classic DOS/ANSI bulletin board system
+
+bg = "#00007B"
+bg_light = "#0000AA"
+fg = "#AAAAAA"
+fg_dim = "#666688"
+
+red = "#FF5555"
+green = "#55FF55"
+yellow = "#FFFF55"
+blue = "#8888FF"
+magenta = "#FF55FF"
+cyan = "#55FFFF"
+orange = "#FFAA55"
+
+border_active = "cyan"
+border_inactive = "#2A2A88"
+status_bg = "#000055"
+cursor_line = "#0000AA"
+
+dir_color = "cyan"
+symlink_color = "yellow"
+file_color = "fg"

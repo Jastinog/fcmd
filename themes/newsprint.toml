@@ -1,0 +1,23 @@
+# Newsprint — old newspaper, classic print media
+
+bg = "#F0EEE8"
+bg_light = "#E4E0D8"
+fg = "#1A1818"
+fg_dim = "#6A6860"
+
+red = "#AA1818"
+green = "#1A5018"
+yellow = "#7A5A00"
+blue = "#1A1A88"
+magenta = "#6A1A6A"
+cyan = "#1A5A5A"
+orange = "#AA4400"
+
+border_active = "blue"
+border_inactive = "#B0ACA0"
+status_bg = "#DCDAD0"
+cursor_line = "#E8E4DC"
+
+dir_color = "blue"
+symlink_color = "cyan"
+file_color = "fg"

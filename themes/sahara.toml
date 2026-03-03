@@ -1,0 +1,23 @@
+# Sahara — deep night in the Sahara desert
+
+bg = "#1A1410"
+bg_light = "#2A2018"
+fg = "#E8D5A0"
+fg_dim = "#8C7A50"
+
+red = "#CC4422"
+green = "#6A9A30"
+yellow = "#E8B040"
+blue = "#5A80CC"
+magenta = "#A05090"
+cyan = "#4A9088"
+orange = "#CC7030"
+
+border_active = "orange"
+border_inactive = "#4A3A28"
+status_bg = "#241C14"
+cursor_line = "#2A2018"
+
+dir_color = "yellow"
+symlink_color = "cyan"
+file_color = "fg"

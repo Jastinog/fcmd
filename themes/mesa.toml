@@ -1,0 +1,23 @@
+# Mesa — red mesa and badlands at dusk
+
+bg = "#180808"
+bg_light = "#2A1008"
+fg = "#E0B890"
+fg_dim = "#8A6848"
+
+red = "#CC2808"
+green = "#608028"
+yellow = "#D0A030"
+blue = "#4A6EB0"
+magenta = "#884058"
+cyan = "#407870"
+orange = "#C85820"
+
+border_active = "red"
+border_inactive = "#4A1808"
+status_bg = "#200C08"
+cursor_line = "#2A1008"
+
+dir_color = "orange"
+symlink_color = "cyan"
+file_color = "fg"
