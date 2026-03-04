@@ -37,11 +37,7 @@ impl App {
                 self.mode = Mode::Normal;
             }
             KeyCode::Backspace => {
-                if self.rename_input.is_empty() {
-                    self.mode = Mode::Normal;
-                } else {
-                    self.rename_input.pop();
-                }
+                self.rename_input.pop();
             }
             KeyCode::Char(c) => {
                 self.rename_input.push(c);
@@ -86,11 +82,7 @@ impl App {
                 self.mode = Mode::Normal;
             }
             KeyCode::Backspace => {
-                if self.rename_input.is_empty() {
-                    self.mode = Mode::Normal;
-                } else {
-                    self.rename_input.pop();
-                }
+                self.rename_input.pop();
             }
             KeyCode::Char(c) => {
                 self.rename_input.push(c);
@@ -132,9 +124,10 @@ mod tests {
         assert_eq!(app.rename_input, "");
         assert_eq!(app.mode, Mode::Rename);
 
-        // Empty backspace exits to Normal
+        // Backspace on empty input stays in Rename
         app.handle_rename(KeyEvent::new(KeyCode::Backspace, KeyModifiers::NONE));
-        assert_eq!(app.mode, Mode::Normal);
+        assert_eq!(app.rename_input, "");
+        assert_eq!(app.mode, Mode::Rename);
     }
 
     #[tokio::test]
