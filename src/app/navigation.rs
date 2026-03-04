@@ -433,7 +433,7 @@ impl App {
             ("c", m(mode == SortMode::Created,  "▍created",  " created")),
             ("e", m(mode == SortMode::Extension,"▍extension"," extension")),
             ("", "Direction"),
-            ("r", if rev { "▍reverse \u{25b2}" } else { " ascending \u{25bc}" }),
+            ("r", if rev { "▍reverse \u{2191}" } else { " ascending \u{2193}" }),
         ]
     }
 

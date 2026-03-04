@@ -137,9 +137,9 @@ pub(super) fn render_status(f: &mut Frame, app: &App, area: Rect) {
     // Sort segment (always visible)
     {
         let arrow = if panel.sort_reverse {
-            "\u{25b2}"
+            "\u{2191}"
         } else {
-            "\u{25bc}"
+            "\u{2193}"
         };
         let is_default = panel.sort_mode == SortMode::Name && !panel.sort_reverse;
         let sort_fg = if is_default {
