@@ -48,6 +48,10 @@ Yank (`yy`), delete (`dd` to trash / `dD` permanently), paste (`p`/`P`), rename 
 
 ![Delete confirmation](assets/delete-confirm.png)
 
+### Bulk Rename
+
+Select multiple files and press `cw` to open an interactive bulk rename overlay. Edit each name inline with `i`, navigate between files with `j`/`k`, and use `:%s/old/new` to find & replace across all names at once. Conflicts (duplicates, empty names) are highlighted in red. Works from Normal, Visual, and Select modes. Also available via `:bulkrename`.
+
 ### File Info
 
 Press `i` on any file or directory to see detailed information: type, full path, size, permissions (rwx with color coding), owner/group, timestamps (modified, created, accessed), inode, hard links, device, and git status. For directories, total size, file count, and subdirectory count are calculated in the background.
@@ -168,6 +172,7 @@ cargo install --path .
 | `p` | Paste into active panel |
 | `P` | Paste (overwrite existing) |
 | `r` | Rename in-place |
+| `cw` | Bulk rename selected files |
 | `a` | Create new file or directory (append `/` for dir) |
 | `u` | Undo last operation |
 | `yp` | Copy file path to clipboard |
@@ -296,6 +301,7 @@ Press `:` to enter command mode.
 | `:mkdir <name>` | Create directory |
 | `:touch <name>` | Create file |
 | `:rename <name>` | Rename selected item |
+| `:bulkrename` | Bulk rename selected files |
 | `:find <query>` | Find in current directory |
 | `:theme <name>` | Set color theme |
 | `:sort <mode>` | Set sort (name/size/mod/cre/ext) |
