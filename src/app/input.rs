@@ -82,13 +82,18 @@ impl App {
                     .map(|e| (e.is_dir, e.name == ".."));
                 match entry_info {
                     Some((false, _)) if key.code == KeyCode::Enter => {
-                        // Enter on file → open preview
+                        // Enter on archive → open archive overlay
                         if let Some(entry) = self.active_panel().selected_entry() {
-                            let path = entry.path.clone();
-                            self.file_preview_path = Some(path.clone());
-                            self.file_preview = Some(Preview::loading_placeholder(&path));
-                            self.mode = Mode::Preview;
-                            self.spawn_file_preview_load(path);
+                            if crate::archive::is_archive(&entry.path) {
+                                self.open_archive();
+                            } else {
+                                // Enter on file → open preview
+                                let path = entry.path.clone();
+                                self.file_preview_path = Some(path.clone());
+                                self.file_preview = Some(Preview::loading_placeholder(&path));
+                                self.mode = Mode::Preview;
+                                self.spawn_file_preview_load(path);
+                            }
                         }
                     }
                     Some((_, true)) if key.code == KeyCode::Enter => {
@@ -101,7 +106,7 @@ impl App {
                     }
                 }
             }
-            KeyCode::Char('h') | KeyCode::Left | KeyCode::Backspace | KeyCode::Char('-') => {
+            KeyCode::Char('h') | KeyCode::Left | KeyCode::Backspace => {
                 self.go_parent_async();
             }
             KeyCode::Char('~') => {
@@ -237,6 +242,7 @@ impl App {
             ('u', KeyCode::Char('t')) => self.toggle_transparent(),
             ('c', KeyCode::Char('p')) => self.enter_chmod(),
             ('c', KeyCode::Char('o')) => self.enter_chown(),
+            ('c', KeyCode::Char('w')) => self.enter_bulk_rename(),
             // Layout
             ('w', KeyCode::Char('1')) => self.set_layout(PanelLayout::Single),
             ('w', KeyCode::Char('2')) => self.set_layout(PanelLayout::Dual),

@@ -11,6 +11,8 @@ mod chmod;
 mod info;
 mod chown;
 mod conflict;
+mod archive;
+mod bulk_rename;
 
 pub(super) use which_key::render_which_key;
 pub(super) use command::render_command_popup;
@@ -25,6 +27,8 @@ pub(super) use chmod::render_chmod_popup;
 pub(super) use info::render_info_popup;
 pub(super) use chown::render_chown_picker;
 pub(super) use conflict::render_conflict_popup;
+pub(super) use archive::render_archive;
+pub(super) use bulk_rename::render_bulk_rename;
 
 pub(super) fn format_binary_size(bytes: usize) -> String {
     if bytes >= 1_048_576 {

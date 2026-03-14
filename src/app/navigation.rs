@@ -126,7 +126,7 @@ impl App {
         self.active_panel_mut().sort_reverse = rev;
         self.resort_from_cache_or_reload();
         self.save_current_sort();
-        let arrow = if rev { "\u{25b2}" } else { "\u{25bc}" };
+        let arrow = if rev { "\u{2191}" } else { "\u{2193}" };
         let mode = self.active_panel().sort_mode;
         self.status_message = format!("Sort: {} {arrow}", mode.display_label());
     }
@@ -395,7 +395,7 @@ impl App {
         const GOTO_HINTS: &[(&str, &str)] = &[("g", "top"), ("t", "next tab"), ("T", "prev tab")];
         const YANK_HINTS: &[(&str, &str)] = &[("y", "yank"), ("p", "yank path"), ("n", "yank name")];
         const DELETE_HINTS: &[(&str, &str)] = &[("d", "trash"), ("D", "permanent")];
-        const CHANGE_HINTS: &[(&str, &str)] = &[("p", "permissions"), ("o", "owner")];
+        const CHANGE_HINTS: &[(&str, &str)] = &[("p", "permissions"), ("o", "owner"), ("w", "bulk rename")];
         const MARK_HINTS: &[(&str, &str)] = &[("a-z", "go to mark")];
 
         let pending = self.pending_key?;

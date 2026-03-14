@@ -204,6 +204,14 @@ pub fn render(f: &mut Frame, app: &mut App) {
         overlays::render_conflict_popup(f, app, full_area);
     }
 
+    if app.mode == Mode::BulkRename {
+        overlays::render_bulk_rename(f, app, full_area);
+    }
+
+    if app.mode == Mode::Archive {
+        overlays::render_archive(f, app, full_area);
+    }
+
     if let Some(ref fs) = app.find_state {
         find_overlay::render_find(f, fs, &app.theme, full_area);
     }

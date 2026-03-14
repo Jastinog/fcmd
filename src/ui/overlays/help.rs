@@ -44,13 +44,14 @@ fn build_help_rows() -> (Vec<Cell>, Vec<Cell>) {
         ("Ctrl-d/u", "Half page \u{2195}"),
         ("Ctrl-l/h", "Focus panel \u{2192}/\u{2190}"),
         ("Tab", "Cycle panels"),
-        ("~ / -", "Home / Parent"),
+        ("~", "Home"),
     ]);
     push_section(&mut r, "\u{f0ad0} Visual  (v)", &[
         ("j k", "Extend selection"),
         ("G / gg", "Bottom / Top"),
         ("Ctrl-d/u", "Half page \u{2195}"),
         ("y d D p", "Yank/Del/Paste"),
+        ("cw", "Bulk rename"),
         ("cp co", "Chmod / Chown"),
         ("v Esc", "Exit \u{2192} Normal"),
     ]);
@@ -59,6 +60,7 @@ fn build_help_rows() -> (Vec<Cell>, Vec<Cell>) {
         ("Shift-\u{2191}/\u{2193}", "Toggle mark & move"),
         ("j k", "Move (keep marks)"),
         ("y d D p", "Yank/Del/Paste"),
+        ("cw", "Bulk rename"),
         ("cp co", "Chmod / Chown"),
         ("Esc", "Clear \u{2192} Normal"),
     ]);
@@ -74,6 +76,7 @@ fn build_help_rows() -> (Vec<Cell>, Vec<Cell>) {
         ("yp / yn", "Copy path / name"),
         ("r F2", "Rename"),
         ("a F7", "Create (/ = dir)"),
+        ("cw", "Bulk rename"),
         ("cp / co", "Chmod / Chown"),
         ("i", "File info"),
         ("o F4", "Open in editor"),
@@ -176,9 +179,45 @@ fn build_help_rows() -> (Vec<Cell>, Vec<Cell>) {
         (":unsel ..", "Unselect by glob"),
         (":theme ..", "Load / list themes"),
         (":mark a-z", "Set named mark"),
+        (":marks", "List named marks"),
         (":du", "Directory sizes"),
         (":hidden", "Toggle hidden files"),
+        (":bulkrename", "Bulk rename selected"),
+        (":mkdir <n>", "Create directory"),
+        (":touch <n>", "Create file"),
+        (":rename <n>", "Rename selected"),
+        (":archive <n>", "Create archive (.zip..)"),
+        (":bookmark <n>", "Add bookmark"),
         (":tabnew", "New tab"),
+        (":tabclose", "Close tab"),
+    ]);
+    align(&mut l, &mut r);
+    l.push(Cell::Separator); r.push(Cell::Separator);
+
+    // ── Block 6: Archive | Bulk Rename ────────────────
+    push_section(&mut l, "\u{f0187} Archive  (Enter on archive)", &[
+        ("j k / \u{2191}\u{2193}", "Move down / up"),
+        ("l / h", "Expand / Collapse dir"),
+        ("Enter", "Toggle expand dir"),
+        ("G / g", "Bottom / Top"),
+        ("Ctrl-d/u", "Half page \u{2195}"),
+        ("x", "Extract selected entry"),
+        ("X", "Extract all files"),
+        ("/", "Search in archive"),
+        ("q Esc", "Close archive"),
+    ]);
+    push_section(&mut r, "\u{f0453} Bulk Rename  (cw / :bulkrename)", &[
+        ("j k", "Move cursor"),
+        ("G / g", "Bottom / Top"),
+        ("Ctrl-d/u", "Half page \u{2195}"),
+        ("i a", "Edit entry name"),
+        ("Enter/Tab", "Commit & next"),
+        ("Shift-Tab", "Commit & prev"),
+        ("u", "Undo line (reset name)"),
+        ("d", "Remove from list"),
+        (":", "Find/Replace (%s/old/new)"),
+        ("Enter", "Apply all renames"),
+        ("q Esc", "Exit"),
     ]);
     align(&mut l, &mut r);
 

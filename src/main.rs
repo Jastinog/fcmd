@@ -12,6 +12,7 @@ use futures::StreamExt;
 use ratatui::{Terminal, backend::CrosstermBackend};
 
 mod app;
+mod archive;
 mod db;
 mod find;
 mod ops;
@@ -103,6 +104,24 @@ fn open_in_editor(
     Ok(())
 }
 
+/// Lightweight snapshot of state that poll functions may change.
+/// Used to detect whether a tick actually modified anything worth redrawing.
+fn snapshot(app: &app::App) -> (String, Option<String>, bool, usize, usize, usize, usize) {
+    let find_count = app
+        .find_state
+        .as_ref()
+        .map_or(0, |fs| fs.total_count());
+    (
+        app.status_message.clone(),
+        app.task_notification.clone(),
+        app.conflict_info.is_some(),
+        app.dir_sizes.len(),
+        app.git_statuses.len(),
+        app.info_lines.len(),
+        find_count,
+    )
+}
+
 /// Helper: await a value from an Option<oneshot::Receiver>, or pend forever if None.
 /// Returns None if the sender was dropped (e.g. background task panicked).
 async fn recv_or_pend<T>(rx: &mut Option<tokio::sync::oneshot::Receiver<T>>) -> Option<T> {
@@ -121,16 +140,23 @@ async fn run(
     app: &mut app::App,
 ) -> io::Result<()> {
     let mut reader = EventStream::new();
-    let mut tick = tokio::time::interval(Duration::from_millis(50));
+    let mut tick = tokio::time::interval(Duration::from_millis(250));
 
     loop {
-        terminal.draw(|f| ui::render(f, app))?;
+        if app.needs_redraw {
+            terminal.draw(|f| ui::render(f, app))?;
+            app.needs_redraw = false;
+        }
 
         tokio::select! {
             maybe_event = reader.next() => {
                 match maybe_event {
                     Some(Ok(Event::Key(key))) if key.kind == KeyEventKind::Press => {
                         app.handle_key(key);
+                        app.needs_redraw = true;
+                    }
+                    Some(Ok(Event::Resize(_, _))) => {
+                        app.needs_redraw = true;
                     }
                     Some(Ok(_)) => {}
                     Some(Err(_)) => {}
@@ -138,44 +164,61 @@ async fn run(
                 }
             }
             _ = tick.tick() => {
+                let before = snapshot(app);
                 app.poll_tasks();
                 app.poll_conflicts();
                 app.poll_du();
                 app.poll_find();
                 app.poll_info_du();
                 app.poll_git();
+                if before != snapshot(app) {
+                    app.needs_redraw = true;
+                }
+                // Pending key may need a redraw for which-key popup after delay
+                if app.pending_key.is_some() {
+                    app.needs_redraw = true;
+                }
+                // Active tasks (copy/move/delete) need continuous progress redraws
+                if app.task_manager.active_count() > 0 {
+                    app.needs_redraw = true;
+                }
             }
             Some(msg) = app.dir_load_rx.recv() => {
                 app.handle_dir_load_msg(msg);
+                app.needs_redraw = true;
             }
             result = recv_or_pend(&mut app.preview_load_rx) => {
-                if let Some(r) = result { app.apply_preview_load(r); }
+                if let Some(r) = result { app.apply_preview_load(r); app.needs_redraw = true; }
             }
             result = recv_or_pend(&mut app.file_preview_rx) => {
-                if let Some(r) = result { app.apply_file_preview_load(r); }
+                if let Some(r) = result { app.apply_file_preview_load(r); app.needs_redraw = true; }
             }
             result = recv_or_pend(&mut app.tree_load_rx) => {
-                if let Some(r) = result { app.apply_tree_data(r); }
+                if let Some(r) = result { app.apply_tree_data(r); app.needs_redraw = true; }
             }
             result = recv_or_pend(&mut app.info_load_rx) => {
-                if let Some(r) = result { app.apply_info_load(r); }
+                if let Some(r) = result { app.apply_info_load(r); app.needs_redraw = true; }
             }
             result = recv_or_pend(&mut app.chown_load_rx) => {
-                if let Some(r) = result { app.apply_chown_load(r); }
+                if let Some(r) = result { app.apply_chown_load(r); app.needs_redraw = true; }
             }
             result = recv_or_pend(&mut app.nav_check_rx) => {
-                if let Some(r) = result { app.apply_nav_check(r); }
+                if let Some(r) = result { app.apply_nav_check(r); app.needs_redraw = true; }
             }
             result = recv_or_pend(&mut app.file_op_rx) => {
-                if let Some(r) = result { app.apply_file_op(r); }
+                if let Some(r) = result { app.apply_file_op(r); app.needs_redraw = true; }
             }
             result = recv_or_pend(&mut app.theme_load_rx) => {
-                if let Some(r) = result { app.apply_theme_preview(r); }
+                if let Some(r) = result { app.apply_theme_preview(r); app.needs_redraw = true; }
+            }
+            result = recv_or_pend(&mut app.archive_load_rx) => {
+                if let Some(r) = result { app.handle_archive_load(r); app.needs_redraw = true; }
             }
         }
 
         if let Some(path) = app.open_editor.take() {
             open_in_editor(terminal, app, &path)?;
+            app.needs_redraw = true;
         }
 
         if app.should_quit {

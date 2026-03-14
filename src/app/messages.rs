@@ -1,5 +1,10 @@
 use super::*;
 
+pub struct ArchiveLoadResult {
+    pub archive_path: PathBuf,
+    pub result: std::io::Result<(crate::archive::ArchiveFormat, Vec<crate::archive::ArchiveEntry>)>,
+}
+
 pub struct PhantomEntry {
     pub name: String,
     pub is_dir: bool,
@@ -132,5 +137,19 @@ pub enum FileOpResult {
     Clipboard {
         label: String,
         ok: bool,
+    },
+    BulkRename {
+        total: usize,
+        records: Vec<ops::OpRecord>,
+        errors: Vec<String>,
+    },
+    ArchiveExtract {
+        entry_path: String,
+        result: Result<usize, String>,
+    },
+    ArchiveCreate {
+        name: String,
+        count: usize,
+        result: Result<(), String>,
     },
 }

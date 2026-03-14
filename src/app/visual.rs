@@ -21,6 +21,11 @@ impl App {
                     self.enter_chown();
                     return;
                 }
+                ('c', KeyCode::Char('w')) => {
+                    self.exit_visual();
+                    self.enter_bulk_rename();
+                    return;
+                }
                 _ => {}
             }
         }
@@ -133,6 +138,11 @@ impl App {
                 ('c', KeyCode::Char('o')) => {
                     self.exit_select();
                     self.enter_chown();
+                    return;
+                }
+                ('c', KeyCode::Char('w')) => {
+                    self.exit_select();
+                    self.enter_bulk_rename();
                     return;
                 }
                 _ => {}

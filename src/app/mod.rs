@@ -10,7 +10,9 @@ pub(crate) use crate::panel::{self, DirCache, FileEntry, Panel, SortMode};
 pub(crate) use crate::preview::Preview;
 pub(crate) use crate::theme::Theme;
 
+pub(crate) mod archive;
 mod bookmarks;
+pub(crate) mod bulk_rename;
 pub(crate) mod chmod;
 mod command;
 mod dialogs;
@@ -57,6 +59,8 @@ pub enum Mode {
     SelectPattern,
     UnselectPattern,
     Conflict,
+    BulkRename,
+    Archive,
 }
 
 #[derive(PartialEq, Eq, Clone, Copy, Debug)]
@@ -252,10 +256,17 @@ pub struct App {
     pub(super) dir_sizes_load_rx: Option<tokio::sync::oneshot::Receiver<Vec<(PathBuf, HashMap<PathBuf, u64>)>>>,
     // Async navigation validation
     pub nav_check_rx: Option<tokio::sync::oneshot::Receiver<NavCheckResult>>,
+    // Bulk rename
+    pub bulk_rename: Option<bulk_rename::BulkRenameState>,
     // Async file operations (mkdir, touch, rename, chmod, chown, undo)
     pub file_op_rx: Option<tokio::sync::oneshot::Receiver<FileOpResult>>,
     // Async theme loading (for theme picker preview)
     pub theme_load_rx: Option<tokio::sync::oneshot::Receiver<Option<Theme>>>,
+    // Archive
+    pub archive_state: Option<archive::ArchiveState>,
+    pub archive_load_rx: Option<tokio::sync::oneshot::Receiver<ArchiveLoadResult>>,
+    /// Set to true whenever state changes that require a UI repaint.
+    pub needs_redraw: bool,
 }
 
 impl App {
@@ -406,6 +417,7 @@ impl App {
             git_roots: [None, None, None],
             git_checked_dirs: [None, None, None],
             git_progress: None,
+            bulk_rename: None,
             dir_cache: DirCache::new(64),
             dir_load_tx,
             dir_load_rx,
@@ -418,6 +430,9 @@ impl App {
             nav_check_rx: None,
             file_op_rx: None,
             theme_load_rx: None,
+            archive_state: None,
+            archive_load_rx: None,
+            needs_redraw: true,
         };
         app.refresh_git_status();
         app.apply_transparency();
@@ -730,6 +745,54 @@ impl App {
                     "Clipboard not available".into()
                 };
             }
+            FileOpResult::BulkRename {
+                total,
+                records,
+                errors,
+            } => {
+                let ok = records.len();
+                if !records.is_empty() {
+                    self.undo_stack.push(records);
+                }
+                if errors.is_empty() {
+                    self.status_message = format!("Renamed {ok}/{total} file(s)");
+                } else {
+                    self.status_message =
+                        format!("Renamed {ok}/{total}, errors: {}", errors.join("; "));
+                }
+                self.refresh_current_panel();
+                self.tree_dirty = true;
+            }
+            FileOpResult::ArchiveExtract { entry_path, result } => {
+                match result {
+                    Ok(count) => {
+                        let what = if entry_path.is_empty() {
+                            "all entries".to_string()
+                        } else {
+                            entry_path
+                        };
+                        self.status_message = format!("Extracted {what} ({count} items)");
+                    }
+                    Err(e) => {
+                        self.status_message = format!("Extract failed: {e}");
+                    }
+                }
+                self.refresh_current_panel();
+                self.tree_dirty = true;
+            }
+            FileOpResult::ArchiveCreate { name, count, result } => {
+                match result {
+                    Ok(()) => {
+                        self.status_message =
+                            format!("Created {name} from {count} item(s)");
+                    }
+                    Err(e) => {
+                        self.status_message = format!("Archive failed: {e}");
+                    }
+                }
+                self.refresh_current_panel();
+                self.tree_dirty = true;
+            }
         }
     }
 
@@ -797,6 +860,8 @@ impl App {
             Mode::SelectPattern => self.handle_select_pattern(key),
             Mode::UnselectPattern => self.handle_unselect_pattern(key),
             Mode::Conflict => self.handle_conflict(key),
+            Mode::BulkRename => self.handle_bulk_rename(key),
+            Mode::Archive => self.handle_archive(key),
         }
 
         self.update_preview();
@@ -931,6 +996,7 @@ impl App {
             git_roots: [None, None, None],
             git_checked_dirs: [None, None, None],
             git_progress: None,
+            bulk_rename: None,
             dir_cache: DirCache::new(64),
             dir_load_tx,
             dir_load_rx,
@@ -943,6 +1009,9 @@ impl App {
             nav_check_rx: None,
             file_op_rx: None,
             theme_load_rx: None,
+            archive_state: None,
+            archive_load_rx: None,
+            needs_redraw: true,
         }
     }
 }

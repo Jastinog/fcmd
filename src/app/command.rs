@@ -248,6 +248,19 @@ impl App {
             }
 
             "du" => self.start_du(),
+            "bulkrename" | "brn" => self.enter_bulk_rename(),
+
+            "archive" | "ar" => {
+                let name = match arg.filter(|a| !a.is_empty()) {
+                    Some(n) => n,
+                    None => {
+                        self.status_message =
+                            "Usage: :archive <name.zip|.tar.gz|.tar.bz2|.tar.xz>".into();
+                        return;
+                    }
+                };
+                self.create_archive(name);
+            }
 
             "marks" => {
                 if self.marks.is_empty() {
