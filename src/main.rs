@@ -164,6 +164,7 @@ async fn run(
                 }
             }
             _ = tick.tick() => {
+                app.tick_count = app.tick_count.wrapping_add(1);
                 let before = snapshot(app);
                 app.poll_tasks();
                 app.poll_conflicts();

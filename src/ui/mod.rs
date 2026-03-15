@@ -33,6 +33,7 @@ pub struct RenderContext<'a> {
     pub git_statuses: &'a HashMap<PathBuf, char>,
     pub theme: &'a Theme,
     pub is_select_mode: bool,
+    pub tick_count: u32,
 }
 
 // ── Main render ─────────────────────────────────────────────────────
@@ -120,6 +121,7 @@ pub fn render(f: &mut Frame, app: &mut App) {
         git_statuses: &app.git_statuses,
         theme: &app.theme,
         is_select_mode: app.mode == Mode::Select,
+        tick_count: app.tick_count,
     };
 
     let panels_active = !app.tree_focused;

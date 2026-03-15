@@ -190,6 +190,8 @@ pub struct App {
     pub visual_marks: HashMap<PathBuf, u8>,
     // Database
     pub db: Option<std::sync::Arc<std::sync::Mutex<crate::db::Db>>>,
+    // Animation tick counter (incremented every 250ms for spinner etc.)
+    pub tick_count: u32,
     // Task manager (copy/move/delete operations)
     pub task_manager: task_manager::TaskManager,
     pub task_notification: Option<String>,
@@ -380,6 +382,7 @@ impl App {
             visual_marks,
             dir_sorts,
             db,
+            tick_count: 0,
             task_manager: task_manager::TaskManager::new(),
             task_notification: None,
             conflict_rx: None,
@@ -959,6 +962,7 @@ impl App {
             visual_marks: HashMap::new(),
             dir_sorts: HashMap::new(),
             db,
+            tick_count: 0,
             task_manager: task_manager::TaskManager::new(),
             task_notification: None,
             conflict_rx: None,
