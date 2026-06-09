@@ -296,6 +296,21 @@ impl Panel {
         } else if self.selected >= self.entries.len() {
             self.selected = self.entries.len() - 1;
         }
+        self.clamp_visual_anchor();
+    }
+
+    /// Keep `visual_anchor` within bounds after the entries list changes.
+    /// A background refresh can shrink the directory while the user is in
+    /// Visual mode; without this, `visual_range()` would slice
+    /// `entries[lo..=hi]` out of range and panic.
+    fn clamp_visual_anchor(&mut self) {
+        if let Some(a) = self.visual_anchor {
+            if self.entries.is_empty() {
+                self.visual_anchor = None;
+            } else if a >= self.entries.len() {
+                self.visual_anchor = Some(self.entries.len() - 1);
+            }
+        }
     }
 
     /// Append a batch of unsorted entries during streaming load.
@@ -307,6 +322,7 @@ impl Panel {
     /// Swap in entries loaded asynchronously, optionally re-selecting a named entry.
     pub fn apply_entries(&mut self, entries: Vec<FileEntry>, select_name: Option<&str>) {
         self.entries = entries;
+        self.clamp_visual_anchor();
         if let Some(name) = select_name {
             if let Some(pos) = self.entries.iter().position(|e| e.name == name) {
                 self.selected = pos;
@@ -735,6 +751,47 @@ mod tests {
     fn visual_range_none_without_anchor() {
         let p = make_panel_with_entries(5);
         assert_eq!(p.visual_range(), None);
+    }
+
+    #[test]
+    fn apply_entries_clamps_stale_visual_anchor() {
+        // Simulate: user is in Visual mode with anchor deep in the list, then a
+        // background refresh replaces entries with a much shorter list.
+        let mut p = make_panel_with_entries(10);
+        p.visual_anchor = Some(8);
+        p.selected = 0;
+
+        // Shrink to 3 entries (e.g. files were moved out of this dir).
+        let shorter: Vec<FileEntry> = (0..3)
+            .map(|i| FileEntry {
+                name: format!("f{i}"),
+                path: PathBuf::from(format!("/tmp/f{i}")),
+                is_dir: false,
+                size: 0,
+                modified: None,
+                created: None,
+                is_symlink: false,
+            })
+            .collect();
+        p.apply_entries(shorter, None);
+
+        // Anchor must be clamped into range so visual_range()/targeted_paths()
+        // cannot slice out of bounds.
+        let (lo, hi) = p.visual_range().unwrap();
+        assert!(hi < p.entries.len());
+        assert!(lo <= hi);
+        // targeted_paths must not panic.
+        let _ = p.targeted_paths();
+    }
+
+    #[test]
+    fn apply_entries_clears_anchor_when_empty() {
+        let mut p = make_panel_with_entries(5);
+        p.visual_anchor = Some(3);
+        p.apply_entries(Vec::new(), None);
+        assert_eq!(p.visual_anchor, None);
+        assert_eq!(p.visual_range(), None);
+        assert!(p.targeted_paths().is_empty());
     }
 
     #[test]
