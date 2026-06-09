@@ -165,7 +165,7 @@ fn list_zip(path: &Path) -> io::Result<Vec<ArchiveEntry>> {
                     _ => {
                         let m = month - 1;
                         let leap = if year % 4 == 0 { 1 } else { 0 };
-                        (m * 30 + (m + 1) / 2 - 2 + leap) as i64
+                        (m * 30 + m.div_ceil(2) - 2 + leap) as i64
                     }
                 }
                 + day as i64
@@ -461,14 +461,14 @@ fn create_zip(paths: &[PathBuf], base_dir: &Path, output: &Path) -> io::Result<(
             let name = rel.to_string_lossy().into_owned();
             archive
                 .start_file(&name, options)
-                .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
+                .map_err(io::Error::other)?;
             let mut f = File::open(path)?;
             io::copy(&mut f, &mut archive)?;
         }
     }
     archive
         .finish()
-        .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
+        .map_err(io::Error::other)?;
     Ok(())
 }
 
@@ -481,7 +481,7 @@ fn add_dir_to_zip(
     let dir_name = format!("{}/", rel.to_string_lossy());
     archive
         .add_directory(&dir_name, options)
-        .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
+        .map_err(io::Error::other)?;
 
     for entry in std::fs::read_dir(dir)? {
         let entry = entry?;
@@ -493,7 +493,7 @@ fn add_dir_to_zip(
             let name = child_rel.to_string_lossy().into_owned();
             archive
                 .start_file(&name, options)
-                .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
+                .map_err(io::Error::other)?;
             let mut f = File::open(&child)?;
             io::copy(&mut f, archive)?;
         }

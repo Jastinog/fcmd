@@ -194,11 +194,10 @@ impl App {
                     self.rename_input.pop();
                 }
             }
-            KeyCode::Char(c) if c.is_ascii_digit() && c <= '7' => {
-                if self.rename_input.len() < 4 {
+            KeyCode::Char(c) if c.is_ascii_digit() && c <= '7'
+                && self.rename_input.len() < 4 => {
                     self.rename_input.push(c);
                 }
-            }
             _ => {}
         }
     }

@@ -118,7 +118,7 @@ impl Preview {
                 }
 
                 let text = String::from_utf8_lossy(&bytes);
-                let lines: Vec<String> = text.lines().take(MAX_LINES).map(|l| sanitize_line(l)).collect();
+                let lines: Vec<String> = text.lines().take(MAX_LINES).map(sanitize_line).collect();
                 let info = format!("{} lines", lines.len());
                 Preview {
                     lines,
@@ -596,7 +596,7 @@ mod tests {
         std::fs::create_dir_all(&dir).unwrap();
         let path = dir.join("test.bin");
         // Write 5 bytes — tests incomplete line padding
-        std::fs::write(&path, &[0x41, 0x42, 0x00, 0x43, 0x44]).unwrap();
+        std::fs::write(&path, [0x41, 0x42, 0x00, 0x43, 0x44]).unwrap();
 
         let p = Preview::load(&path, MAX_LINES);
         assert!(p.is_binary);
@@ -707,12 +707,8 @@ mod tests {
         let path = dir.path().join("ctrl.bin");
         // Create content with >10% control chars (but no NUL)
         let mut data = Vec::new();
-        for _ in 0..20 {
-            data.push(0x01); // control char
-        }
-        for _ in 0..80 {
-            data.push(b'A'); // normal ASCII
-        }
+        data.extend(std::iter::repeat_n(0x01, 20)); // control chars
+        data.extend(std::iter::repeat_n(b'A', 80)); // normal ASCII
         std::fs::write(&path, &data).unwrap();
         let p = Preview::load(&path, MAX_LINES);
         assert!(p.is_binary);

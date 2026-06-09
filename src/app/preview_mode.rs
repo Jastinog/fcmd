@@ -73,14 +73,13 @@ impl App {
                     self.scroll_preview_to_match();
                 }
             }
-            KeyCode::Char('N') => {
-                if !self.preview_search_matches.is_empty() {
+            KeyCode::Char('N')
+                if !self.preview_search_matches.is_empty() => {
                     let len = self.preview_search_matches.len();
                     self.preview_search_current =
                         (self.preview_search_current + len - 1) % len;
                     self.scroll_preview_to_match();
                 }
-            }
             _ => {}
         }
     }

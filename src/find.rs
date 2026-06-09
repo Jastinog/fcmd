@@ -280,7 +280,7 @@ impl FindState {
                         .map(|s| (i, s))
                 })
                 .collect();
-            scored.sort_by(|a, b| b.1.cmp(&a.1));
+            scored.sort_by_key(|&(_, s)| std::cmp::Reverse(s));
             self.filtered = scored.into_iter().map(|(i, _)| i).collect();
         }
         // Clamp selected

@@ -25,7 +25,7 @@ pub(super) fn render_status(f: &mut Frame, app: &App, area: Rect) {
     // Confirm mode — overlay handles the popup, status bar shows mode
     if app.mode == Mode::Confirm {
         let mut spans = vec![
-            Span::styled(format!(" \u{f05e8} CONFIRM "), Style::default().fg(t.bg_text).bg(t.red)),
+            Span::styled(" \u{f05e8} CONFIRM ".to_string(), Style::default().fg(t.bg_text).bg(t.red)),
             Span::styled(SEP_RIGHT, Style::default().fg(t.red).bg(t.status_bg)),
         ];
 
@@ -48,68 +48,68 @@ pub(super) fn render_status(f: &mut Frame, app: &App, area: Rect) {
     // ── Mode segment ────────────────
     let mode_str: String;
     let (mode_ref, mode_bg) = if app.tree_focused && app.mode == Mode::Normal {
-        mode_str = format!("\u{f0645} TREE");    // 󰙅
+        mode_str = "\u{f0645} TREE".to_string();    // 󰙅
         (mode_str.as_str(), t.cyan)
     } else {
         match app.mode {
             Mode::Normal => {
-                mode_str = format!("\u{f018d} NORMAL");  // 󰆍
+                mode_str = "\u{f018d} NORMAL".to_string();  // 󰆍
                 (mode_str.as_str(), t.green)
             }
             Mode::Visual => {
-                mode_str = format!("\u{f0489} VISUAL");  // 󰒉
+                mode_str = "\u{f0489} VISUAL".to_string();  // 󰒉
                 (mode_str.as_str(), t.magenta)
             }
             Mode::Select => {
-                mode_str = format!("\u{f0135} SELECT");  // 󰄵
+                mode_str = "\u{f0135} SELECT".to_string();  // 󰄵
                 (mode_str.as_str(), t.orange)
             }
             Mode::Find => {
-                mode_str = format!("\u{f002} FIND");     //
+                mode_str = "\u{f002} FIND".to_string();     //
                 (mode_str.as_str(), t.cyan)
             }
             Mode::Preview => {
-                mode_str = format!("\u{f0208} PREVIEW"); // 󰈈
+                mode_str = "\u{f0208} PREVIEW".to_string(); // 󰈈
                 (mode_str.as_str(), t.cyan)
             }
             Mode::Help => {
-                mode_str = format!("\u{f02d6} HELP");    // 󰋖
+                mode_str = "\u{f02d6} HELP".to_string();    // 󰋖
                 (mode_str.as_str(), t.cyan)
             }
             Mode::ThemePicker => {
-                mode_str = format!("\u{f03d8} THEME");   // 󰏘
+                mode_str = "\u{f03d8} THEME".to_string();   // 󰏘
                 (mode_str.as_str(), t.cyan)
             }
             Mode::Bookmarks => {
-                mode_str = format!("\u{f02e6} BOOKMARKS"); // 󰋦
+                mode_str = "\u{f02e6} BOOKMARKS".to_string(); // 󰋦
                 (mode_str.as_str(), t.cyan)
             }
             Mode::Rename => {
-                mode_str = format!("\u{f03eb} RENAME");  // 󰏫
+                mode_str = "\u{f03eb} RENAME".to_string();  // 󰏫
                 (mode_str.as_str(), t.yellow)
             }
             Mode::Create => {
-                mode_str = format!("\u{f0415} CREATE");  // 󰐕
+                mode_str = "\u{f0415} CREATE".to_string();  // 󰐕
                 (mode_str.as_str(), t.green)
             }
             Mode::Chmod => {
-                mode_str = format!("\u{f033e} CHMOD");   // 󰌾
+                mode_str = "\u{f033e} CHMOD".to_string();   // 󰌾
                 (mode_str.as_str(), t.orange)
             }
             Mode::Chown => {
-                mode_str = format!("\u{f0004} CHOWN");   // 󰀄
+                mode_str = "\u{f0004} CHOWN".to_string();   // 󰀄
                 (mode_str.as_str(), t.orange)
             }
             Mode::Info => {
-                mode_str = format!("\u{f02fd} INFO");    // 󰋽
+                mode_str = "\u{f02fd} INFO".to_string();    // 󰋽
                 (mode_str.as_str(), t.cyan)
             }
             Mode::Search => {
-                mode_str = format!("\u{f0349} SEARCH");  // 󰍉
+                mode_str = "\u{f0349} SEARCH".to_string();  // 󰍉
                 (mode_str.as_str(), t.cyan)
             }
             Mode::Command => {
-                mode_str = format!("\u{f018d} CMD");     // 󰆍
+                mode_str = "\u{f018d} CMD".to_string();     // 󰆍
                 (mode_str.as_str(), t.cyan)
             }
             _ => {

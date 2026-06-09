@@ -21,7 +21,7 @@ pub(in crate::ui) fn render_command_popup(f: &mut Frame, app: &App, area: Rect) 
 
     f.render_widget(Clear, popup);
 
-    let title = format!(" \u{f018d} Command ");
+    let title = " \u{f018d} Command ".to_string();
 
     let block = Block::default()
         .borders(Borders::ALL)

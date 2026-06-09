@@ -284,7 +284,7 @@ pub(in crate::ui) fn render_help(f: &mut Frame, app: &mut App, area: Rect) {
     let key_width = 14;
 
     let mut rows: Vec<Line> = Vec::with_capacity(total_rows);
-    for (lc, rc) in left_cells.into_iter().zip(right_cells.into_iter()) {
+    for (lc, rc) in left_cells.into_iter().zip(right_cells) {
         let line = match (lc, rc) {
             (Cell::Separator, Cell::Separator) => {
                 // Full-width dim separator between blocks
@@ -323,7 +323,7 @@ pub(in crate::ui) fn render_help(f: &mut Frame, app: &mut App, area: Rect) {
     let sep_y = inner.y + list_height as u16;
     let sep_area = Rect::new(inner.x, sep_y, inner.width, 1);
     let sep_text = if total_rows > list_height {
-        let pct = if max_scroll == 0 { 100 } else { (scroll * 100) / max_scroll };
+        let pct = (scroll * 100).checked_div(max_scroll).unwrap_or(100);
         let indicator = format!(" {pct}%");
         let dash_len = inner_w.saturating_sub(indicator.chars().count());
         format!("{}{indicator}", "\u{2500}".repeat(dash_len))

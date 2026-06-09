@@ -33,11 +33,10 @@ impl App {
 
         // Set notification from the last finished task if no running tasks remain
         if self.task_manager.active_count() == 0 {
-            if let Some(task) = self.task_manager.tasks().last() {
-                if let task_manager::TaskState::Finished { summary, .. } = &task.state {
+            if let Some(task) = self.task_manager.tasks().last()
+                && let task_manager::TaskState::Finished { summary, .. } = &task.state {
                     self.task_notification = Some(summary.clone());
                 }
-            }
             self.task_manager.remove_finished();
         }
 

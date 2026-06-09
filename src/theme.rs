@@ -341,13 +341,11 @@ impl Theme {
         if let Ok(entries) = std::fs::read_dir(&themes_dir) {
             for entry in entries.flatten() {
                 let path = entry.path();
-                if path.extension().is_some_and(|e| e == "toml") {
-                    if let Some(fname) = path.file_name().and_then(|f| f.to_str()) {
-                        if !builtin_names.contains(fname) {
+                if path.extension().is_some_and(|e| e == "toml")
+                    && let Some(fname) = path.file_name().and_then(|f| f.to_str())
+                        && !builtin_names.contains(fname) {
                             let _ = std::fs::remove_file(&path);
                         }
-                    }
-                }
             }
         }
 
@@ -363,14 +361,12 @@ impl Theme {
 
 /// Check if a theme's bg color is light (luminance > 128).
 fn is_light_theme_content(content: &str) -> bool {
-    if let Ok(table) = content.parse::<toml::Table>() {
-        if let Some(bg_str) = table.get("bg").and_then(|v| v.as_str()) {
-            if let Some(Color::Rgb(r, g, b)) = parse_hex(bg_str) {
+    if let Ok(table) = content.parse::<toml::Table>()
+        && let Some(bg_str) = table.get("bg").and_then(|v| v.as_str())
+            && let Some(Color::Rgb(r, g, b)) = parse_hex(bg_str) {
                 let lum = 0.299 * (r as f64) + 0.587 * (g as f64) + 0.114 * (b as f64);
                 return lum > 128.0;
             }
-        }
-    }
     false
 }
 

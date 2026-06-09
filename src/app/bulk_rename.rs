@@ -58,13 +58,11 @@ impl BulkRenameState {
             }
             // Check filesystem: if target name differs and exists on disk,
             // and is not another entry in this batch (which will be renamed away)
-            if e.new_name != e.original_name && !original_names.contains(e.new_name.as_str()) {
-                if let Some(parent) = e.original_path.parent() {
-                    if parent.join(&e.new_name).exists() {
+            if e.new_name != e.original_name && !original_names.contains(e.new_name.as_str())
+                && let Some(parent) = e.original_path.parent()
+                    && parent.join(&e.new_name).exists() {
                         return true;
                     }
-                }
-            }
         }
         false
     }
@@ -86,13 +84,11 @@ impl BulkRenameState {
                 seen.insert(&e.new_name, i);
             }
             // Check filesystem conflict
-            if e.new_name != e.original_name && !original_names.contains(e.new_name.as_str()) {
-                if let Some(parent) = e.original_path.parent() {
-                    if parent.join(&e.new_name).exists() {
+            if e.new_name != e.original_name && !original_names.contains(e.new_name.as_str())
+                && let Some(parent) = e.original_path.parent()
+                    && parent.join(&e.new_name).exists() {
                         result.insert(i);
                     }
-                }
-            }
         }
         result
     }

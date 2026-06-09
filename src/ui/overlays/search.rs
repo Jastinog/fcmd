@@ -38,7 +38,7 @@ pub(in crate::ui) fn render_search_popup(f: &mut Frame, app: &App, area: Rect) {
     let title = if !app.search_query.is_empty() {
         format!(" \u{f0349} Search ({match_count}) ")
     } else {
-        format!(" \u{f0349} Search ")
+        " \u{f0349} Search ".to_string()
     };
 
     let block = Block::default()

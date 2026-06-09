@@ -100,8 +100,8 @@ fn expand_dir(
             }
         }
     }
-    subdirs.sort_by(|a, b| a.0.to_lowercase().cmp(&b.0.to_lowercase()));
-    files.sort_by(|a, b| a.0.to_lowercase().cmp(&b.0.to_lowercase()));
+    subdirs.sort_by_key(|a| a.0.to_lowercase());
+    files.sort_by_key(|a| a.0.to_lowercase());
 
     // Combined: dirs first, then files — needed for correct "is_last" connectors
     let total = subdirs.len() + files.len();

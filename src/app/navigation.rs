@@ -114,11 +114,7 @@ impl App {
 
     pub(super) fn toggle_tree(&mut self) {
         self.show_tree = !self.show_tree;
-        if self.show_tree {
-            self.tree_focused = true;
-        } else {
-            self.tree_focused = false;
-        }
+        self.tree_focused = self.show_tree;
     }
 
     pub(super) fn toggle_sort_reverse(&mut self) {
@@ -144,14 +140,13 @@ impl App {
         let sort_reverse = self.active_panel().sort_reverse;
         let show_hidden = self.active_panel().show_hidden;
 
-        if let Some(cached) = self.dir_cache.get(&path) {
-            if cached.show_hidden == show_hidden {
+        if let Some(cached) = self.dir_cache.get(&path)
+            && cached.show_hidden == show_hidden {
                 let mut entries = cached.entries.clone();
                 panel::resort_entries(&mut entries, sort_mode, sort_reverse, &self.dir_sizes);
                 self.active_panel_mut().apply_entries(entries, None);
                 return;
             }
-        }
         self.reload_active_panel();
     }
 
@@ -292,8 +287,8 @@ impl App {
         let show_hidden = panel.show_hidden;
 
         // Try cache hit
-        if let Some(cached) = self.dir_cache.get(&path) {
-            if cached.show_hidden == show_hidden {
+        if let Some(cached) = self.dir_cache.get(&path)
+            && cached.show_hidden == show_hidden {
                 let mut entries = cached.entries.clone();
                 // Re-sort if sort mode differs from cached
                 if cached.sort_mode != sort_mode || cached.sort_reverse != sort_reverse {
@@ -303,7 +298,6 @@ impl App {
                 panel.apply_entries(entries, select_name.as_deref());
                 panel.loading = false;
             }
-        }
 
         // Always refresh from disk in background
         self.spawn_dir_load(panel_idx, select_name);

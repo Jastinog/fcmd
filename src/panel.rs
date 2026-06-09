@@ -506,15 +506,15 @@ pub fn sort_file_entries(
                     (None, None) => std::cmp::Ordering::Equal,
                 }
             });
-            files.sort_by(|a, b| a.size.cmp(&b.size));
+            files.sort_by_key(|a| a.size);
         }
         SortMode::Modified => {
-            dirs.sort_by(|a, b| a.modified.cmp(&b.modified));
-            files.sort_by(|a, b| a.modified.cmp(&b.modified));
+            dirs.sort_by_key(|a| a.modified);
+            files.sort_by_key(|a| a.modified);
         }
         SortMode::Created => {
-            dirs.sort_by(|a, b| a.created.cmp(&b.created));
-            files.sort_by(|a, b| a.created.cmp(&b.created));
+            dirs.sort_by_key(|a| a.created);
+            files.sort_by_key(|a| a.created);
         }
         SortMode::Extension => {
             sort_name(dirs);
@@ -628,11 +628,10 @@ impl DirCache {
     }
 
     pub fn remove(&mut self, path: &Path) {
-        if self.map.remove(path).is_some() {
-            if let Some(pos) = self.order.iter().position(|p| p == path) {
+        if self.map.remove(path).is_some()
+            && let Some(pos) = self.order.iter().position(|p| p == path) {
                 self.order.remove(pos);
             }
-        }
     }
 
     pub fn clear(&mut self) {

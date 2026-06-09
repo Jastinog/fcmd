@@ -157,8 +157,8 @@ impl ArchiveState {
     }
 
     pub fn toggle_expand(&mut self) {
-        if let Some(node) = self.tree.get(self.cursor) {
-            if node.is_dir {
+        if let Some(node) = self.tree.get(self.cursor)
+            && node.is_dir {
                 let path = node.full_path.clone();
                 if self.expanded.contains(&path) {
                     self.expanded.remove(&path);
@@ -171,7 +171,6 @@ impl ArchiveState {
                     self.cursor = self.tree.len().saturating_sub(1);
                 }
             }
-        }
     }
 
     pub fn collapse(&mut self) {

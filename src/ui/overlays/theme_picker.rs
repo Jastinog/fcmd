@@ -354,7 +354,7 @@ fn render_preview_panel(f: &mut Frame, pt: &Theme, area: Rect) {
     let show_code = panels_area.width >= 40;
 
     let (tree_rect, panel_rect, code_rect) = if show_tree && show_code {
-        let tree_w = ((panels_area.width as u32 * 20 / 100) as u16).max(10).min(16);
+        let tree_w = ((panels_area.width as u32 * 20 / 100) as u16).clamp(10, 16);
         let code_w = ((panels_area.width as u32 * 35 / 100) as u16).max(14);
         let panel_w = panels_area.width.saturating_sub(tree_w + code_w);
         (

@@ -255,7 +255,7 @@ pub struct App {
     // Async chown picker loading
     pub chown_load_rx: Option<tokio::sync::oneshot::Receiver<ChownLoadResult>>,
     // Async dir sizes loading from DB
-    pub(super) dir_sizes_load_rx: Option<tokio::sync::oneshot::Receiver<Vec<(PathBuf, HashMap<PathBuf, u64>)>>>,
+    pub(super) dir_sizes_load_rx: Option<tokio::sync::oneshot::Receiver<DirSizesLoadResult>>,
     // Async navigation validation
     pub nav_check_rx: Option<tokio::sync::oneshot::Receiver<NavCheckResult>>,
     // Bulk rename
@@ -802,12 +802,11 @@ impl App {
     /// Apply async theme preview load (for theme picker).
     pub fn apply_theme_preview(&mut self, mut theme: Option<Theme>) {
         if self.mode == Mode::ThemePicker {
-            if self.transparent {
-                if let Some(ref mut t) = theme {
+            if self.transparent
+                && let Some(ref mut t) = theme {
                     t.bg = ratatui::style::Color::Reset;
                     t.status_bg = ratatui::style::Color::Reset;
                 }
-            }
             self.theme_preview = theme;
         }
     }

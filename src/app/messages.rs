@@ -59,6 +59,9 @@ pub enum DirLoadMsg {
     },
 }
 
+/// Per-directory cached sizes loaded from the DB, keyed by parent directory.
+pub type DirSizesLoadResult = Vec<(PathBuf, HashMap<PathBuf, u64>)>;
+
 pub struct PreviewLoadResult {
     pub path: PathBuf,
     pub preview: Preview,

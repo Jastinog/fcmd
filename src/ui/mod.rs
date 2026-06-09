@@ -137,12 +137,12 @@ pub fn render(f: &mut Frame, app: &mut App) {
     };
 
     // Render file panels
-    for i in 0..file_panel_count {
+    for (i, &area) in panel_areas.iter().enumerate().take(file_panel_count) {
         let phantoms = app.phantoms_for(&tab.panels[i].path);
         panel::render_panel(
             f,
             &tab.panels[i],
-            panel_areas[i],
+            area,
             panels_active && i == active_idx,
             &phantoms,
             &ctx,
@@ -342,11 +342,7 @@ fn render_tab_bar(f: &mut Frame, app: &App, area: Rect) {
                 None
             }
         })
-    } else if let Some(ref notif) = app.task_notification {
-        Some((notif.clone(), t.fg))
-    } else {
-        None
-    };
+    } else { app.task_notification.as_ref().map(|notif| (notif.clone(), t.fg)) };
 
     // Compute info segment width
     let tabs_used: usize = spans.iter().map(|s| util::display_width(&s.content)).sum();
