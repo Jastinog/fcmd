@@ -19,30 +19,37 @@ impl App {
         let events = self.task_manager.poll_all();
 
         let mut needs_refresh = false;
+        // Notification reflects the most recent task that finished this poll. Finished
+        // tasks are kept in the manager (visible in the task overlay), so the old
+        // "last task once active_count==0" approach no longer applies.
+        let mut last_summary = None;
 
         for event in events {
             match event {
-                TaskEvent::PasteFinished { records, error, is_copy } => {
+                TaskEvent::PasteFinished { records, error, is_copy, summary } => {
                     self.undo_stack.push(records);
                     if error.is_none() && !is_copy {
                         self.register = None;
                     }
+                    last_summary = Some(summary);
                     needs_refresh = true;
                 }
-                TaskEvent::DeleteFinished => {
+                TaskEvent::DeleteFinished { summary } => {
+                    last_summary = Some(summary);
+                    needs_refresh = true;
+                }
+                TaskEvent::ArchiveFinished { summary } => {
+                    last_summary = Some(summary);
                     needs_refresh = true;
                 }
             }
         }
 
-        // Set notification from the last finished task if no running tasks remain
-        if self.task_manager.active_count() == 0 {
-            if let Some(task) = self.task_manager.tasks().last()
-                && let task_manager::TaskState::Finished { summary, .. } = &task.state {
-                    self.task_notification = Some(summary.clone());
-                    self.task_notification_tick = Some(self.tick_count);
-                }
-            self.task_manager.remove_finished();
+        if let Some(summary) = last_summary {
+            self.task_notification = Some(summary);
+            self.task_notification_tick = Some(self.tick_count);
+            // Keep retained finished history bounded.
+            self.task_manager.prune_finished();
         }
 
         // Auto-expire the completion notification after a few seconds so it stays
@@ -111,7 +118,7 @@ impl App {
             rx,
             started_at: Instant::now(),
         });
-        self.status_message = format!("Calculating sizes for {n} directories...");
+        self.background_progress = Some(format!("Calculating sizes for {n} directories..."));
     }
 
     pub fn poll_du(&mut self) {
@@ -145,8 +152,8 @@ impl App {
             current,
         }) = last_progress
         {
-            self.status_message =
-                format!("Calculating sizes... [{}/{}] {current}", done + 1, total);
+            self.background_progress =
+                Some(format!("Calculating sizes... [{}/{}] {current}", done + 1, total));
         }
 
         if let Some(DuMsg::Finished { sizes }) = finished {
@@ -171,6 +178,7 @@ impl App {
             let total_str = format_bytes(total);
             self.status_message = format!("{count} dirs measured: {total_str} total ({secs:.1}s)");
             self.du_progress = None;
+            self.background_progress = None;
         }
     }
 
@@ -347,7 +355,10 @@ mod tests {
         // Start first DU
         app.start_du();
         assert!(app.du_progress.is_some());
-        // Second start should show "already in progress"
+        // Progress goes to the dedicated background slot, leaving status_message free.
+        assert!(app.background_progress.is_some());
+        assert!(app.status_message.is_empty());
+        // Second start should show "already in progress" (a user message, not progress)
         app.start_du();
         assert!(app.status_message.contains("already in progress"));
     }
@@ -366,10 +377,13 @@ mod tests {
             sizes: vec![(PathBuf::from("/test/subdir"), 4096)],
         }).await.unwrap();
 
+        app.background_progress = Some("Calculating...".into());
         app.poll_du();
         assert!(app.du_progress.is_none());
         assert_eq!(app.dir_sizes.get(&PathBuf::from("/test/subdir")), Some(&4096));
+        // The final summary surfaces as a transient status message; progress slot clears.
         assert!(app.status_message.contains("measured"));
+        assert!(app.background_progress.is_none());
     }
 
     #[tokio::test]
@@ -391,7 +405,14 @@ mod tests {
         // Don't finish yet — just progress
         app.poll_du();
         assert!(app.du_progress.is_some());
-        assert!(app.status_message.contains("Calculating sizes"));
+        // Progress now lives in background_progress (separate from status_message) so the
+        // per-keypress status clear and progress polls don't clobber each other.
+        assert!(
+            app.background_progress
+                .as_deref()
+                .is_some_and(|p| p.contains("Calculating sizes"))
+        );
+        assert!(app.status_message.is_empty());
     }
 
     #[tokio::test]

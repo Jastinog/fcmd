@@ -100,8 +100,8 @@ Legend: `[ ]` todo · `[~]` in progress · `[x]` done
 - [x] **P1.12 Archive ops: no confirm, no overwrite handling, no progress** — `src/app/archive.rs:305-438`
   Done (pragmatic subset): extract-all (`X`) now needs a double-press to confirm; create/
   extract/extract-all set an immediate status ("Extracting...", etc.) so the UI isn't silent.
-  DEFERRED to X.3: full streaming progress + conflict-routing for archive ops would require
-  archive::* to emit progress/conflict callbacks like ops::paste (large refactor).
+  Full streaming progress + conflict-routing for archive ops (archive::* emitting
+  progress/conflict callbacks like ops::paste) was tracked as X.5 and is now DONE.
 
 - [x] **P1.13 `:archive` overwrites existing archive silently** — `src/app/command.rs:264`, `src/app/archive.rs:407-439`
   No check whether output exists. Prompt overwrite/abort.
@@ -152,13 +152,75 @@ Legend: `[ ]` todo · `[~]` in progress · `[x]` done
 
 ## Cross-cutting follow-ups (after the above)
 
-- [ ] **X.1** Standardize all truncation on `util::truncate_to_width` / `display_width`
+- [x] **X.1** Standardize all truncation on `util::truncate_to_width` / `display_width`
   (tree, find_overlay, inputs, conflict `icon.len()`).
-- [ ] **X.2** Separate progress/spinner area from `status_message` (currently one line,
+  Done for every popup that renders real user data (filenames/paths/values), which is
+  where wide chars actually appear: `confirm`, `chmod` (file ctx + input + rwx breakdown),
+  `archive` (tree names), `info` (values), `bookmarks` (paths), `theme_picker` preview-file
+  panel, plus the shared `separator_with_indicator`. `bulk_rename`'s local
+  `truncate_with_ellipsis`/`char_width` now delegate to the util helpers, fixing all its
+  call sites at once.
+  INTENTIONALLY LEFT (char-count == display-width, no wide chars possible / out of scope):
+  static ASCII chrome in `help`, `which_key`, and the `theme_picker` mock UI; `archive`
+  search-prefix/indent; `chown` user/group lists (deferred to X.4); and the `preview`
+  in-overlay search bar, whose mid-string cursor scroll needs its own width-aware rework
+  rather than a truncation swap.
+- [x] **X.2** Separate progress/spinner area from `status_message` (currently one line,
   cleared every keypress → du-progress flicker, lost messages).
-- [ ] **X.3** Task-manager overlay: view all tasks, cancel, see per-task success/failure.
-- [ ] **X.4** Small-terminal degradation: minimum widths/heights, "terminal too small"
+  Done: added a dedicated `App::background_progress: Option<String>` field. The `du`
+  calculation now writes its progress there (start + per-poll), and `poll_du` clears it on
+  finish while putting the final summary into `status_message` as a transient result.
+  Rendered in the **tab bar** info segment with an animated spinner (priority: running
+  file-task → background_progress → task_notification), alongside file-task progress —
+  all background activity lives in one place. `status_message` (bottom bar) is now purely
+  user messages + ambient context and is no longer clobbered by progress polls, so the
+  per-keypress flicker and message loss are gone. `main.rs` `snapshot()` tracks the new
+  field and the tick loop animates the spinner while it's active.
+  Left intentionally: `status_message`'s per-keypress clear (by design; long-lived notices
+  already use the timed `task_notification` mechanism), and archive's one-shot
+  "Extracting..."/"Creating..." messages (single status writes, not flickering polls).
+- [x] **X.3** Task-manager overlay: view all tasks, cancel, see per-task success/failure.
+  Done: new `Mode::Tasks` overlay (open with `Space j` or `:tasks`/`:jobs`) lists every
+  copy/move/delete task with a live spinner + `[████░░] %` progress bar for running tasks
+  and a ✓/✗/⊘ glyph + summary for finished/failed/cancelled ones. `x`/`d` cancels the
+  selected task, `c` clears finished, `j/k/g/G` navigate, esc/q close.
+  Cancellation is real: each task carries a shared `Arc<AtomicBool>` checked between items
+  in `ops::paste_in_background` and the delete loop (a single in-flight file isn't
+  interrupted); partial records are still pushed to the undo stack. Added `cancelled` flags
+  to `ProgressMsg::Finished`/`DeleteMsg::Finished`.
+  Finished tasks are now retained (so the overlay shows history) instead of being purged on
+  completion; `poll_tasks` surfaces the completion notification from the finishing event and
+  prunes finished history to `MAX_FINISHED` (50). 628 tests, clippy clean.
+  NOTE: the P1.12 deferral (full *archive* op streaming/conflict-routing into the task
+  manager) is a separate `archive::*` refactor and is NOT part of this overlay work — it
+  is tracked below as X.5 (now done).
+
+- [x] **X.5** Stream archive create/extract through the task manager (progress + conflict
+  routing), the way `ops::paste` does. Carried over from P1.12.
+  Done: `archive::*` gained callback-driven streaming functions — `extract_stream`
+  (progress + per-file conflict resolver + `AtomicBool` cancel) and `create_stream`
+  (progress + cancel, returns written count). The old `extract_entry`/`extract_all`/
+  `create_archive` are kept as thin no-op-callback wrappers (still cover the round-trip
+  tests). `create_stream` flattens directories into a pre-ordered entry list and appends
+  one file at a time (replacing tar's opaque `append_dir_all`) so progress + between-file
+  cancellation work for both zip and tar; cancelled archives are still finalized to a valid
+  partial file. Extract conflicts route through the **existing** `ConflictInfo`/
+  `ConflictChoice`/`conflict_rxs`/`Mode::Conflict` machinery (same dialog as paste), so
+  extract no longer overwrites silently. New `ArchiveMsg` + `TaskKind::Archive` +
+  `add_archive`/`poll_all` arm + `TaskEvent::ArchiveFinished`; archive tasks appear in the
+  X.3 task overlay (`Space j`) with live progress bars, ✓/✗/⊘ status, and real cancellation,
+  and in the tab-bar info segment (magenta). The fire-and-forget `FileOpResult::Archive*`
+  path is removed. 647 tests, clippy clean.
+- [x] **X.4** Small-terminal degradation: minimum widths/heights, "terminal too small"
   messages instead of empty boxes.
+  Done: added `MIN_TERM_WIDTH`/`MIN_TERM_HEIGHT` (24×6) + `is_too_small()` guard at the top
+  of `render()` — below the floor it draws a centered, width-clamped "Terminal too small /
+  min 24×6 / now W×H" notice and skips the panel/overlay pipeline entirely (no garbled
+  boxes). Popups already clamp via `centered_rect` and have per-overlay panic guards
+  (P1.5/P1.6), and the global guard means they only ever render at ≥24×6.
+  Also finished the **chown** items deferred from X.1/P1.16: width-aware name truncation
+  (`display_width`/`truncate_to_width`) and ↑/↓ scroll indicators in the User/Group column
+  headers when a list overflows its window.
 
 ---
 
@@ -176,3 +238,25 @@ Legend: `[ ]` todo · `[~]` in progress · `[x]` done
   clippy clean. P1.12 progress-streaming and chown scroll indicators deferred to X.3/X.4.
 - 2026-06-09: **P2 done** (P2.1,2.2,2.4,2.5,2.6,2.7); P2.3 left as a design decision.
   619 tests, clippy clean.
+- 2026-06-09: **X.1 done** — width-aware truncation standardized across
+  confirm/chmod/archive/info/bookmarks/theme_picker-preview overlays and the shared
+  separator; bulk_rename helpers now delegate to util. ASCII-only chrome, chown (→X.4),
+  and the preview search input left intentionally (see X.1 note). 619 tests, clippy clean.
+- 2026-06-09: **X.4 done** — global "terminal too small" notice (24×6 floor) replaces the
+  broken layout below the minimum; chown gains width-aware truncation + ↑/↓ scroll
+  indicators (the X.1/P1.16 deferral). 621 tests, clippy clean.
+- 2026-06-09: **X.3 done** — task-manager overlay (`Space j` / `:tasks`) with live
+  progress bars, per-task success/fail/cancel status, real between-items cancellation
+  (`Arc<AtomicBool>` through ops/delete), retained finished history with pruning. Split the
+  archive-streaming remainder of P1.12 into a new **X.5**. 628 tests, clippy clean.
+- 2026-06-09: **X.2 done** — dedicated `background_progress` field for du (and future
+  background work), rendered with a spinner in the tab bar separate from `status_message`;
+  no more du-progress flicker or message clobbering. 628 tests, clippy clean.
+- 2026-06-09: **X.5 done** — archive create/extract now stream through the task manager.
+  New callback-driven `archive::extract_stream`/`create_stream` (progress + cancel; extract
+  also routes per-file overwrite conflicts through the existing paste conflict dialog, so
+  extract no longer overwrites silently). `create_stream` walks dirs into a flat entry list
+  and appends per-file (replacing tar `append_dir_all`) for real progress + cancellation.
+  Added `ArchiveMsg`/`TaskKind::Archive`/`TaskEvent::ArchiveFinished`; archive jobs show in
+  the X.3 overlay + tab bar. Removed the old `FileOpResult::Archive*` path. This closes the
+  P1.12 archive-streaming remainder. 647 tests, clippy clean.

@@ -144,7 +144,7 @@ pub(in crate::ui) fn render_bulk_rename(f: &mut Frame, app: &App, area: Rect) {
     if state.sub_mode == BulkRenameSubMode::FindReplace {
         let prefix = ":%s";
         let input = &state.find_replace_input;
-        let pad = iw.saturating_sub(prefix.len() + char_width(input) + 1);
+        let pad = iw.saturating_sub(char_width(prefix) + char_width(input) + 1);
         let fr_line = Line::from(vec![
             Span::styled(prefix, Style::default().fg(t.yellow)),
             Span::styled(input.as_str(), Style::default().fg(t.fg)),
@@ -218,18 +218,9 @@ pub(in crate::ui) fn render_bulk_rename(f: &mut Frame, app: &App, area: Rect) {
 }
 
 fn truncate_with_ellipsis(s: &str, max: usize) -> String {
-    let chars: Vec<char> = s.chars().collect();
-    if chars.len() <= max {
-        s.to_string()
-    } else if max > 1 {
-        let mut r: String = chars[..max - 1].iter().collect();
-        r.push('\u{2026}');
-        r
-    } else {
-        "\u{2026}".to_string()
-    }
+    crate::ui::util::truncate_to_width(s, max)
 }
 
 fn char_width(s: &str) -> usize {
-    s.chars().count()
+    crate::ui::util::display_width(s)
 }

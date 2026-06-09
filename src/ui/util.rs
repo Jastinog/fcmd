@@ -90,6 +90,19 @@ pub(crate) fn pad_to_width(s: &str, target_cols: usize) -> String {
     }
 }
 
+/// Fit a name into a row of `total_cols` that also has `reserved_cols` taken by fixed
+/// elements (icon/marker prefix, right-aligned suffix like a uid, etc.). Returns the
+/// width-truncated name and the number of padding columns needed to fill the remaining
+/// space. Centralises the icon + truncated-name + padding arithmetic that every list
+/// overlay shares, so the off-by-one between "space reserved" and "space filled" stays
+/// consistent.
+pub(crate) fn fit_truncated(name: &str, total_cols: usize, reserved_cols: usize) -> (String, usize) {
+    let max_name = total_cols.saturating_sub(reserved_cols);
+    let truncated = truncate_to_width(name, max_name);
+    let pad = total_cols.saturating_sub(reserved_cols + display_width(&truncated));
+    (truncated, pad)
+}
+
 pub(crate) fn format_time(time: SystemTime) -> String {
     let dt: DateTime<Local> = DateTime::<Utc>::from(time).into();
     let now = Local::now();
@@ -265,6 +278,38 @@ mod tests {
     #[test]
     fn pad_zero_width() {
         assert_eq!(pad_to_width("hello", 0), "hello");
+    }
+
+    // ── fit_truncated ──────────────────────────────────────────────
+
+    #[test]
+    fn fit_truncated_fills_remaining() {
+        let (name, pad) = fit_truncated("file", 10, 2);
+        assert_eq!(name, "file");
+        assert_eq!(pad, 4); // 10 - 2 - 4
+    }
+
+    #[test]
+    fn fit_truncated_truncates_and_no_pad() {
+        let (name, pad) = fit_truncated("hello world", 8, 2);
+        // Available width = 6, so name truncates to width 6 and fills it exactly.
+        assert_eq!(display_width(&name), 6);
+        assert_eq!(pad, 0);
+    }
+
+    #[test]
+    fn fit_truncated_reserved_exceeds_total() {
+        let (name, pad) = fit_truncated("x", 2, 5);
+        assert_eq!(name, "\u{2026}"); // max_name == 0 → ellipsis
+        assert_eq!(pad, 0);
+    }
+
+    #[test]
+    fn fit_truncated_cjk_pad() {
+        // 2 CJK chars (4 cols) into 8 cols with 0 reserved → 4 pad cols.
+        let (name, pad) = fit_truncated("日本", 8, 0);
+        assert_eq!(name, "日本");
+        assert_eq!(pad, 4);
     }
 
     // ── centered_rect ──────────────────────────────────────────────

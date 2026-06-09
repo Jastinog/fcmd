@@ -1,6 +1,8 @@
 use std::collections::VecDeque;
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::SystemTime;
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -68,6 +70,9 @@ pub enum ProgressMsg {
         records: Vec<OpRecord>,
         error: Option<String>,
         bytes_total: u64,
+        /// True when the task stopped early because the user cancelled it. The records
+        /// collected so far are still returned so a partial paste can be undone.
+        cancelled: bool,
     },
 }
 
@@ -474,6 +479,7 @@ pub fn paste_in_background(
     op: RegisterOp,
     tx: tokio::sync::mpsc::Sender<ProgressMsg>,
     conflict_tx: tokio::sync::mpsc::Sender<ConflictInfo>,
+    cancel: Arc<AtomicBool>,
 ) {
     tokio::task::spawn_blocking(move || {
         let bytes_total: u64 = paths.iter().map(|p| path_size(p)).sum();
@@ -492,6 +498,17 @@ pub fn paste_in_background(
 
         let mut records = Vec::new();
         for (i, src) in paths.iter().enumerate() {
+            // Cancellation is checked between items: an in-flight single file is not
+            // interrupted, but the remaining queue is skipped and what's done is kept.
+            if cancel.load(Ordering::Relaxed) {
+                let _ = tx.blocking_send(ProgressMsg::Finished {
+                    records,
+                    error: None,
+                    bytes_total,
+                    cancelled: true,
+                });
+                return;
+            }
             ctx.item_index = i;
 
             let result = match op {
@@ -511,6 +528,7 @@ pub fn paste_in_background(
                         records,
                         error: Some(format!("{e}")),
                         bytes_total,
+                        cancelled: false,
                     });
                     return;
                 }
@@ -520,6 +538,7 @@ pub fn paste_in_background(
             records,
             error: None,
             bytes_total,
+            cancelled: false,
         });
     });
 }

@@ -394,6 +394,7 @@ impl App {
             (".", "find global"),
             ("", "Other"),
             ("b", "bookmarks"),
+            ("j", "tasks"),
             ("?", "help"),
         ];
         const GOTO_HINTS: &[(&str, &str)] = &[("g", "top"), ("t", "next tab"), ("T", "prev tab")];

@@ -1,3 +1,6 @@
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
+
 use super::*;
 
 impl App {
@@ -56,11 +59,19 @@ impl App {
         let total = items.len();
         let paths: Vec<PathBuf> = items.into_iter().map(|(p, _)| p).collect();
         let (tx, rx) = tokio::sync::mpsc::channel(64);
+        let cancel = Arc::new(AtomicBool::new(false));
+        let cancel_worker = Arc::clone(&cancel);
 
         tokio::task::spawn_blocking(move || {
             let mut deleted = 0usize;
             let mut errors = Vec::new();
+            let mut cancelled = false;
             for (i, path) in paths.iter().enumerate() {
+                // Honour a cancel request between items; items already removed still count.
+                if cancel_worker.load(Ordering::Relaxed) {
+                    cancelled = true;
+                    break;
+                }
                 let name = path
                     .file_name()
                     .map(|n| n.to_string_lossy().into_owned())
@@ -84,10 +95,11 @@ impl App {
                 deleted,
                 errors,
                 permanent,
+                cancelled,
             });
         });
 
-        self.task_manager.add_delete(rx, permanent);
+        self.task_manager.add_delete(rx, permanent, cancel);
         self.mode = Mode::Normal;
     }
 
@@ -149,15 +161,23 @@ impl App {
         let paths: Vec<PathBuf> = reg_entries.iter().map(|e| e.path.clone()).collect();
         let (tx, rx) = tokio::sync::mpsc::channel(64);
         let (conflict_tx, conflict_rx) = tokio::sync::mpsc::channel(4);
-        ops::paste_in_background(paths, dst_dir.clone(), op, tx, conflict_tx);
+        let cancel = Arc::new(AtomicBool::new(false));
+        ops::paste_in_background(
+            paths,
+            dst_dir.clone(),
+            op,
+            tx,
+            conflict_tx,
+            Arc::clone(&cancel),
+        );
         // Track per-task: a concurrent paste must not clobber an earlier paste's
         // conflict channel, which would make the earlier task silently skip conflicts.
         self.conflict_rxs.push(conflict_rx);
 
         if op == RegisterOp::Yank {
-            self.task_manager.add_copy(rx, dst_dir, phantoms);
+            self.task_manager.add_copy(rx, dst_dir, phantoms, cancel);
         } else {
-            self.task_manager.add_move(rx, dst_dir, phantoms);
+            self.task_manager.add_move(rx, dst_dir, phantoms, cancel);
         }
     }
 

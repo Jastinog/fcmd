@@ -475,17 +475,15 @@ fn render_preview_panel(f: &mut Frame, pt: &Theme, area: Rect) {
                     _ => (" ", None),
                 };
 
-                let icon_w = icon.chars().count();
+                let icon_w = crate::ui::util::display_width(icon);
                 let meta_str = if entry.name == ".." { String::new() } else { format!("{:>5}", entry.meta) };
-                let meta_w = if entry.name == ".." { 0 } else { meta_str.chars().count() + 1 };
+                let meta_w = if entry.name == ".." { 0 } else { crate::ui::util::display_width(&meta_str) + 1 };
                 let name_w = iw.saturating_sub(2 + icon_w + meta_w + 1);
 
-                let name_display: String = if display_name.chars().count() > name_w {
-                    display_name.chars().take(name_w.saturating_sub(1)).chain(std::iter::once('\u{2026}')).collect()
-                } else {
-                    let pad = name_w.saturating_sub(display_name.chars().count());
-                    format!("{display_name}{}", " ".repeat(pad))
-                };
+                let name_display = crate::ui::util::pad_to_width(
+                    &crate::ui::util::truncate_to_width(&display_name, name_w),
+                    name_w,
+                );
 
                 let row_area = Rect::new(inner.x, inner.y + i as u16, inner.width, 1);
 

@@ -30,6 +30,7 @@ mod rename;
 pub(crate) mod task_manager;
 mod search;
 mod select_pattern;
+mod tasks;
 mod tree;
 mod visual;
 
@@ -62,6 +63,7 @@ pub enum Mode {
     Conflict,
     BulkRename,
     Archive,
+    Tasks,
 }
 
 #[derive(PartialEq, Eq, Clone, Copy, Debug)]
@@ -195,6 +197,9 @@ pub struct App {
     pub tick_count: u32,
     // Task manager (copy/move/delete operations)
     pub task_manager: task_manager::TaskManager,
+    /// Cursor/scroll for the task-manager overlay (Mode::Tasks).
+    pub tasks_cursor: usize,
+    pub tasks_scroll: usize,
     pub task_notification: Option<String>,
     /// `tick_count` when the current task notification was set, used to auto-expire it.
     pub task_notification_tick: Option<u32>,
@@ -208,6 +213,10 @@ pub struct App {
     pub dir_sizes: HashMap<PathBuf, u64>,
     pub du_progress: Option<DuProgress>,
     pub(super) dir_sizes_loaded: HashSet<PathBuf>,
+    /// Ongoing background-work text (e.g. dir-size calculation), shown with a spinner in
+    /// the tab bar. Kept separate from `status_message` so progress polls don't clobber
+    /// transient user messages and aren't wiped by the per-keypress status clear.
+    pub background_progress: Option<String>,
     // Tree cache invalidation
     pub tree_dirty: bool,
     pub tree_last_path: Option<PathBuf>,
@@ -389,6 +398,8 @@ impl App {
             db,
             tick_count: 0,
             task_manager: task_manager::TaskManager::new(),
+            tasks_cursor: 0,
+            tasks_scroll: 0,
             task_notification: None,
             task_notification_tick: None,
             conflict_rxs: Vec::new(),
@@ -396,6 +407,7 @@ impl App {
             conflict_selected: 0,
             dir_sizes: HashMap::new(),
             du_progress: None,
+            background_progress: None,
             dir_sizes_loaded: HashSet::new(),
             tree_dirty: true,
             tree_last_path: None,
@@ -772,36 +784,6 @@ impl App {
                 self.refresh_current_panel();
                 self.tree_dirty = true;
             }
-            FileOpResult::ArchiveExtract { entry_path, result } => {
-                match result {
-                    Ok(count) => {
-                        let what = if entry_path.is_empty() {
-                            "all entries".to_string()
-                        } else {
-                            entry_path
-                        };
-                        self.status_message = format!("Extracted {what} ({count} items)");
-                    }
-                    Err(e) => {
-                        self.status_message = format!("Extract failed: {e}");
-                    }
-                }
-                self.refresh_current_panel();
-                self.tree_dirty = true;
-            }
-            FileOpResult::ArchiveCreate { name, count, result } => {
-                match result {
-                    Ok(()) => {
-                        self.status_message =
-                            format!("Created {name} from {count} item(s)");
-                    }
-                    Err(e) => {
-                        self.status_message = format!("Archive failed: {e}");
-                    }
-                }
-                self.refresh_current_panel();
-                self.tree_dirty = true;
-            }
         }
     }
 
@@ -873,6 +855,7 @@ impl App {
             Mode::Conflict => self.handle_conflict(key),
             Mode::BulkRename => self.handle_bulk_rename(key),
             Mode::Archive => self.handle_archive(key),
+            Mode::Tasks => self.handle_tasks(key),
         }
 
         self.update_preview();
@@ -972,6 +955,8 @@ impl App {
             db,
             tick_count: 0,
             task_manager: task_manager::TaskManager::new(),
+            tasks_cursor: 0,
+            tasks_scroll: 0,
             task_notification: None,
             task_notification_tick: None,
             conflict_rxs: Vec::new(),
@@ -979,6 +964,7 @@ impl App {
             conflict_selected: 0,
             dir_sizes: HashMap::new(),
             du_progress: None,
+            background_progress: None,
             dir_sizes_loaded: HashSet::new(),
             tree_dirty: false,
             tree_last_path: None,

@@ -7,6 +7,7 @@ use ratatui::{
 };
 
 use crate::app::App;
+use crate::ui::util::{display_width, truncate_to_width_left};
 
 pub(in crate::ui) fn render_bookmarks(f: &mut Frame, app: &App, area: Rect) {
     let t = &app.theme;
@@ -60,18 +61,12 @@ pub(in crate::ui) fn render_bookmarks(f: &mut Frame, app: &App, area: Rect) {
             path_str.into_owned()
         };
 
-        let marker_w = marker.chars().count();
+        let marker_w = display_width(marker);
         let name_col = format!("{name}  ");
-        let name_w = name_col.chars().count();
+        let name_w = display_width(&name_col);
         let path_max = iw.saturating_sub(marker_w + name_w);
-        let path_display = if short_path.chars().count() > path_max {
-            let start = short_path.chars().count() - path_max.saturating_sub(1);
-            let tail: String = short_path.chars().skip(start).collect();
-            format!("\u{2026}{tail}")
-        } else {
-            short_path.clone()
-        };
-        let pad = iw.saturating_sub(marker_w + name_w + path_display.chars().count());
+        let path_display = truncate_to_width_left(&short_path, path_max);
+        let pad = iw.saturating_sub(marker_w + name_w + display_width(&path_display));
 
         if is_cursor {
             let cursor_style = Style::default().fg(t.bg_text).bg(t.blue);

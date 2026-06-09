@@ -2,6 +2,7 @@ use std::collections::HashSet;
 use std::fs::File;
 use std::io::{self, BufReader, Read};
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::SystemTime;
 
 #[derive(Clone, Debug)]
@@ -56,6 +57,44 @@ pub fn is_archive(path: &Path) -> bool {
     ArchiveFormat::from_path(path).is_some()
 }
 
+// ── Streaming hooks (progress / conflict / cancel) ───────────────────
+//
+// These let the app layer stream archive create/extract through the task
+// manager the way `ops::paste` does, without `archive.rs` knowing about tokio:
+// the caller passes plain closures and an `AtomicBool` cancel flag.
+
+/// Per-entry overwrite decision for extract conflicts.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ConflictDecision {
+    Overwrite,
+    Skip,
+    /// Stop the whole operation, keeping what was already extracted.
+    Abort,
+}
+
+/// Reported before each entry is processed: `(done, total, current_name)`.
+pub type ProgressFn<'a> = dyn FnMut(usize, usize, &str) + 'a;
+
+/// Asked when an extracted file would overwrite an existing one. Receives the
+/// archive entry name, the destination path, and the source entry's size and
+/// mtime so the caller can build a conflict prompt.
+pub type ConflictFn<'a> = dyn FnMut(&str, &Path, u64, Option<SystemTime>) -> ConflictDecision + 'a;
+
+/// Result of a streaming extract.
+#[derive(Debug, Default)]
+pub struct ExtractOutcome {
+    pub extracted: Vec<PathBuf>,
+    pub skipped: usize,
+    /// True if cancelled (via the flag) or aborted at a conflict prompt.
+    pub cancelled: bool,
+}
+
+/// A cancel flag that is never set — for the synchronous wrappers / tests.
+#[allow(dead_code)]
+fn never_cancel() -> AtomicBool {
+    AtomicBool::new(false)
+}
+
 /// List all entries in an archive. Returns a flat list sorted by path.
 pub fn list_archive(path: &Path) -> io::Result<(ArchiveFormat, Vec<ArchiveEntry>)> {
     let format = ArchiveFormat::from_path(path)
@@ -107,28 +146,87 @@ pub fn list_archive(path: &Path) -> io::Result<(ArchiveFormat, Vec<ArchiveEntry>
 }
 
 /// Extract a single entry (file or directory) from an archive.
+///
+/// Convenience wrapper: no progress, overwrites existing files, never cancels.
+/// Use [`extract_stream`] to drive progress/conflict/cancel.
+#[allow(dead_code)]
 pub fn extract_entry(
     archive_path: &Path,
     entry_path: &str,
     dest: &Path,
 ) -> io::Result<Vec<PathBuf>> {
-    let format = ArchiveFormat::from_path(archive_path)
-        .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidInput, "Unknown archive format"))?;
-
-    match format {
-        ArchiveFormat::Zip => extract_zip_entry(archive_path, entry_path, dest),
-        _ => extract_tar_entry(archive_path, entry_path, dest, tar_compression(format)),
-    }
+    let cancel = never_cancel();
+    let outcome = extract_stream(
+        archive_path,
+        Some(entry_path),
+        dest,
+        0,
+        &mut |_, _, _| {},
+        &mut |_, _, _, _| ConflictDecision::Overwrite,
+        &cancel,
+    )?;
+    Ok(outcome.extracted)
 }
 
 /// Extract all entries from an archive.
+///
+/// Convenience wrapper: no progress, overwrites existing files, never cancels.
+#[allow(dead_code)]
 pub fn extract_all(archive_path: &Path, dest: &Path) -> io::Result<Vec<PathBuf>> {
+    let cancel = never_cancel();
+    let outcome = extract_stream(
+        archive_path,
+        None,
+        dest,
+        0,
+        &mut |_, _, _| {},
+        &mut |_, _, _, _| ConflictDecision::Overwrite,
+        &cancel,
+    )?;
+    Ok(outcome.extracted)
+}
+
+/// Extract entries, streaming progress and routing per-file overwrite conflicts.
+///
+/// `filter` selects which entries to extract: `None` extracts everything, `Some(path)`
+/// extracts a single file (exact match) or a directory subtree (trailing `/`). `total`
+/// is a best-effort hint for the progress denominator (0 if unknown). Cancellation is
+/// honoured between entries; a single in-flight file is not interrupted.
+pub fn extract_stream(
+    archive_path: &Path,
+    filter: Option<&str>,
+    dest: &Path,
+    total: usize,
+    on_progress: &mut ProgressFn,
+    resolve: &mut ConflictFn,
+    cancel: &AtomicBool,
+) -> io::Result<ExtractOutcome> {
     let format = ArchiveFormat::from_path(archive_path)
         .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidInput, "Unknown archive format"))?;
 
     match format {
-        ArchiveFormat::Zip => extract_zip_all(archive_path, dest),
-        _ => extract_tar_all(archive_path, dest, tar_compression(format)),
+        ArchiveFormat::Zip => {
+            extract_zip_stream(archive_path, filter, dest, total, on_progress, resolve, cancel)
+        }
+        _ => extract_tar_stream(
+            archive_path,
+            filter,
+            dest,
+            total,
+            tar_compression(format),
+            on_progress,
+            resolve,
+            cancel,
+        ),
+    }
+}
+
+/// Whether an entry named `name` is selected by `filter`.
+fn entry_matches(filter: Option<&str>, name: &str) -> bool {
+    match filter {
+        None => true,
+        Some(f) if f.ends_with('/') => name.starts_with(f),
+        Some(f) => name == f,
     }
 }
 
@@ -148,31 +246,7 @@ fn list_zip(path: &Path) -> io::Result<Vec<ArchiveEntry>> {
         let name = entry.name().to_string();
         let is_dir = entry.is_dir();
         let size = entry.size();
-        let modified = entry.last_modified().map(|dt| {
-            let (year, month, day, hour, min, sec) = (
-                dt.year() as i64,
-                dt.month() as u64,
-                dt.day() as u64,
-                dt.hour() as u64,
-                dt.minute() as u64,
-                dt.second() as u64,
-            );
-            // Approximate conversion — good enough for display
-            let days = (year - 1970) * 365 + (year - 1969) / 4
-                + match month {
-                    1 => 0,
-                    2 => 31,
-                    _ => {
-                        let m = month - 1;
-                        let leap = if year % 4 == 0 { 1 } else { 0 };
-                        (m * 30 + m.div_ceil(2) - 2 + leap) as i64
-                    }
-                }
-                + day as i64
-                - 1;
-            let secs = days as u64 * 86400 + hour * 3600 + min * 60 + sec;
-            SystemTime::UNIX_EPOCH + std::time::Duration::from_secs(secs)
-        });
+        let modified = zip_datetime_to_systemtime(entry.last_modified());
         entries.push(ArchiveEntry {
             path: name,
             size,
@@ -183,32 +257,66 @@ fn list_zip(path: &Path) -> io::Result<Vec<ArchiveEntry>> {
     Ok(entries)
 }
 
-fn extract_zip_entry(
+/// Approximate a zip `DateTime` as a `SystemTime`. Good enough for display
+/// and conflict prompts; not used for any correctness-sensitive comparison.
+fn zip_datetime_to_systemtime(dt: Option<zip::DateTime>) -> Option<SystemTime> {
+    dt.map(|dt| {
+        let (year, month, day, hour, min, sec) = (
+            dt.year() as i64,
+            dt.month() as u64,
+            dt.day() as u64,
+            dt.hour() as u64,
+            dt.minute() as u64,
+            dt.second() as u64,
+        );
+        let days = (year - 1970) * 365 + (year - 1969) / 4
+            + match month {
+                1 => 0,
+                2 => 31,
+                _ => {
+                    let m = month - 1;
+                    let leap = if year % 4 == 0 { 1 } else { 0 };
+                    (m * 30 + m.div_ceil(2) - 2 + leap) as i64
+                }
+            }
+            + day as i64
+            - 1;
+        let secs = days as u64 * 86400 + hour * 3600 + min * 60 + sec;
+        SystemTime::UNIX_EPOCH + std::time::Duration::from_secs(secs)
+    })
+}
+
+#[allow(clippy::too_many_arguments)]
+fn extract_zip_stream(
     archive_path: &Path,
-    entry_path: &str,
+    filter: Option<&str>,
     dest: &Path,
-) -> io::Result<Vec<PathBuf>> {
+    total: usize,
+    on_progress: &mut ProgressFn,
+    resolve: &mut ConflictFn,
+    cancel: &AtomicBool,
+) -> io::Result<ExtractOutcome> {
     let file = File::open(archive_path)?;
     let reader = BufReader::new(file);
     let mut archive = zip::ZipArchive::new(reader)
         .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
 
-    let is_dir_extract = entry_path.ends_with('/');
-    let mut extracted = Vec::new();
+    let mut outcome = ExtractOutcome::default();
+    let mut done = 0usize;
 
     for i in 0..archive.len() {
+        // Honour cancellation between entries; an in-flight file is not interrupted.
+        if cancel.load(Ordering::Relaxed) {
+            outcome.cancelled = true;
+            break;
+        }
+
         let mut entry = archive
             .by_index(i)
             .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
 
         let name = entry.name().to_string();
-        let should_extract = if is_dir_extract {
-            name.starts_with(entry_path)
-        } else {
-            name == entry_path
-        };
-
-        if !should_extract {
+        if !entry_matches(filter, &name) {
             continue;
         }
 
@@ -221,39 +329,7 @@ fn extract_zip_entry(
             continue;
         }
 
-        if entry.is_dir() {
-            std::fs::create_dir_all(&out_path)?;
-        } else {
-            if let Some(parent) = out_path.parent() {
-                std::fs::create_dir_all(parent)?;
-            }
-            let mut out_file = File::create(&out_path)?;
-            io::copy(&mut entry, &mut out_file)?;
-        }
-        extracted.push(out_path);
-    }
-    Ok(extracted)
-}
-
-fn extract_zip_all(archive_path: &Path, dest: &Path) -> io::Result<Vec<PathBuf>> {
-    let file = File::open(archive_path)?;
-    let reader = BufReader::new(file);
-    let mut archive = zip::ZipArchive::new(reader)
-        .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
-
-    let mut extracted = Vec::new();
-    for i in 0..archive.len() {
-        let mut entry = archive
-            .by_index(i)
-            .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
-
-        let name = entry.name().to_string();
-        // Sanitize raw archive path to strip `..`/`.`/leading `/` (Zip Slip guard).
-        let safe_name = sanitize_archive_path(&name);
-        let out_path = dest.join(&safe_name);
-        if !out_path.starts_with(dest) {
-            continue;
-        }
+        on_progress(done, total, &name);
 
         if entry.is_dir() {
             std::fs::create_dir_all(&out_path)?;
@@ -261,12 +337,28 @@ fn extract_zip_all(archive_path: &Path, dest: &Path) -> io::Result<Vec<PathBuf>>
             if let Some(parent) = out_path.parent() {
                 std::fs::create_dir_all(parent)?;
             }
+            if out_path.exists() {
+                let modified = zip_datetime_to_systemtime(entry.last_modified());
+                match resolve(&name, &out_path, entry.size(), modified) {
+                    ConflictDecision::Overwrite => {}
+                    ConflictDecision::Skip => {
+                        outcome.skipped += 1;
+                        done += 1;
+                        continue;
+                    }
+                    ConflictDecision::Abort => {
+                        outcome.cancelled = true;
+                        break;
+                    }
+                }
+            }
             let mut out_file = File::create(&out_path)?;
             io::copy(&mut entry, &mut out_file)?;
         }
-        extracted.push(out_path);
+        outcome.extracted.push(out_path);
+        done += 1;
     }
-    Ok(extracted)
+    Ok(outcome)
 }
 
 // ── Tar ──────────────────────────────────────────────────────────────
@@ -347,28 +439,32 @@ fn list_tar(path: &Path, compression: TarCompression) -> io::Result<Vec<ArchiveE
     Ok(entries)
 }
 
-fn extract_tar_entry(
+#[allow(clippy::too_many_arguments)]
+fn extract_tar_stream(
     archive_path: &Path,
-    entry_path: &str,
+    filter: Option<&str>,
     dest: &Path,
+    total: usize,
     compression: TarCompression,
-) -> io::Result<Vec<PathBuf>> {
+    on_progress: &mut ProgressFn,
+    resolve: &mut ConflictFn,
+    cancel: &AtomicBool,
+) -> io::Result<ExtractOutcome> {
     let reader = open_tar_reader(archive_path, compression)?;
     let mut archive = tar::Archive::new(reader);
-    let is_dir_extract = entry_path.ends_with('/');
-    let mut extracted = Vec::new();
+    let mut outcome = ExtractOutcome::default();
+    let mut done = 0usize;
 
     for entry_result in archive.entries()? {
+        // Honour cancellation between entries; an in-flight file is not interrupted.
+        if cancel.load(Ordering::Relaxed) {
+            outcome.cancelled = true;
+            break;
+        }
+
         let mut entry = entry_result?;
         let name = entry.path()?.to_string_lossy().into_owned();
-
-        let should_extract = if is_dir_extract {
-            name.starts_with(entry_path)
-        } else {
-            name == entry_path
-        };
-
-        if !should_extract {
+        if !entry_matches(filter, &name) {
             continue;
         }
 
@@ -378,37 +474,7 @@ fn extract_tar_entry(
             continue;
         }
 
-        if entry.header().entry_type().is_dir() {
-            std::fs::create_dir_all(&out_path)?;
-        } else {
-            if let Some(parent) = out_path.parent() {
-                std::fs::create_dir_all(parent)?;
-            }
-            let mut out_file = File::create(&out_path)?;
-            io::copy(&mut entry, &mut out_file)?;
-        }
-        extracted.push(out_path);
-    }
-    Ok(extracted)
-}
-
-fn extract_tar_all(
-    archive_path: &Path,
-    dest: &Path,
-    compression: TarCompression,
-) -> io::Result<Vec<PathBuf>> {
-    let reader = open_tar_reader(archive_path, compression)?;
-    let mut archive = tar::Archive::new(reader);
-    let mut extracted = Vec::new();
-
-    for entry_result in archive.entries()? {
-        let mut entry = entry_result?;
-        let name = entry.path()?.to_string_lossy().into_owned();
-        let safe_name = sanitize_archive_path(&name);
-        let out_path = dest.join(&safe_name);
-        if !out_path.starts_with(dest) {
-            continue;
-        }
+        on_progress(done, total, &name);
 
         if entry.header().entry_type().is_dir() {
             std::fs::create_dir_all(&out_path)?;
@@ -416,166 +482,271 @@ fn extract_tar_all(
             if let Some(parent) = out_path.parent() {
                 std::fs::create_dir_all(parent)?;
             }
+            if out_path.exists() {
+                let size = entry.size();
+                let modified = entry
+                    .header()
+                    .mtime()
+                    .ok()
+                    .map(|secs| SystemTime::UNIX_EPOCH + std::time::Duration::from_secs(secs));
+                match resolve(&name, &out_path, size, modified) {
+                    ConflictDecision::Overwrite => {}
+                    ConflictDecision::Skip => {
+                        outcome.skipped += 1;
+                        done += 1;
+                        continue;
+                    }
+                    ConflictDecision::Abort => {
+                        outcome.cancelled = true;
+                        break;
+                    }
+                }
+            }
             let mut out_file = File::create(&out_path)?;
             io::copy(&mut entry, &mut out_file)?;
         }
-        extracted.push(out_path);
+        outcome.extracted.push(out_path);
+        done += 1;
     }
-    Ok(extracted)
+    Ok(outcome)
 }
 
 /// Create an archive from a list of file/directory paths.
-pub fn create_archive(
+///
+/// Convenience wrapper: no progress, never cancels. Use [`create_stream`] to
+/// drive progress and cancellation through the task manager.
+#[allow(dead_code)]
+pub fn create_archive(paths: &[PathBuf], base_dir: &Path, output: &Path) -> io::Result<()> {
+    let cancel = never_cancel();
+    create_stream(paths, base_dir, output, &mut |_, _, _| {}, &cancel)?;
+    Ok(())
+}
+
+/// One flattened item to add to an archive, in pre-order (a directory appears
+/// before its contents) so the writer always sees parents first.
+struct CreateEntry {
+    abs: PathBuf,
+    /// Path inside the archive, relative to `base_dir`, with `/` separators.
+    rel: String,
+    is_dir: bool,
+}
+
+/// Walk `paths` (relative to `base_dir`) into a flat, pre-ordered entry list so
+/// `create_stream` can report per-file progress and cancel between files —
+/// `tar::append_dir_all` would otherwise archive a whole directory in one opaque
+/// call with no callback or cancellation point inside.
+fn collect_create_entries(
+    paths: &[PathBuf],
+    base_dir: &Path,
+    out: &mut Vec<CreateEntry>,
+) -> io::Result<()> {
+    for path in paths {
+        let rel = path
+            .strip_prefix(base_dir)
+            .map_err(|e| io::Error::new(io::ErrorKind::InvalidInput, e))?
+            .to_string_lossy()
+            .into_owned();
+        push_create_entry(path, rel, out)?;
+    }
+    Ok(())
+}
+
+fn push_create_entry(abs: &Path, rel: String, out: &mut Vec<CreateEntry>) -> io::Result<()> {
+    if abs.is_dir() {
+        out.push(CreateEntry {
+            abs: abs.to_path_buf(),
+            rel: rel.clone(),
+            is_dir: true,
+        });
+        // Sort children for deterministic archive ordering across platforms.
+        let mut children: Vec<_> = std::fs::read_dir(abs)?.collect::<Result<_, _>>()?;
+        children.sort_by_key(|e| e.file_name());
+        for child in children {
+            let child_rel = format!("{rel}/{}", child.file_name().to_string_lossy());
+            push_create_entry(&child.path(), child_rel, out)?;
+        }
+    } else {
+        out.push(CreateEntry {
+            abs: abs.to_path_buf(),
+            rel,
+            is_dir: false,
+        });
+    }
+    Ok(())
+}
+
+/// A tar compression writer that finalizes its footer on `finish()` (a plain
+/// `flush()` won't write the gzip/bzip2/xz trailer).
+enum CompWriter {
+    Plain(File),
+    Gz(flate2::write::GzEncoder<File>),
+    Bz2(bzip2::write::BzEncoder<File>),
+    Xz(xz2::write::XzEncoder<File>),
+}
+
+impl io::Write for CompWriter {
+    fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
+        match self {
+            Self::Plain(w) => w.write(buf),
+            Self::Gz(w) => w.write(buf),
+            Self::Bz2(w) => w.write(buf),
+            Self::Xz(w) => w.write(buf),
+        }
+    }
+    fn flush(&mut self) -> io::Result<()> {
+        match self {
+            Self::Plain(w) => w.flush(),
+            Self::Gz(w) => w.flush(),
+            Self::Bz2(w) => w.flush(),
+            Self::Xz(w) => w.flush(),
+        }
+    }
+}
+
+impl CompWriter {
+    fn finish(self) -> io::Result<()> {
+        match self {
+            Self::Plain(_) => Ok(()),
+            Self::Gz(w) => {
+                w.finish()?;
+                Ok(())
+            }
+            Self::Bz2(w) => {
+                w.finish()?;
+                Ok(())
+            }
+            Self::Xz(w) => {
+                w.finish()?;
+                Ok(())
+            }
+        }
+    }
+}
+
+/// Unified write end: hides the zip-vs-tar differences behind add_dir/add_file.
+enum ArchiveSink {
+    Zip {
+        writer: zip::ZipWriter<File>,
+        options: zip::write::SimpleFileOptions,
+    },
+    Tar(tar::Builder<CompWriter>),
+}
+
+impl ArchiveSink {
+    fn add_dir(&mut self, rel: &str, abs: &Path) -> io::Result<()> {
+        match self {
+            ArchiveSink::Zip { writer, options } => writer
+                .add_directory(format!("{rel}/"), *options)
+                .map_err(io::Error::other),
+            ArchiveSink::Tar(b) => b.append_dir(rel, abs),
+        }
+    }
+
+    fn add_file(&mut self, rel: &str, abs: &Path) -> io::Result<()> {
+        match self {
+            ArchiveSink::Zip { writer, options } => {
+                writer.start_file(rel, *options).map_err(io::Error::other)?;
+                let mut f = File::open(abs)?;
+                io::copy(&mut f, writer)?;
+                Ok(())
+            }
+            ArchiveSink::Tar(b) => {
+                let mut f = File::open(abs)?;
+                b.append_file(rel, &mut f)
+            }
+        }
+    }
+
+    fn finish(self) -> io::Result<()> {
+        match self {
+            ArchiveSink::Zip { writer, .. } => {
+                writer.finish().map_err(io::Error::other)?;
+                Ok(())
+            }
+            ArchiveSink::Tar(b) => {
+                let writer = b.into_inner()?;
+                writer.finish()
+            }
+        }
+    }
+}
+
+/// Create an archive, streaming per-file progress and honouring cancellation
+/// between files. Returns `(written, cancelled)`: `written` is the number of
+/// entries added (the resulting archive is still valid even if cancelled), and
+/// `cancelled` is true if the operation stopped early. On error the partial
+/// output file is removed.
+pub fn create_stream(
     paths: &[PathBuf],
     base_dir: &Path,
     output: &Path,
-) -> io::Result<()> {
-    let format = ArchiveFormat::from_path(output)
-        .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidInput, "Unknown archive format"))?;
-
-    let result = match format {
-        ArchiveFormat::Zip => create_zip(paths, base_dir, output),
-        _ => create_tar(paths, base_dir, output, format),
-    };
+    on_progress: &mut ProgressFn,
+    cancel: &AtomicBool,
+) -> io::Result<(usize, bool)> {
+    let result = create_stream_inner(paths, base_dir, output, on_progress, cancel);
     if result.is_err() {
-        // Clean up partial file on failure
+        // Clean up partial file on failure.
         let _ = std::fs::remove_file(output);
     }
     result
 }
 
-fn create_zip(paths: &[PathBuf], base_dir: &Path, output: &Path) -> io::Result<()> {
-    let file = File::create(output)?;
-    let mut archive = zip::ZipWriter::new(file);
-    let options = zip::write::SimpleFileOptions::default()
-        .compression_method(zip::CompressionMethod::Deflated);
-
-    for path in paths {
-        let rel = path
-            .strip_prefix(base_dir)
-            .map_err(|e| io::Error::new(io::ErrorKind::InvalidInput, e))?;
-
-        if path.is_dir() {
-            add_dir_to_zip(&mut archive, path, rel, options)?;
-        } else {
-            let name = rel.to_string_lossy().into_owned();
-            archive
-                .start_file(&name, options)
-                .map_err(io::Error::other)?;
-            let mut f = File::open(path)?;
-            io::copy(&mut f, &mut archive)?;
-        }
-    }
-    archive
-        .finish()
-        .map_err(io::Error::other)?;
-    Ok(())
-}
-
-fn add_dir_to_zip(
-    archive: &mut zip::ZipWriter<File>,
-    dir: &Path,
-    rel: &Path,
-    options: zip::write::SimpleFileOptions,
-) -> io::Result<()> {
-    let dir_name = format!("{}/", rel.to_string_lossy());
-    archive
-        .add_directory(&dir_name, options)
-        .map_err(io::Error::other)?;
-
-    for entry in std::fs::read_dir(dir)? {
-        let entry = entry?;
-        let child = entry.path();
-        let child_rel = rel.join(entry.file_name());
-        if child.is_dir() {
-            add_dir_to_zip(archive, &child, &child_rel, options)?;
-        } else {
-            let name = child_rel.to_string_lossy().into_owned();
-            archive
-                .start_file(&name, options)
-                .map_err(io::Error::other)?;
-            let mut f = File::open(&child)?;
-            io::copy(&mut f, archive)?;
-        }
-    }
-    Ok(())
-}
-
-fn create_tar(
+fn create_stream_inner(
     paths: &[PathBuf],
     base_dir: &Path,
     output: &Path,
-    format: ArchiveFormat,
-) -> io::Result<()> {
+    on_progress: &mut ProgressFn,
+    cancel: &AtomicBool,
+) -> io::Result<(usize, bool)> {
+    let format = ArchiveFormat::from_path(output)
+        .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidInput, "Unknown archive format"))?;
+
+    let mut entries = Vec::new();
+    collect_create_entries(paths, base_dir, &mut entries)?;
+    let total = entries.len();
+
     let file = File::create(output)?;
-
-    // We need to finalize compressors explicitly (flush() alone won't write
-    // the compression footer).  Use an enum so we keep the concrete type.
-    enum CompWriter {
-        Plain(File),
-        Gz(flate2::write::GzEncoder<File>),
-        Bz2(bzip2::write::BzEncoder<File>),
-        Xz(xz2::write::XzEncoder<File>),
-    }
-    impl io::Write for CompWriter {
-        fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
-            match self {
-                Self::Plain(w) => w.write(buf),
-                Self::Gz(w) => w.write(buf),
-                Self::Bz2(w) => w.write(buf),
-                Self::Xz(w) => w.write(buf),
-            }
+    let mut sink = match format {
+        ArchiveFormat::Zip => ArchiveSink::Zip {
+            writer: zip::ZipWriter::new(file),
+            options: zip::write::SimpleFileOptions::default()
+                .compression_method(zip::CompressionMethod::Deflated),
+        },
+        _ => {
+            let writer = match format {
+                ArchiveFormat::TarGz => CompWriter::Gz(flate2::write::GzEncoder::new(
+                    file,
+                    flate2::Compression::default(),
+                )),
+                ArchiveFormat::TarBz2 => CompWriter::Bz2(bzip2::write::BzEncoder::new(
+                    file,
+                    bzip2::Compression::default(),
+                )),
+                ArchiveFormat::TarXz => CompWriter::Xz(xz2::write::XzEncoder::new(file, 6)),
+                _ => CompWriter::Plain(file),
+            };
+            ArchiveSink::Tar(tar::Builder::new(writer))
         }
-        fn flush(&mut self) -> io::Result<()> {
-            match self {
-                Self::Plain(w) => w.flush(),
-                Self::Gz(w) => w.flush(),
-                Self::Bz2(w) => w.flush(),
-                Self::Xz(w) => w.flush(),
-            }
-        }
-    }
-    impl CompWriter {
-        fn finish(self) -> io::Result<()> {
-            match self {
-                Self::Plain(_) => Ok(()),
-                Self::Gz(w) => { w.finish()?; Ok(()) }
-                Self::Bz2(w) => { w.finish()?; Ok(()) }
-                Self::Xz(w) => { w.finish()?; Ok(()) }
-            }
-        }
-    }
-
-    let writer = match format {
-        ArchiveFormat::TarGz => CompWriter::Gz(flate2::write::GzEncoder::new(
-            file,
-            flate2::Compression::default(),
-        )),
-        ArchiveFormat::TarBz2 => CompWriter::Bz2(bzip2::write::BzEncoder::new(
-            file,
-            bzip2::Compression::default(),
-        )),
-        ArchiveFormat::TarXz => CompWriter::Xz(xz2::write::XzEncoder::new(file, 6)),
-        _ => CompWriter::Plain(file),
     };
 
-    let mut archive = tar::Builder::new(writer);
-
-    for path in paths {
-        let rel = path
-            .strip_prefix(base_dir)
-            .map_err(|e| io::Error::new(io::ErrorKind::InvalidInput, e))?;
-
-        if path.is_dir() {
-            archive.append_dir_all(rel, path)?;
-        } else {
-            let mut f = File::open(path)?;
-            archive.append_file(rel, &mut f)?;
+    let mut cancelled = false;
+    let mut written = 0usize;
+    for (done, entry) in entries.iter().enumerate() {
+        // Honour cancellation between files; an in-flight file is not interrupted.
+        if cancel.load(Ordering::Relaxed) {
+            cancelled = true;
+            break;
         }
+        on_progress(done, total, &entry.rel);
+        if entry.is_dir {
+            sink.add_dir(&entry.rel, &entry.abs)?;
+        } else {
+            sink.add_file(&entry.rel, &entry.abs)?;
+        }
+        written += 1;
     }
-    let writer = archive.into_inner()?;
-    writer.finish()?;
-    Ok(())
+    sink.finish()?;
+    Ok((written, cancelled))
 }
 
 #[cfg(test)]
@@ -761,5 +932,204 @@ mod tests {
         assert_eq!(sanitize_archive_path("a/../b"), "b");
         assert_eq!(sanitize_archive_path("./foo/./bar"), "foo/bar");
         assert_eq!(sanitize_archive_path("dir/"), "dir/");
+    }
+
+    /// Build a one-file zip at `path` whose `hello.txt` holds `content`.
+    fn make_hello_zip(path: &Path, content: &[u8]) {
+        let file = File::create(path).unwrap();
+        let mut w = zip::ZipWriter::new(file);
+        let opt = zip::write::SimpleFileOptions::default();
+        w.start_file("hello.txt", opt).unwrap();
+        w.write_all(content).unwrap();
+        w.finish().unwrap();
+    }
+
+    #[test]
+    fn extract_stream_skip_vs_overwrite_on_conflict() {
+        let dir = tempfile::tempdir().unwrap();
+        let zip_path = dir.path().join("t.zip");
+        make_hello_zip(&zip_path, b"new");
+
+        let dest = dir.path().join("out");
+        std::fs::create_dir(&dest).unwrap();
+        std::fs::write(dest.join("hello.txt"), b"old").unwrap();
+
+        let cancel = AtomicBool::new(false);
+
+        // Skip → existing content preserved, counted as skipped, not extracted.
+        let outcome = extract_stream(
+            &zip_path,
+            None,
+            &dest,
+            1,
+            &mut |_, _, _| {},
+            &mut |_, _, _, _| ConflictDecision::Skip,
+            &cancel,
+        )
+        .unwrap();
+        assert_eq!(outcome.skipped, 1);
+        assert!(outcome.extracted.is_empty());
+        assert_eq!(std::fs::read(dest.join("hello.txt")).unwrap(), b"old");
+
+        // Overwrite → file replaced.
+        let outcome = extract_stream(
+            &zip_path,
+            None,
+            &dest,
+            1,
+            &mut |_, _, _| {},
+            &mut |_, _, _, _| ConflictDecision::Overwrite,
+            &cancel,
+        )
+        .unwrap();
+        assert_eq!(outcome.skipped, 0);
+        assert_eq!(outcome.extracted.len(), 1);
+        assert_eq!(std::fs::read(dest.join("hello.txt")).unwrap(), b"new");
+    }
+
+    #[test]
+    fn extract_stream_resolver_only_called_on_existing() {
+        let dir = tempfile::tempdir().unwrap();
+        let zip_path = dir.path().join("t.zip");
+        make_hello_zip(&zip_path, b"data");
+        let dest = dir.path().join("out");
+        std::fs::create_dir(&dest).unwrap();
+
+        let cancel = AtomicBool::new(false);
+        let mut conflicts = 0;
+        let outcome = extract_stream(
+            &zip_path,
+            None,
+            &dest,
+            1,
+            &mut |_, _, _| {},
+            &mut |_, _, _, _| {
+                conflicts += 1;
+                ConflictDecision::Overwrite
+            },
+            &cancel,
+        )
+        .unwrap();
+        // No pre-existing file → resolver never consulted.
+        assert_eq!(conflicts, 0);
+        assert_eq!(outcome.extracted.len(), 1);
+    }
+
+    #[test]
+    fn extract_stream_abort_stops_early() {
+        let dir = tempfile::tempdir().unwrap();
+        let zip_path = dir.path().join("t.zip");
+        make_hello_zip(&zip_path, b"new");
+        let dest = dir.path().join("out");
+        std::fs::create_dir(&dest).unwrap();
+        std::fs::write(dest.join("hello.txt"), b"old").unwrap();
+
+        let cancel = AtomicBool::new(false);
+        let outcome = extract_stream(
+            &zip_path,
+            None,
+            &dest,
+            1,
+            &mut |_, _, _| {},
+            &mut |_, _, _, _| ConflictDecision::Abort,
+            &cancel,
+        )
+        .unwrap();
+        assert!(outcome.cancelled);
+        assert_eq!(std::fs::read(dest.join("hello.txt")).unwrap(), b"old");
+    }
+
+    #[test]
+    fn extract_stream_honours_cancel_flag() {
+        let dir = tempfile::tempdir().unwrap();
+        let zip_path = dir.path().join("t.zip");
+        make_hello_zip(&zip_path, b"data");
+        let dest = dir.path().join("out");
+        std::fs::create_dir(&dest).unwrap();
+
+        let cancel = AtomicBool::new(true); // pre-cancelled
+        let outcome = extract_stream(
+            &zip_path,
+            None,
+            &dest,
+            1,
+            &mut |_, _, _| {},
+            &mut |_, _, _, _| ConflictDecision::Overwrite,
+            &cancel,
+        )
+        .unwrap();
+        assert!(outcome.cancelled);
+        assert!(outcome.extracted.is_empty());
+        assert!(!dest.join("hello.txt").exists());
+    }
+
+    #[test]
+    fn extract_stream_reports_progress_with_total() {
+        let dir = tempfile::tempdir().unwrap();
+        let zip_path = dir.path().join("t.zip");
+        make_hello_zip(&zip_path, b"data");
+        let dest = dir.path().join("out");
+        std::fs::create_dir(&dest).unwrap();
+
+        let cancel = AtomicBool::new(false);
+        let mut calls: Vec<(usize, usize, String)> = Vec::new();
+        extract_stream(
+            &zip_path,
+            None,
+            &dest,
+            1,
+            &mut |d, t, name| calls.push((d, t, name.to_string())),
+            &mut |_, _, _, _| ConflictDecision::Overwrite,
+            &cancel,
+        )
+        .unwrap();
+        assert_eq!(calls.len(), 1);
+        assert_eq!(calls[0], (0, 1, "hello.txt".to_string()));
+    }
+
+    #[test]
+    fn create_stream_reports_progress_and_count() {
+        let dir = tempfile::tempdir().unwrap();
+        let src = dir.path().join("src");
+        std::fs::create_dir(&src).unwrap();
+        std::fs::write(src.join("a.txt"), "a").unwrap();
+        std::fs::create_dir(src.join("sub")).unwrap();
+        std::fs::write(src.join("sub/b.txt"), "b").unwrap();
+
+        let out = dir.path().join("out.zip");
+        let cancel = AtomicBool::new(false);
+        let mut calls = 0;
+        let (written, cancelled) = create_stream(
+            &[src.join("a.txt"), src.join("sub")],
+            &src,
+            &out,
+            &mut |_, _, _| calls += 1,
+            &cancel,
+        )
+        .unwrap();
+        assert!(!cancelled);
+        // Entries in pre-order: a.txt, sub/, sub/b.txt = 3.
+        assert_eq!(written, 3);
+        assert_eq!(calls, 3);
+
+        // The archive is valid and round-trips.
+        let (_, entries) = list_archive(&out).unwrap();
+        assert!(entries.iter().any(|e| e.path == "a.txt"));
+        assert!(entries.iter().any(|e| e.path == "sub/b.txt"));
+    }
+
+    #[test]
+    fn create_stream_honours_cancel_flag() {
+        let dir = tempfile::tempdir().unwrap();
+        let src = dir.path().join("src");
+        std::fs::create_dir(&src).unwrap();
+        std::fs::write(src.join("a.txt"), "a").unwrap();
+
+        let out = dir.path().join("out.zip");
+        let cancel = AtomicBool::new(true); // pre-cancelled
+        let (written, cancelled) =
+            create_stream(&[src.join("a.txt")], &src, &out, &mut |_, _, _| {}, &cancel).unwrap();
+        assert!(cancelled);
+        assert_eq!(written, 0);
     }
 }

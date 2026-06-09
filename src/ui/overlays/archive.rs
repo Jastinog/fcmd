@@ -7,6 +7,7 @@ use ratatui::{
 };
 
 use crate::app::App;
+use crate::ui::util::{display_width, fit_truncated};
 
 pub(in crate::ui) fn render_archive(f: &mut Frame, app: &App, area: Rect) {
     let state = match app.archive_state {
@@ -93,17 +94,10 @@ pub(in crate::ui) fn render_archive(f: &mut Frame, app: &App, area: Rect) {
         // Name (fill remaining space)
         let name_max = iw
             .saturating_sub(indent_w)
-            .saturating_sub(icon.chars().count())
+            .saturating_sub(display_width(&icon))
             .saturating_sub(size_col_w + 1);
 
-        let name_display = if node.name.chars().count() > name_max {
-            let mut s: String = node.name.chars().take(name_max.saturating_sub(1)).collect();
-            s.push('\u{2026}');
-            s
-        } else {
-            node.name.clone()
-        };
-        let name_pad = name_max.saturating_sub(name_display.chars().count());
+        let (name_display, name_pad) = fit_truncated(&node.name, name_max, 0);
 
         let name_fg = if node.is_dir {
             t.blue

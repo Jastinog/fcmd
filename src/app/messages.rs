@@ -38,6 +38,29 @@ pub enum DeleteMsg {
         deleted: usize,
         errors: Vec<String>,
         permanent: bool,
+        /// True when the user cancelled the delete; the items removed so far still count.
+        cancelled: bool,
+    },
+}
+
+pub enum ArchiveMsg {
+    Progress {
+        done: usize,
+        total: usize,
+        current: String,
+    },
+    Finished {
+        /// True for archive creation, false for extraction.
+        is_create: bool,
+        /// Files/dirs successfully written (created) or extracted.
+        processed: usize,
+        /// Files skipped at an overwrite conflict (extract only).
+        skipped: usize,
+        error: Option<String>,
+        /// True when the user cancelled or aborted; what was done so far still counts.
+        cancelled: bool,
+        /// Archive name (create) or extracted entry / "all entries" (extract).
+        label: String,
     },
 }
 
@@ -145,14 +168,5 @@ pub enum FileOpResult {
         total: usize,
         records: Vec<ops::OpRecord>,
         errors: Vec<String>,
-    },
-    ArchiveExtract {
-        entry_path: String,
-        result: Result<usize, String>,
-    },
-    ArchiveCreate {
-        name: String,
-        count: usize,
-        result: Result<(), String>,
     },
 }

@@ -7,6 +7,7 @@ use ratatui::{
 };
 
 use crate::app::App;
+use crate::ui::util::{display_width, truncate_to_width_left};
 
 pub(in crate::ui) fn render_chmod_popup(f: &mut Frame, app: &App, area: Rect) {
     let t = &app.theme;
@@ -58,16 +59,10 @@ pub(in crate::ui) fn render_chmod_popup(f: &mut Frame, app: &App, area: Rect) {
     // -- File context line --
     {
         let icon = " 󰈔 ";
-        let icon_w = icon.chars().count();
+        let icon_w = display_width(icon);
         let max_name = iw.saturating_sub(icon_w);
-        let name_display = if file_ctx.chars().count() > max_name {
-            let start = file_ctx.chars().count() - max_name.saturating_sub(1);
-            let tail: String = file_ctx.chars().skip(start).collect();
-            format!("\u{2026}{tail}")
-        } else {
-            file_ctx
-        };
-        let pad = iw.saturating_sub(icon_w + name_display.chars().count());
+        let name_display = truncate_to_width_left(&file_ctx, max_name);
+        let pad = iw.saturating_sub(icon_w + display_width(&name_display));
         let line = Line::from(vec![
             Span::styled(icon, Style::default().fg(t.fg_dim)),
             Span::styled(name_display, Style::default().fg(t.fg)),
@@ -83,8 +78,8 @@ pub(in crate::ui) fn render_chmod_popup(f: &mut Frame, app: &App, area: Rect) {
     // -- Input field --
     {
         let prefix = " \u{276f} ";
-        let prefix_w = prefix.chars().count();
-        let input_w = input.chars().count();
+        let prefix_w = display_width(prefix);
+        let input_w = display_width(input);
 
         // Build rwx colored spans for suffix
         let mut suffix_spans: Vec<Span> = Vec::new();
@@ -105,7 +100,7 @@ pub(in crate::ui) fn render_chmod_popup(f: &mut Frame, app: &App, area: Rect) {
                 ));
             }
         }
-        let suffix_len: usize = suffix_spans.iter().map(|s| s.content.chars().count()).sum();
+        let suffix_len: usize = suffix_spans.iter().map(|s| display_width(&s.content)).sum();
 
         let used = prefix_w + input_w + 1 + suffix_len;
         let pad = iw.saturating_sub(used);
@@ -192,7 +187,7 @@ pub(in crate::ui) fn render_chmod_popup(f: &mut Frame, app: &App, area: Rect) {
                 }
             };
 
-            let used = label_w + rwx_col.chars().count() + desc.chars().count();
+            let used = label_w + display_width(&rwx_col) + display_width(&desc);
             let pad = iw.saturating_sub(used);
 
             let dim = Style::default().fg(t.fg_dim);

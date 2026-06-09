@@ -7,6 +7,19 @@ use ratatui::{
 };
 
 use crate::app::App;
+use crate::ui::util::{display_width, fit_truncated};
+
+/// Compact arrows showing whether more list rows exist above/below the visible window.
+fn scroll_arrows(scroll: usize, visible: usize, total: usize) -> &'static str {
+    let more_above = scroll > 0;
+    let more_below = scroll + visible < total;
+    match (more_above, more_below) {
+        (true, true) => "\u{2191}\u{2193}", // ↑↓
+        (true, false) => "\u{2191}",        // ↑
+        (false, true) => "\u{2193}",        // ↓
+        (false, false) => "",
+    }
+}
 
 pub(in crate::ui) fn render_chown_picker(f: &mut Frame, app: &App, area: Rect) {
     let t = &app.theme;
@@ -58,20 +71,24 @@ pub(in crate::ui) fn render_chown_picker(f: &mut Frame, app: &App, area: Rect) {
 
     let user_scroll = picker.user_scroll;
 
+    let user_list_h = list_height.saturating_sub(1); // minus header
+
     let mut user_items: Vec<ListItem> = Vec::new();
-    // Column header
+    // Column header with a scroll indicator when the list overflows the window
     let header_style = if is_user_active {
         Style::default().fg(accent)
     } else {
         Style::default().fg(t.fg_dim)
     };
-    let user_header_pad = col_w.saturating_sub(6);
+    let user_ind = scroll_arrows(user_scroll, user_list_h, picker.users.len());
+    let user_header_pad = col_w
+        .saturating_sub(display_width(" User") + display_width(user_ind))
+        .max(1);
     user_items.push(ListItem::new(Line::from(vec![
         Span::styled(" User", header_style),
-        Span::styled(" ".repeat(user_header_pad.max(1)), Style::default()),
+        Span::styled(" ".repeat(user_header_pad), Style::default()),
+        Span::styled(user_ind, header_style),
     ])));
-
-    let user_list_h = list_height.saturating_sub(1); // minus header
     for (i, (name, uid)) in picker
         .users
         .iter()
@@ -84,15 +101,8 @@ pub(in crate::ui) fn render_chown_picker(f: &mut Frame, app: &App, area: Rect) {
 
         let marker = if is_cursor { "\u{25b8} " } else { "  " };
         let uid_str = format!("{uid}");
-        let max_name = col_w.saturating_sub(marker.chars().count() + uid_str.len() + 2);
-        let name_display = if name.chars().count() > max_name {
-            let trunc: String = name.chars().take(max_name.saturating_sub(1)).collect();
-            format!("{trunc}\u{2026}")
-        } else {
-            name.clone()
-        };
-        let pad =
-            col_w.saturating_sub(marker.chars().count() + name_display.chars().count() + uid_str.len() + 1);
+        let reserved = display_width(marker) + uid_str.len() + 1;
+        let (name_display, pad) = fit_truncated(name, col_w, reserved);
 
         if is_cursor && is_user_active {
             let s = Style::default().fg(t.bg_text).bg(t.blue);
@@ -133,20 +143,24 @@ pub(in crate::ui) fn render_chown_picker(f: &mut Frame, app: &App, area: Rect) {
 
     let group_scroll = picker.group_scroll;
 
+    let group_list_h = list_height.saturating_sub(1);
+
     let mut group_items: Vec<ListItem> = Vec::new();
-    // Column header
+    // Column header with a scroll indicator when the list overflows the window
     let header_style = if is_group_active {
         Style::default().fg(accent)
     } else {
         Style::default().fg(t.fg_dim)
     };
-    let group_header_pad = group_col_w.saturating_sub(7);
+    let group_ind = scroll_arrows(group_scroll, group_list_h, picker.groups.len());
+    let group_header_pad = group_col_w
+        .saturating_sub(display_width(" Group") + display_width(group_ind))
+        .max(1);
     group_items.push(ListItem::new(Line::from(vec![
         Span::styled(" Group", header_style),
-        Span::styled(" ".repeat(group_header_pad.max(1)), Style::default()),
+        Span::styled(" ".repeat(group_header_pad), Style::default()),
+        Span::styled(group_ind, header_style),
     ])));
-
-    let group_list_h = list_height.saturating_sub(1);
     for (i, (name, gid)) in picker
         .groups
         .iter()
@@ -159,15 +173,8 @@ pub(in crate::ui) fn render_chown_picker(f: &mut Frame, app: &App, area: Rect) {
 
         let marker = if is_cursor { "\u{25b8} " } else { "  " };
         let gid_str = format!("{gid}");
-        let max_name = group_col_w.saturating_sub(marker.chars().count() + gid_str.len() + 2);
-        let name_display = if name.chars().count() > max_name {
-            let trunc: String = name.chars().take(max_name.saturating_sub(1)).collect();
-            format!("{trunc}\u{2026}")
-        } else {
-            name.clone()
-        };
-        let pad = group_col_w
-            .saturating_sub(marker.chars().count() + name_display.chars().count() + gid_str.len() + 1);
+        let reserved = display_width(marker) + gid_str.len() + 1;
+        let (name_display, pad) = fit_truncated(name, group_col_w, reserved);
 
         if is_cursor && is_group_active {
             let s = Style::default().fg(t.bg_text).bg(t.blue);

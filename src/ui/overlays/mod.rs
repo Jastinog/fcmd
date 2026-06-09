@@ -13,6 +13,7 @@ mod chown;
 mod conflict;
 mod archive;
 mod bulk_rename;
+mod tasks;
 
 pub(super) use which_key::render_which_key;
 pub(super) use command::render_command_popup;
@@ -30,6 +31,7 @@ pub(super) use chown::render_chown_picker;
 pub(super) use conflict::render_conflict_popup;
 pub(super) use archive::render_archive;
 pub(super) use bulk_rename::render_bulk_rename;
+pub(super) use tasks::render_tasks_overlay;
 
 /// Render a single-line text input field: `<prefix><text>█` with the visible text
 /// scrolled to keep the tail (where the cursor sits) in view, padded to `total_cols`.
@@ -62,7 +64,7 @@ pub(in crate::ui) fn input_field_line<'a>(
 /// A horizontal separator line (`width` cells of dashes) with a right-aligned `indicator`
 /// overwriting the trailing dashes, so the line stays exactly `width` wide.
 pub(in crate::ui) fn separator_with_indicator(width: usize, indicator: &str) -> String {
-    let dash_len = width.saturating_sub(indicator.chars().count());
+    let dash_len = width.saturating_sub(crate::ui::util::display_width(indicator));
     format!("{}{indicator}", "\u{2500}".repeat(dash_len))
 }
 

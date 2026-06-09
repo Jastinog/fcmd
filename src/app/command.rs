@@ -309,6 +309,10 @@ impl App {
                 self.open_bookmarks();
             }
 
+            "tasks" | "jobs" => {
+                self.open_tasks();
+            }
+
             "brename" | "bmrn" => {
                 let parts: Vec<&str> = match arg.filter(|a| !a.is_empty()) {
                     Some(a) => a.splitn(2, ' ').collect(),

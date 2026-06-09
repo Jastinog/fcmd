@@ -25,6 +25,21 @@ pub(crate) mod util;
 pub(super) const SEP_RIGHT: &str = "\u{e0b0}"; //
 pub(super) const SEP_LEFT: &str = "\u{e0b2}"; //
 
+// Spinner frames for ongoing background work, shared by the tab bar, the panel
+// loading row, and overlays so they animate identically.
+pub(super) const SPINNER: [&str; 4] = ["\u{25d0}", "\u{25d3}", "\u{25d1}", "\u{25d2}"];
+
+// Smallest terminal the main UI can render without garbling: tab bar (1) + a usable
+// panel + status bar (1) need this much room. Below it we show a "too small" notice
+// instead of a broken layout.
+pub(super) const MIN_TERM_WIDTH: u16 = 24;
+pub(super) const MIN_TERM_HEIGHT: u16 = 6;
+
+/// Whether the given area is too small to render the main UI.
+pub(super) fn is_too_small(area: Rect) -> bool {
+    area.width < MIN_TERM_WIDTH || area.height < MIN_TERM_HEIGHT
+}
+
 pub struct RenderContext<'a> {
     pub visual_marks: &'a HashMap<PathBuf, u8>,
     pub dir_sizes: &'a HashMap<PathBuf, u64>,
@@ -40,6 +55,11 @@ pub struct RenderContext<'a> {
 
 pub fn render(f: &mut Frame, app: &mut App) {
     let full_area = f.area();
+
+    if is_too_small(full_area) {
+        render_too_small(f, full_area, &app.theme);
+        return;
+    }
 
     let chunks = Layout::default()
         .direction(Direction::Vertical)
@@ -216,6 +236,10 @@ pub fn render(f: &mut Frame, app: &mut App) {
         overlays::render_archive(f, app, full_area);
     }
 
+    if app.mode == Mode::Tasks {
+        overlays::render_tasks_overlay(f, app, full_area);
+    }
+
     if let Some(ref fs) = app.find_state {
         find_overlay::render_find(f, fs, &app.theme, full_area);
     }
@@ -274,6 +298,41 @@ fn build_panel_layout(
         (Some(tree_area), panel_areas)
     } else {
         (None, cols.to_vec())
+    }
+}
+
+/// Render a centered "terminal too small" notice. Each line is width-clamped and the
+/// block is vertically centered, so it degrades cleanly down to a 1-cell area.
+fn render_too_small(f: &mut Frame, area: Rect, t: &Theme) {
+    use ratatui::widgets::{Block, Clear};
+
+    f.render_widget(Clear, area);
+    f.render_widget(Block::default().style(Style::default().bg(t.bg)), area);
+
+    let lines = [
+        "Terminal too small".to_string(),
+        format!("min {MIN_TERM_WIDTH}\u{00d7}{MIN_TERM_HEIGHT}"),
+        format!("now {}\u{00d7}{}", area.width, area.height),
+    ];
+
+    let total = lines.len() as u16;
+    let start_y = area.y + area.height.saturating_sub(total) / 2;
+    for (i, line) in lines.iter().enumerate() {
+        let y = start_y + i as u16;
+        if y >= area.y + area.height {
+            break;
+        }
+        let text = util::truncate_to_width(line, area.width as usize);
+        let w = util::display_width(&text) as u16;
+        let x = area.x + area.width.saturating_sub(w) / 2;
+        let fg = if i == 0 { t.fg } else { t.fg_dim };
+        f.render_widget(
+            Paragraph::new(Line::from(Span::styled(
+                text,
+                Style::default().fg(fg).bg(t.bg),
+            ))),
+            Rect::new(x, y, w.min(area.width), 1),
+        );
     }
 }
 
@@ -338,13 +397,20 @@ fn render_tab_bar(f: &mut Frame, app: &App, area: Rect) {
                     TaskKind::Copy { .. } => t.cyan,
                     TaskKind::Move { .. } => t.yellow,
                     TaskKind::Delete { .. } => t.red,
+                    TaskKind::Archive { .. } => t.magenta,
                 };
                 Some((format!("{status_text} {progress_pct}%"), fg))
             } else {
                 None
             }
         })
-    } else { app.task_notification.as_ref().map(|notif| (notif.clone(), t.fg)) };
+    } else if let Some(progress) = &app.background_progress {
+        // Ongoing background work (e.g. dir-size calculation) with an animated spinner.
+        let spinner = SPINNER[(app.tick_count % 4) as usize];
+        Some((format!("{spinner} {progress}"), t.cyan))
+    } else {
+        app.task_notification.as_ref().map(|notif| (notif.clone(), t.fg))
+    };
 
     // Compute info segment width
     let tabs_used: usize = spans.iter().map(|s| util::display_width(&s.content)).sum();
@@ -403,4 +469,22 @@ fn render_tab_bar(f: &mut Frame, app: &App, area: Rect) {
 
     let line = Line::from(spans);
     f.render_widget(Paragraph::new(line), area);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn too_small_below_minimums() {
+        assert!(is_too_small(Rect::new(0, 0, MIN_TERM_WIDTH - 1, 40)));
+        assert!(is_too_small(Rect::new(0, 0, 80, MIN_TERM_HEIGHT - 1)));
+        assert!(is_too_small(Rect::new(0, 0, 1, 1)));
+    }
+
+    #[test]
+    fn not_too_small_at_minimums() {
+        assert!(!is_too_small(Rect::new(0, 0, MIN_TERM_WIDTH, MIN_TERM_HEIGHT)));
+        assert!(!is_too_small(Rect::new(0, 0, 80, 40)));
+    }
 }

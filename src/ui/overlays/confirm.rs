@@ -7,6 +7,7 @@ use ratatui::{
 };
 
 use crate::app::App;
+use crate::ui::util::{display_width, fit_truncated};
 
 pub(in crate::ui) fn render_confirm_popup(f: &mut Frame, app: &App, area: Rect) {
     let t = &app.theme;
@@ -58,14 +59,7 @@ pub(in crate::ui) fn render_confirm_popup(f: &mut Frame, app: &App, area: Rect) 
         let icon = if is_dir { " " } else { " 󰈔 " };
         let icon_color = if is_dir { t.blue } else { t.fg_dim };
 
-        let max_name = iw.saturating_sub(icon.chars().count());
-        let name_display = if name.chars().count() > max_name {
-            let truncated: String = name.chars().take(max_name.saturating_sub(1)).collect();
-            format!("{truncated}\u{2026}")
-        } else {
-            name
-        };
-        let pad = iw.saturating_sub(icon.chars().count() + name_display.chars().count());
+        let (name_display, pad) = fit_truncated(&name, iw, display_width(icon));
 
         // The list is a non-interactive preview (no per-row cursor), so every row
         // uses the same background.

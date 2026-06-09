@@ -120,8 +120,7 @@ pub(super) fn render_panel(
                 } else {
                     pad_to_width(&display, name_width)
                 };
-                const SPINNER: [&str; 4] = ["\u{25d0}", "\u{25d3}", "\u{25d1}", "\u{25d2}"];
-                let spin_char = SPINNER[(ctx.tick_count % 4) as usize];
+                let spin_char = super::SPINNER[(ctx.tick_count % 4) as usize];
                 let mut spans = vec![
                     Span::styled(spin_char, ghost_style),
                     Span::styled(" ", ghost_style),

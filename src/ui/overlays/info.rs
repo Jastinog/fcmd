@@ -7,6 +7,7 @@ use ratatui::{
 };
 
 use crate::app::App;
+use crate::ui::util::{display_width, fit_truncated};
 
 pub(in crate::ui) fn render_info_popup(f: &mut Frame, app: &App, area: Rect) {
     let t = &app.theme;
@@ -57,7 +58,7 @@ pub(in crate::ui) fn render_info_popup(f: &mut Frame, app: &App, area: Rect) {
     let key_width = lines
         .iter()
         .skip(1) // skip Name (in title)
-        .map(|(k, _)| k.chars().count())
+        .map(|(k, _)| display_width(k))
         .max()
         .unwrap_or(0);
 
@@ -66,17 +67,10 @@ pub(in crate::ui) fn render_info_popup(f: &mut Frame, app: &App, area: Rect) {
 
     let mut items: Vec<ListItem> = Vec::new();
     for (k, v) in lines.iter().skip(1).skip(scroll).take(list_height) {
-        let pad = key_width.saturating_sub(k.chars().count());
+        let pad = key_width.saturating_sub(display_width(k));
         let key_col = format!(" {k}{} ", " ".repeat(pad));
-        let key_w = key_col.chars().count();
-        let val_max = iw.saturating_sub(key_w);
-        let val_display = if v.chars().count() > val_max {
-            let trunc: String = v.chars().take(val_max.saturating_sub(1)).collect();
-            format!("{trunc}\u{2026}")
-        } else {
-            v.clone()
-        };
-        let val_pad = iw.saturating_sub(key_w + val_display.chars().count());
+        let key_w = display_width(&key_col);
+        let (val_display, val_pad) = fit_truncated(v, iw, key_w);
 
         // Color permissions specially
         let val_spans = if k == "Permissions" {

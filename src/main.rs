@@ -106,7 +106,9 @@ fn open_in_editor(
 
 /// Lightweight snapshot of state that poll functions may change.
 /// Used to detect whether a tick actually modified anything worth redrawing.
-fn snapshot(app: &app::App) -> (String, Option<String>, bool, usize, usize, usize, usize) {
+fn snapshot(
+    app: &app::App,
+) -> (String, Option<String>, Option<String>, bool, usize, usize, usize, usize) {
     let find_count = app
         .find_state
         .as_ref()
@@ -114,6 +116,7 @@ fn snapshot(app: &app::App) -> (String, Option<String>, bool, usize, usize, usiz
     (
         app.status_message.clone(),
         app.task_notification.clone(),
+        app.background_progress.clone(),
         app.conflict_info.is_some(),
         app.dir_sizes.len(),
         app.git_statuses.len(),
@@ -181,6 +184,10 @@ async fn run(
                 }
                 // Active tasks (copy/move/delete) need continuous progress redraws
                 if app.task_manager.active_count() > 0 {
+                    app.needs_redraw = true;
+                }
+                // Animate the background-work spinner (e.g. dir-size calculation).
+                if app.background_progress.is_some() {
                     app.needs_redraw = true;
                 }
             }
