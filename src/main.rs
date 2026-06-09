@@ -143,7 +143,14 @@ async fn run(
     app: &mut app::App,
 ) -> io::Result<()> {
     let mut reader = EventStream::new();
-    let mut tick = tokio::time::interval(Duration::from_millis(250));
+    const TICK_MS: u64 = 250;
+    let mut tick = tokio::time::interval(Duration::from_millis(TICK_MS));
+    // How often to refresh the progress animation of a running task. Progress is
+    // purely cosmetic, so we redraw it about once per second instead of on every
+    // tick to avoid spending CPU on terminal redraws during long copies/moves.
+    // Task completion, conflicts and status messages are tracked by `snapshot`
+    // and still redraw immediately.
+    const TASK_REDRAW_EVERY_N_TICKS: u32 = if 1000 / TICK_MS > 0 { (1000 / TICK_MS) as u32 } else { 1 };
 
     loop {
         if app.needs_redraw {
@@ -182,8 +189,11 @@ async fn run(
                 if app.pending_key.is_some() {
                     app.needs_redraw = true;
                 }
-                // Active tasks (copy/move/delete) need continuous progress redraws
-                if app.task_manager.active_count() > 0 {
+                // Active tasks (copy/move/delete) animate their progress, but only
+                // about once per second — see TASK_REDRAW_EVERY_N_TICKS.
+                if app.task_manager.active_count() > 0
+                    && app.tick_count % TASK_REDRAW_EVERY_N_TICKS == 0
+                {
                     app.needs_redraw = true;
                 }
                 // Animate the background-work spinner (e.g. dir-size calculation).

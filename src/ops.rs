@@ -3,7 +3,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::time::SystemTime;
+use std::time::{Instant, SystemTime};
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum RegisterOp {
@@ -132,11 +132,30 @@ struct ProgressCtx {
     bytes_total: u64,
     item_index: usize,
     item_total: usize,
+    last_report: Option<Instant>,
 }
 
+/// Minimum interval between progress messages. Progress is purely cosmetic
+/// (the UI keeps only the latest message and derives the final total from
+/// `Finished`), so we throttle to avoid flooding the channel.
+const PROGRESS_INTERVAL: std::time::Duration = std::time::Duration::from_millis(50);
+
 impl ProgressCtx {
-    fn report(&self) {
-        let _ = self.tx.blocking_send(ProgressMsg::Progress {
+    /// Send a progress update without blocking. The channel is bounded and only
+    /// drained on the UI tick; using `try_send` (instead of `blocking_send`)
+    /// means a full channel never throttles the copy thread to UI speed — we
+    /// just drop the intermediate update, which is harmless since progress is
+    /// lossy. Throttled by `PROGRESS_INTERVAL` so per-file copies of huge trees
+    /// don't spend cycles building messages that get dropped anyway.
+    fn report(&mut self) {
+        let now = Instant::now();
+        if let Some(last) = self.last_report {
+            if now.duration_since(last) < PROGRESS_INTERVAL {
+                return;
+            }
+        }
+        self.last_report = Some(now);
+        let _ = self.tx.try_send(ProgressMsg::Progress {
             bytes_done: self.bytes_done,
             bytes_total: self.bytes_total,
             item_index: self.item_index,
@@ -491,6 +510,7 @@ pub fn paste_in_background(
             bytes_total,
             item_index: 0,
             item_total,
+            last_report: None,
         };
         let mut policy = ConflictPolicy::default();
 
@@ -690,6 +710,7 @@ pub fn undo(records: &[OpRecord]) -> std::io::Result<String> {
                                 bytes_total: 0,
                                 item_index: 0,
                                 item_total: 1,
+                                last_report: None,
                             };
                             copy_dir_progress_simple(dst, src, &mut ctx)?;
                             fs::remove_dir_all(dst)?;
@@ -1355,6 +1376,7 @@ mod tests {
             bytes_total: 100,
             item_index: 0,
             item_total: 1,
+            last_report: None,
         };
         copy_dir_progress_simple(&src, &target, &mut ctx).unwrap();
 
@@ -1384,6 +1406,7 @@ mod tests {
             bytes_total: 5,
             item_index: 0,
             item_total: 1,
+            last_report: None,
         };
         let (ctxt, _crx) = make_conflict_channel();
         let mut policy = ConflictPolicy::default();
@@ -1414,6 +1437,7 @@ mod tests {
             bytes_total: 100,
             item_index: 0,
             item_total: 1,
+            last_report: None,
         };
         let (ctxt, _crx) = make_conflict_channel();
         let mut policy = ConflictPolicy::default();
@@ -1445,6 +1469,7 @@ mod tests {
             bytes_total: 100,
             item_index: 0,
             item_total: 1,
+            last_report: None,
         };
         let (ctxt, _crx) = make_conflict_channel();
         let mut policy = ConflictPolicy::default();
@@ -1472,6 +1497,7 @@ mod tests {
             bytes_total: 7,
             item_index: 0,
             item_total: 1,
+            last_report: None,
         };
         let (ctxt, _crx) = make_conflict_channel();
         let mut policy = ConflictPolicy::default();
@@ -1502,6 +1528,7 @@ mod tests {
             bytes_total: 100,
             item_index: 0,
             item_total: 1,
+            last_report: None,
         };
         let (ctxt, _crx) = make_conflict_channel();
         let mut policy = ConflictPolicy::default();
@@ -1554,6 +1581,7 @@ mod tests {
             bytes_total: 1,
             item_index: 0,
             item_total: 1,
+            last_report: None,
         };
         copy_dir_progress_simple(&src, &target, &mut ctx).unwrap();
 
@@ -1635,7 +1663,7 @@ mod tests {
         fs::write(src.join("file.txt"), "data").unwrap();
 
         let (tx, _rx) = tokio::sync::mpsc::channel(64);
-        let mut ctx = ProgressCtx { tx, bytes_done: 0, bytes_total: 0, item_index: 0, item_total: 1 };
+        let mut ctx = ProgressCtx { tx, bytes_done: 0, bytes_total: 0, item_index: 0, item_total: 1, last_report: None };
         let (ctxt, _crx) = make_conflict_channel();
         let mut policy = ConflictPolicy::default();
 
@@ -1656,7 +1684,7 @@ mod tests {
         fs::write(&src, "important").unwrap();
 
         let (tx, _rx) = tokio::sync::mpsc::channel(64);
-        let mut ctx = ProgressCtx { tx, bytes_done: 0, bytes_total: 0, item_index: 0, item_total: 1 };
+        let mut ctx = ProgressCtx { tx, bytes_done: 0, bytes_total: 0, item_index: 0, item_total: 1, last_report: None };
         let (ctxt, _crx) = make_conflict_channel();
         let mut policy = ConflictPolicy::default();
 
@@ -1679,7 +1707,7 @@ mod tests {
         fs::create_dir_all(&dst_dir).unwrap();
 
         let (tx, _rx) = tokio::sync::mpsc::channel(64);
-        let mut ctx = ProgressCtx { tx, bytes_done: 0, bytes_total: 0, item_index: 0, item_total: 1 };
+        let mut ctx = ProgressCtx { tx, bytes_done: 0, bytes_total: 0, item_index: 0, item_total: 1, last_report: None };
         let (ctxt, _crx) = make_conflict_channel();
         let mut policy = ConflictPolicy::default();
 
