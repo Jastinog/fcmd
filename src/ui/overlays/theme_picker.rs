@@ -354,8 +354,8 @@ fn render_preview_panel(f: &mut Frame, pt: &Theme, area: Rect) {
     let show_code = panels_area.width >= 40;
 
     let (tree_rect, panel_rect, code_rect) = if show_tree && show_code {
-        let tree_w = (panels_area.width * 20 / 100).max(10).min(16);
-        let code_w = (panels_area.width * 35 / 100).max(14);
+        let tree_w = ((panels_area.width as u32 * 20 / 100) as u16).max(10).min(16);
+        let code_w = ((panels_area.width as u32 * 35 / 100) as u16).max(14);
         let panel_w = panels_area.width.saturating_sub(tree_w + code_w);
         (
             Some(Rect::new(panels_area.x, panels_area.y, tree_w, panels_area.height)),
@@ -363,7 +363,7 @@ fn render_preview_panel(f: &mut Frame, pt: &Theme, area: Rect) {
             Some(Rect::new(panels_area.x + tree_w + panel_w, panels_area.y, code_w, panels_area.height)),
         )
     } else if show_code {
-        let code_w = (panels_area.width * 35 / 100).max(14);
+        let code_w = ((panels_area.width as u32 * 35 / 100) as u16).max(14);
         let panel_w = panels_area.width.saturating_sub(code_w);
         (
             None,

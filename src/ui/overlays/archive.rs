@@ -15,8 +15,8 @@ pub(in crate::ui) fn render_archive(f: &mut Frame, app: &App, area: Rect) {
     };
     let t = &app.theme;
 
-    let w = (area.width * 80 / 100).max(50).min(area.width.saturating_sub(4));
-    let h = (area.height * 75 / 100).max(12).min(area.height.saturating_sub(4));
+    let w = ((area.width as u32 * 80 / 100) as u16).max(50).min(area.width.saturating_sub(4));
+    let h = ((area.height as u32 * 75 / 100) as u16).max(12).min(area.height.saturating_sub(4));
     let x = (area.width.saturating_sub(w)) / 2;
     let y = (area.height.saturating_sub(h)) / 2;
     let popup = Rect::new(area.x + x, area.y + y, w, h);

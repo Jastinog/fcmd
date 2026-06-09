@@ -17,8 +17,8 @@ pub(in crate::ui) fn render_bulk_rename(f: &mut Frame, app: &App, area: Rect) {
     let t = &app.theme;
 
     // Popup dimensions: 80% width, 70% height
-    let w = (area.width * 80 / 100).max(40).min(area.width.saturating_sub(4));
-    let h = (area.height * 70 / 100).max(10).min(area.height.saturating_sub(4));
+    let w = ((area.width as u32 * 80 / 100) as u16).max(40).min(area.width.saturating_sub(4));
+    let h = ((area.height as u32 * 70 / 100) as u16).max(10).min(area.height.saturating_sub(4));
     let x = (area.width.saturating_sub(w)) / 2;
     let y = (area.height.saturating_sub(h)) / 2;
     let popup = Rect::new(area.x + x, area.y + y, w, h);

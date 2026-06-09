@@ -5,8 +5,10 @@ use ratatui::layout::Rect;
 use unicode_width::UnicodeWidthChar;
 
 pub(crate) fn centered_rect(percent_x: u16, percent_y: u16, area: Rect) -> Rect {
-    let w = (area.width * percent_x / 100).max(30).min(area.width);
-    let h = (area.height * percent_y / 100).max(8).min(area.height);
+    // Compute in u32 to avoid u16 overflow on very wide/tall terminals
+    // (e.g. width 656 * 100 would overflow u16).
+    let w = ((area.width as u32 * percent_x as u32 / 100) as u16).max(30).min(area.width);
+    let h = ((area.height as u32 * percent_y as u32 / 100) as u16).max(8).min(area.height);
     let x = (area.width.saturating_sub(w)) / 2;
     let y = (area.height.saturating_sub(h)) / 2;
     Rect::new(area.x + x, area.y + y, w, h)
