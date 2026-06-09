@@ -66,6 +66,7 @@ impl App {
             let mut deleted = 0usize;
             let mut errors = Vec::new();
             let mut cancelled = false;
+            let mut last_report: Option<std::time::Instant> = None;
             for (i, path) in paths.iter().enumerate() {
                 // Honour a cancel request between items; items already removed still count.
                 if cancel_worker.load(Ordering::Relaxed) {
@@ -76,11 +77,18 @@ impl App {
                     .file_name()
                     .map(|n| n.to_string_lossy().into_owned())
                     .unwrap_or_else(|| path.to_string_lossy().into_owned());
-                let _ = tx.blocking_send(DeleteMsg::Progress {
-                    done: i,
-                    total,
-                    current: name.clone(),
-                });
+                // Throttled non-blocking progress: a full channel (drained at UI tick
+                // rate) must never throttle deletion throughput. Progress is lossy;
+                // the final count is delivered by DeleteMsg::Finished below.
+                let now = std::time::Instant::now();
+                if last_report.is_none_or(|t| now.duration_since(t) >= crate::ops::PROGRESS_INTERVAL) {
+                    last_report = Some(now);
+                    let _ = tx.try_send(DeleteMsg::Progress {
+                        done: i,
+                        total,
+                        current: name.clone(),
+                    });
+                }
                 let result = if permanent {
                     ops::remove_path(path)
                 } else {

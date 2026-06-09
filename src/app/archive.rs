@@ -418,12 +418,20 @@ impl App {
         self.conflict_rxs.push(conflict_rx);
 
         tokio::task::spawn_blocking(move || {
+            // Throttled, non-blocking progress: a full channel (drained at UI tick
+            // rate) must never throttle extraction. Progress is lossy; the final
+            // counts arrive via ArchiveMsg::Finished.
+            let mut last_report: Option<std::time::Instant> = None;
             let mut on_progress = |done: usize, total: usize, current: &str| {
-                let _ = tx.blocking_send(ArchiveMsg::Progress {
-                    done,
-                    total,
-                    current: current.to_string(),
-                });
+                let now = std::time::Instant::now();
+                if last_report.is_none_or(|t| now.duration_since(t) >= crate::ops::PROGRESS_INTERVAL) {
+                    last_report = Some(now);
+                    let _ = tx.try_send(ArchiveMsg::Progress {
+                        done,
+                        total,
+                        current: current.to_string(),
+                    });
+                }
             };
 
             let mut overwrite_all = false;
@@ -543,12 +551,18 @@ impl App {
         let cancel_worker = Arc::clone(&cancel);
 
         tokio::task::spawn_blocking(move || {
+            // See start_archive_extract: throttled, lossy, non-blocking progress.
+            let mut last_report: Option<std::time::Instant> = None;
             let mut on_progress = |done: usize, total: usize, current: &str| {
-                let _ = tx.blocking_send(ArchiveMsg::Progress {
-                    done,
-                    total,
-                    current: current.to_string(),
-                });
+                let now = std::time::Instant::now();
+                if last_report.is_none_or(|t| now.duration_since(t) >= crate::ops::PROGRESS_INTERVAL) {
+                    last_report = Some(now);
+                    let _ = tx.try_send(ArchiveMsg::Progress {
+                        done,
+                        total,
+                        current: current.to_string(),
+                    });
+                }
             };
             let result =
                 archive::create_stream(&paths, &base_dir, &output, &mut on_progress, &cancel_worker);

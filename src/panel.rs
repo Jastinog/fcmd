@@ -406,7 +406,12 @@ pub fn stream_dir_entries(
         .unwrap_or_default();
 
     // For large directories, send intermediate batches from the already-loaded
-    // entries so the user sees content appearing progressively.
+    // entries so the user sees content appearing progressively. These are purely
+    // cosmetic hints: the directory is already fully read at this point, and the
+    // authoritative entry list is delivered by `Finished` below. So we use a
+    // non-blocking `try_send` — a full channel just drops a progressive batch
+    // instead of stalling the worker at the UI redraw rate. Only a closed channel
+    // (the load was cancelled) aborts early.
     if entries.len() > BATCH_SIZE {
         for chunk in entries.chunks(BATCH_SIZE) {
             let msg = crate::app::DirLoadMsg::Batch {
@@ -415,7 +420,7 @@ pub fn stream_dir_entries(
                 path: path.clone(),
                 entries: chunk.to_vec(),
             };
-            if tx.blocking_send(msg).is_err() {
+            if let Err(tokio::sync::mpsc::error::TrySendError::Closed(_)) = tx.try_send(msg) {
                 return; // Receiver dropped (stale load cancelled)
             }
         }

@@ -36,7 +36,10 @@ struct Entry {
 pub struct FindState {
     pub query: String,
     entries: Vec<Entry>,
-    rx: Option<tokio::sync::mpsc::Receiver<Entry>>,
+    // Unbounded so the background walker / `mdfind` reader never blocks waiting for
+    // the UI to drain — results are lossless and capped (MAX_ENTRIES / MDFIND_LIMIT),
+    // so the queue is bounded in practice without throttling discovery to tick rate.
+    rx: Option<tokio::sync::mpsc::UnboundedReceiver<Entry>>,
     pub filtered: Vec<usize>,
     pub selected: usize,
     pub scroll: usize,
@@ -61,7 +64,7 @@ impl Drop for FindState {
 
 impl FindState {
     pub fn new_local(base_dir: &Path) -> Self {
-        let (tx, rx) = tokio::sync::mpsc::channel(1024);
+        let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
         let base = base_dir.to_path_buf();
         tokio::task::spawn_blocking(move || {
             walk_send(&base, &base, &tx, 0, &mut 0);
@@ -142,7 +145,7 @@ impl FindState {
             return;
         }
 
-        let (tx, rx) = tokio::sync::mpsc::channel(1024);
+        let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
         let query = self.query.clone();
 
         // Sanitize: strip characters that could be interpreted by find/mdfind
@@ -432,7 +435,7 @@ fn abbreviate_home(path: &str) -> String {
     path.to_string()
 }
 
-async fn global_search_read(stdout: tokio::process::ChildStdout, tx: &tokio::sync::mpsc::Sender<Entry>) -> usize {
+async fn global_search_read(stdout: tokio::process::ChildStdout, tx: &tokio::sync::mpsc::UnboundedSender<Entry>) -> usize {
     use tokio::io::{AsyncBufReadExt, BufReader};
     let reader = BufReader::new(stdout);
     let mut lines = reader.lines();
@@ -452,7 +455,6 @@ async fn global_search_read(stdout: tokio::process::ChildStdout, tx: &tokio::syn
                 full_path: path,
                 is_dir,
             })
-            .await
             .is_err()
         {
             break;
@@ -462,7 +464,7 @@ async fn global_search_read(stdout: tokio::process::ChildStdout, tx: &tokio::syn
     count
 }
 
-fn walk_send(dir: &Path, base: &Path, tx: &tokio::sync::mpsc::Sender<Entry>, depth: usize, count: &mut usize) {
+fn walk_send(dir: &Path, base: &Path, tx: &tokio::sync::mpsc::UnboundedSender<Entry>, depth: usize, count: &mut usize) {
     if depth > MAX_DEPTH || *count >= MAX_ENTRIES {
         return;
     }
@@ -499,7 +501,7 @@ fn walk_send(dir: &Path, base: &Path, tx: &tokio::sync::mpsc::Sender<Entry>, dep
         let rel_lower = rel.to_lowercase();
 
         if tx
-            .blocking_send(Entry {
+            .send(Entry {
                 rel_path: rel,
                 rel_path_lower: rel_lower,
                 full_path: path.clone(),

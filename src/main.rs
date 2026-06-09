@@ -1,5 +1,5 @@
 use std::io;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use crossterm::{
     event::{Event, EventStream, KeyEventKind},
@@ -151,12 +151,29 @@ async fn run(
     // Task completion, conflicts and status messages are tracked by `snapshot`
     // and still redraw immediately.
     const TASK_REDRAW_EVERY_N_TICKS: u32 = if 1000 / TICK_MS > 0 { (1000 / TICK_MS) as u32 } else { 1 };
+    // Minimum wall-clock gap between two consecutive redraws driven by *background*
+    // work (task progress, streaming dir/find loads, etc.). This keeps the terminal
+    // from being redrawn dozens of times per second when background channels fire
+    // rapidly. Direct keyboard / resize input bypasses this cap (`draw_immediately`)
+    // so navigation always feels instant. A pending background redraw that is held
+    // back is flushed by the next 250ms `tick`.
+    const MIN_REDRAW_INTERVAL: Duration = Duration::from_millis(TICK_MS);
+    let mut last_draw: Option<Instant> = None;
+    // First frame must render unconditionally.
+    let mut draw_immediately = true;
 
     loop {
         if app.needs_redraw {
-            terminal.draw(|f| ui::render(f, app))?;
-            app.needs_redraw = false;
+            let due = draw_immediately
+                || last_draw.is_none_or(|t| t.elapsed() >= MIN_REDRAW_INTERVAL);
+            if due {
+                terminal.draw(|f| ui::render(f, app))?;
+                app.needs_redraw = false;
+                last_draw = Some(Instant::now());
+            }
+            // Otherwise keep `needs_redraw` set; the next tick flushes it within 250ms.
         }
+        draw_immediately = false;
 
         tokio::select! {
             maybe_event = reader.next() => {
@@ -164,9 +181,11 @@ async fn run(
                     Some(Ok(Event::Key(key))) if key.kind == KeyEventKind::Press => {
                         app.handle_key(key);
                         app.needs_redraw = true;
+                        draw_immediately = true;
                     }
                     Some(Ok(Event::Resize(_, _))) => {
                         app.needs_redraw = true;
+                        draw_immediately = true;
                     }
                     Some(Ok(_)) => {}
                     Some(Err(_)) => {}
@@ -192,7 +211,7 @@ async fn run(
                 // Active tasks (copy/move/delete) animate their progress, but only
                 // about once per second — see TASK_REDRAW_EVERY_N_TICKS.
                 if app.task_manager.active_count() > 0
-                    && app.tick_count % TASK_REDRAW_EVERY_N_TICKS == 0
+                    && app.tick_count.is_multiple_of(TASK_REDRAW_EVERY_N_TICKS)
                 {
                     app.needs_redraw = true;
                 }

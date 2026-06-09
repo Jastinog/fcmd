@@ -137,8 +137,10 @@ struct ProgressCtx {
 
 /// Minimum interval between progress messages. Progress is purely cosmetic
 /// (the UI keeps only the latest message and derives the final total from
-/// `Finished`), so we throttle to avoid flooding the channel.
-const PROGRESS_INTERVAL: std::time::Duration = std::time::Duration::from_millis(50);
+/// `Finished`), so we throttle to avoid flooding the channel. Shared by all
+/// background workers that report lossy progress (copy/move, delete, du,
+/// archive) so none of them are ever throttled by the UI redraw rate.
+pub const PROGRESS_INTERVAL: std::time::Duration = std::time::Duration::from_millis(50);
 
 impl ProgressCtx {
     /// Send a progress update without blocking. The channel is bounded and only
@@ -149,10 +151,8 @@ impl ProgressCtx {
     /// don't spend cycles building messages that get dropped anyway.
     fn report(&mut self) {
         let now = Instant::now();
-        if let Some(last) = self.last_report {
-            if now.duration_since(last) < PROGRESS_INTERVAL {
-                return;
-            }
+        if self.last_report.is_some_and(|last| now.duration_since(last) < PROGRESS_INTERVAL) {
+            return;
         }
         self.last_report = Some(now);
         let _ = self.tx.try_send(ProgressMsg::Progress {
@@ -580,19 +580,28 @@ pub fn du_in_background(dirs: Vec<PathBuf>, tx: tokio::sync::mpsc::Sender<DuMsg>
     tokio::task::spawn_blocking(move || {
         let total = dirs.len();
         let mut sizes = Vec::new();
+        let mut last_report: Option<Instant> = None;
         for (i, dir) in dirs.iter().enumerate() {
             let name = dir
                 .file_name()
                 .map(|n| n.to_string_lossy().into_owned())
                 .unwrap_or_default();
-            let _ = tx.blocking_send(DuMsg::Progress {
-                done: i,
-                total,
-                current: name,
-            });
+            // Progress is cosmetic and the receiver only keeps the latest message,
+            // so use a throttled, non-blocking send: a full channel must never stall
+            // the size calculation (see ProgressCtx::report for the same rationale).
+            let now = Instant::now();
+            if last_report.is_none_or(|t| now.duration_since(t) >= PROGRESS_INTERVAL) {
+                last_report = Some(now);
+                let _ = tx.try_send(DuMsg::Progress {
+                    done: i,
+                    total,
+                    current: name,
+                });
+            }
             let size = path_size(dir);
             sizes.push((dir.clone(), size));
         }
+        // Final result must be delivered reliably.
         let _ = tx.blocking_send(DuMsg::Finished { sizes });
     });
 }
