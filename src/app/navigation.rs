@@ -3,27 +3,36 @@ use crate::util::copy_to_clipboard;
 
 impl App {
     pub(super) fn focus_next(&mut self) {
+        let max = self.layout.count().saturating_sub(1);
         if self.tree_focused && self.show_tree {
             // Tree → first panel
             self.tree_focused = false;
+            self.tab_mut().active = 0;
+        } else if self.tab().active < max {
+            self.tab_mut().active += 1;
+        } else if self.show_tree {
+            // Wrap: last panel → tree
+            self.tree_focused = true;
         } else {
-            let max = self.layout.count().saturating_sub(1);
-            let tab = self.tab_mut();
-            if tab.active < max {
-                tab.active += 1;
-            }
+            // Wrap: last panel → first panel
+            self.tab_mut().active = 0;
         }
     }
 
     pub(super) fn focus_prev(&mut self) {
+        let max = self.layout.count().saturating_sub(1);
         if self.tree_focused {
-            return; // already leftmost
-        }
-        let active = self.tab().active;
-        if active > 0 {
-            self.tab_mut().active = active - 1;
+            // Wrap: tree → last panel
+            self.tree_focused = false;
+            self.tab_mut().active = max;
+        } else if self.tab().active > 0 {
+            self.tab_mut().active -= 1;
         } else if self.show_tree {
+            // First panel → tree
             self.tree_focused = true;
+        } else {
+            // Wrap: first panel → last panel
+            self.tab_mut().active = max;
         }
     }
 
@@ -379,6 +388,7 @@ impl App {
             ("", "Select"),
             ("a", "select all"),
             ("n", "unselect"),
+            ("m", "clear mark"),
             ("", "Search"),
             (",", "find"),
             (".", "find global"),
@@ -668,13 +678,39 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn focus_prev_tree_already_focused_noop() {
+    async fn focus_prev_tree_wraps_to_last_panel() {
         let entries = crate::app::make_test_entries(&["a.txt"]);
         let mut app = App::new_for_test(entries);
+        app.layout = PanelLayout::Dual;
         app.show_tree = true;
         app.tree_focused = true;
         app.focus_prev();
-        assert!(app.tree_focused); // stays
+        // Wraps from the tree (leftmost) to the rightmost panel.
+        assert!(!app.tree_focused);
+        assert_eq!(app.tab().active, 1);
+    }
+
+    #[tokio::test]
+    async fn focus_next_last_panel_wraps_to_tree() {
+        let entries = crate::app::make_test_entries(&["a.txt"]);
+        let mut app = App::new_for_test(entries);
+        app.layout = PanelLayout::Dual;
+        app.show_tree = true;
+        app.tree_focused = false;
+        app.tab_mut().active = 1; // last panel
+        app.focus_next();
+        assert!(app.tree_focused);
+    }
+
+    #[tokio::test]
+    async fn focus_next_wraps_without_tree() {
+        let entries = crate::app::make_test_entries(&["a.txt"]);
+        let mut app = App::new_for_test(entries);
+        app.layout = PanelLayout::Dual;
+        app.show_tree = false;
+        app.tab_mut().active = 1; // last panel
+        app.focus_next();
+        assert_eq!(app.tab().active, 0); // wrapped to first
     }
 
     #[tokio::test]

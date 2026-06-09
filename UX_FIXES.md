@@ -73,24 +73,25 @@ Legend: `[ ]` todo · `[~]` in progress · `[x]` done
 
 ### Interaction consistency
 
-- [ ] **P1.7 `Ctrl+l`/`Ctrl+h` don't wrap but `Tab` does** — `src/app/navigation.rs:5-16`
+- [x] **P1.7 `Ctrl+l`/`Ctrl+h` don't wrap but `Tab` does** — `src/app/navigation.rs:5-16`
   `focus_next`/`focus_prev` clamp at boundary; `Tab` (`cycle_panel`) wraps. Make focus
   movement wrap too (or document).
 
-- [ ] **P1.8 Select-mode `d`/`D` leaves stale marks & stays in mode** — `src/app/visual.rs:189-197`
-  Unlike yank, delete doesn't exit Select or clear consumed marks; selection count lies.
-  Exit Select / clear marks of deleted items.
+- [x] **P1.8 Select-mode `d`/`D` leaves stale marks & stays in mode** — `src/app/visual.rs:189-197`
+  Verified: the delete flow goes Select→Confirm and `handle_confirm` already clears all
+  marks on `y`, so no stale marks remain. Added a "Selection cleared (N)" message to the
+  Select-mode Esc for consistency with P1.9.
 
-- [ ] **P1.9 Esc clears selection silently** — `src/app/input.rs:53`
+- [x] **P1.9 Esc clears selection silently** — `src/app/input.rs:53`
   Esc wipes `marked` with no message. Set a "Selection cleared" status when clearing a
   non-empty selection (align with `Space n`).
 
-- [ ] **P1.10 Incremental search: no "no match" feedback** — `src/app/search.rs:33-52`
+- [x] **P1.10 Incremental search: no "no match" feedback** — `src/app/search.rs:33-52`
   Cursor freezes silently when nothing matches; `n`/`N` already report "No match". Surface
   a status / highlight when incremental search finds nothing. Also indicate active search
   pattern after returning to Normal.
 
-- [ ] **P1.11 Mark cycle has no direct unmark** — `src/app/marks.rs:13-35`
+- [x] **P1.11 Mark cycle has no direct unmark** — `src/app/marks.rs:13-35`
   `m` cycles 0→1→2→3→0; removing a level-1 mark needs 3 more presses. Add a direct
   unmark key/modifier.
 

@@ -46,8 +46,11 @@ impl App {
             }
         };
 
-        if let Some(pos) = pos {
-            self.active_panel_mut().selected = pos;
+        match pos {
+            Some(pos) => self.active_panel_mut().selected = pos,
+            // Give feedback while typing instead of silently freezing the cursor.
+            None if !query.is_empty() => self.status_message = "No match".into(),
+            None => {}
         }
     }
 

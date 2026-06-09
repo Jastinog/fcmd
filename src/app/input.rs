@@ -50,7 +50,11 @@ impl App {
                 }
             }
             KeyCode::Esc => {
-                self.active_panel_mut().marked.clear();
+                let n = self.active_panel().marked.len();
+                if n > 0 {
+                    self.active_panel_mut().marked.clear();
+                    self.status_message = format!("Selection cleared ({n} item(s))");
+                }
             }
 
             // Selection with Shift+arrows → enters Select mode
@@ -267,6 +271,7 @@ impl App {
             }
             (' ', KeyCode::Char('a')) => self.select_all(),
             (' ', KeyCode::Char('n')) => self.unselect_all(),
+            (' ', KeyCode::Char('m')) => self.clear_visual_mark(),
             (' ', KeyCode::Char('b')) => self.open_bookmarks(),
             (' ', KeyCode::Char('?')) => self.mode = Mode::Help,
             _ => return false,

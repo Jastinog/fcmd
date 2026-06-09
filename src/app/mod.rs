@@ -1045,9 +1045,9 @@ mod tests {
         assert_eq!(app.tab().active, 1);
         app.focus_next();
         assert_eq!(app.tab().active, 2);
-        // At max, stays at max
+        // At max without a tree, wraps back to the first panel.
         app.focus_next();
-        assert_eq!(app.tab().active, 2);
+        assert_eq!(app.tab().active, 0);
     }
 
     #[tokio::test]
@@ -1060,9 +1060,9 @@ mod tests {
         assert_eq!(app.tab().active, 1);
         app.focus_prev();
         assert_eq!(app.tab().active, 0);
-        // At 0 without tree, stays at 0
+        // At 0 without a tree, wraps to the last panel.
         app.focus_prev();
-        assert_eq!(app.tab().active, 0);
+        assert_eq!(app.tab().active, 2);
     }
 
     #[tokio::test]

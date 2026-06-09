@@ -35,6 +35,25 @@ impl App {
         }
     }
 
+    /// Remove the visual mark on the current entry regardless of its level, so the
+    /// user doesn't have to cycle `m` through every color to clear it.
+    pub(super) fn clear_visual_mark(&mut self) {
+        let Some(entry) = self.active_panel().selected_entry() else {
+            return;
+        };
+        if entry.name == ".." {
+            return;
+        }
+        let path = entry.path.clone();
+        let name = entry.name.clone();
+        if self.visual_marks.remove(&path).is_some() {
+            self.db_spawn(move |db| { let _ = db.remove_visual_mark(&path); });
+            self.status_message = format!("Unmarked: {name}");
+        } else {
+            self.status_message = "No mark here".into();
+        }
+    }
+
     pub(super) fn jump_next_visual_mark(&mut self) {
         let panel = self.active_panel();
         let len = panel.entries.len();
@@ -126,6 +145,33 @@ mod tests {
         app.toggle_visual_mark();
         assert!(!app.visual_marks.contains_key(&path));
         assert!(app.status_message.contains("Unmarked"));
+    }
+
+    #[tokio::test]
+    async fn clear_visual_mark_removes_any_level() {
+        let entries = make_test_entries(&["a.txt"]);
+        let mut app = App::new_for_test(entries);
+        app.active_panel_mut().selected = 1; // a.txt
+        let path = PathBuf::from("/test/a.txt");
+
+        // Mark up to level 3, then clear in a single press.
+        app.toggle_visual_mark();
+        app.toggle_visual_mark();
+        app.toggle_visual_mark();
+        assert_eq!(app.visual_marks.get(&path), Some(&3));
+
+        app.clear_visual_mark();
+        assert!(!app.visual_marks.contains_key(&path));
+        assert!(app.status_message.contains("Unmarked"));
+    }
+
+    #[tokio::test]
+    async fn clear_visual_mark_no_mark_shows_message() {
+        let entries = make_test_entries(&["a.txt"]);
+        let mut app = App::new_for_test(entries);
+        app.active_panel_mut().selected = 1;
+        app.clear_visual_mark();
+        assert!(app.status_message.contains("No mark"));
     }
 
     #[tokio::test]

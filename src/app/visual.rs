@@ -207,8 +207,12 @@ impl App {
             }
 
             KeyCode::Esc => {
+                let n = self.active_panel().marked.len();
                 self.active_panel_mut().marked.clear();
                 self.exit_select();
+                if n > 0 {
+                    self.status_message = format!("Selection cleared ({n} item(s))");
+                }
             }
 
             KeyCode::Tab => {
