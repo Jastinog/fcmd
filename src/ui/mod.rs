@@ -68,11 +68,9 @@ pub fn render(f: &mut Frame, app: &mut App) {
         tab.panels[i].adjust_scroll(vis_h);
     }
 
-    // Adjust find scroll before rendering
+    // Adjust find scroll before rendering, using the exact rendered results height.
     if let Some(ref mut fs) = app.find_state {
-        let popup = util::centered_rect(80, 75, full_area);
-        let inner_h = popup.height.saturating_sub(4) as usize;
-        let results_h = inner_h.saturating_sub(1);
+        let results_h = find_overlay::find_results_height(full_area);
         fs.adjust_scroll(results_h);
     }
 

@@ -40,7 +40,8 @@ pub(in crate::ui) fn render_bookmarks(f: &mut Frame, app: &App, area: Rect) {
 
     let iw = inner.width as usize;
     let list_height = inner.height.saturating_sub(2) as usize;
-    let scroll = app.bookmark_scroll.min(len.saturating_sub(list_height.max(1)));
+    let max_scroll = len.saturating_sub(list_height.max(1));
+    let scroll = app.bookmark_scroll.min(max_scroll);
 
     let home = dirs::home_dir().unwrap_or_default();
 
@@ -95,12 +96,12 @@ pub(in crate::ui) fn render_bookmarks(f: &mut Frame, app: &App, area: Rect) {
     let list_area = Rect::new(inner.x, inner.y, inner.width, list_height as u16);
     f.render_widget(List::new(items), list_area);
 
-    // Separator
+    // Separator with scroll indicator
     let sep_y = inner.y + list_height as u16;
     let sep_area = Rect::new(inner.x, sep_y, inner.width, 1);
     f.render_widget(
         Paragraph::new(Line::from(Span::styled(
-            "\u{2500}".repeat(iw),
+            super::scroll_separator(iw, scroll, max_scroll),
             Style::default().fg(t.border_inactive),
         ))),
         sep_area,

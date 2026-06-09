@@ -45,10 +45,11 @@ pub(in crate::ui) fn render_confirm_popup(f: &mut Frame, app: &App, area: Rect) 
     let list_height = inner.height.saturating_sub(2) as usize;
 
     // Adjust scroll so it stays in range
-    let scroll = app.confirm_scroll.min(n.saturating_sub(list_height.max(1)));
+    let max_scroll = n.saturating_sub(list_height.max(1));
+    let scroll = app.confirm_scroll.min(max_scroll);
 
     let mut items: Vec<ListItem> = Vec::new();
-    for (i, (path, is_dir)) in paths.iter().enumerate().skip(scroll).take(list_height) {
+    for (path, is_dir) in paths.iter().skip(scroll).take(list_height) {
         let name = path
             .file_name()
             .map(|n| n.to_string_lossy().into_owned())
@@ -66,12 +67,9 @@ pub(in crate::ui) fn render_confirm_popup(f: &mut Frame, app: &App, area: Rect) 
         };
         let pad = iw.saturating_sub(icon.chars().count() + name_display.chars().count());
 
-        let bg = if i == scroll && n > list_height {
-            // No special highlight needed, just show the list
-            t.bg_light
-        } else {
-            t.bg_light
-        };
+        // The list is a non-interactive preview (no per-row cursor), so every row
+        // uses the same background.
+        let bg = t.bg_light;
 
         let line = Line::from(vec![
             Span::styled(icon, Style::default().fg(icon_color).bg(bg)),
@@ -84,12 +82,12 @@ pub(in crate::ui) fn render_confirm_popup(f: &mut Frame, app: &App, area: Rect) 
     let list_area = Rect::new(inner.x, inner.y, inner.width, list_height as u16);
     f.render_widget(List::new(items), list_area);
 
-    // Separator
+    // Separator with scroll indicator
     let sep_y = inner.y + list_height as u16;
     let sep_area = Rect::new(inner.x, sep_y, inner.width, 1);
     f.render_widget(
         Paragraph::new(Line::from(Span::styled(
-            "\u{2500}".repeat(iw),
+            super::scroll_separator(iw, scroll, max_scroll),
             Style::default().fg(t.border_inactive),
         ))),
         sep_area,

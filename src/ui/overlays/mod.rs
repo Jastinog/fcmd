@@ -59,6 +59,24 @@ pub(in crate::ui) fn input_field_line<'a>(
     ])
 }
 
+/// A horizontal separator line (`width` cells of dashes) with a right-aligned `indicator`
+/// overwriting the trailing dashes, so the line stays exactly `width` wide.
+pub(in crate::ui) fn separator_with_indicator(width: usize, indicator: &str) -> String {
+    let dash_len = width.saturating_sub(indicator.chars().count());
+    format!("{}{indicator}", "\u{2500}".repeat(dash_len))
+}
+
+/// A horizontal separator that shows a right-aligned scroll percentage when the content
+/// is scrollable (`max_scroll > 0`), matching the help overlay's indicator. Lets the user
+/// see there's more above/below in scrollable list popups.
+pub(in crate::ui) fn scroll_separator(width: usize, scroll: usize, max_scroll: usize) -> String {
+    if max_scroll == 0 {
+        return "\u{2500}".repeat(width);
+    }
+    let pct = (scroll * 100).checked_div(max_scroll).unwrap_or(100);
+    separator_with_indicator(width, &format!(" {pct}%"))
+}
+
 pub(super) fn format_binary_size(bytes: usize) -> String {
     if bytes >= 1_048_576 {
         format!("{:.1} MB", bytes as f64 / 1_048_576.0)

@@ -174,16 +174,23 @@ pub(in crate::ui) fn render_which_key(
     }
 
     let list_height = inner.height.saturating_sub(2) as usize;
+    let hidden = lines.len().saturating_sub(list_height);
     lines.truncate(list_height);
     let list_area = Rect::new(inner.x, inner.y, inner.width, list_height as u16);
     f.render_widget(List::new(lines), list_area);
 
-    // Separator
+    // Separator — flag any bindings hidden by a short terminal instead of dropping
+    // them silently.
     let sep_y = inner.y + list_height as u16;
     let sep_area = Rect::new(inner.x, sep_y, inner.width, 1);
+    let sep_text = if hidden > 0 {
+        super::separator_with_indicator(iw, &format!(" +{hidden} more"))
+    } else {
+        "\u{2500}".repeat(iw)
+    };
     f.render_widget(
         Paragraph::new(Line::from(Span::styled(
-            "\u{2500}".repeat(iw),
+            sep_text,
             Style::default().fg(t.border_inactive),
         ))),
         sep_area,

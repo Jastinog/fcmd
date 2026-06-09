@@ -61,7 +61,8 @@ pub(in crate::ui) fn render_info_popup(f: &mut Frame, app: &App, area: Rect) {
         .max()
         .unwrap_or(0);
 
-    let scroll = app.info_scroll.min(content_lines.saturating_sub(list_height.max(1)));
+    let max_scroll = content_lines.saturating_sub(list_height.max(1));
+    let scroll = app.info_scroll.min(max_scroll);
 
     let mut items: Vec<ListItem> = Vec::new();
     for (k, v) in lines.iter().skip(1).skip(scroll).take(list_height) {
@@ -107,22 +108,28 @@ pub(in crate::ui) fn render_info_popup(f: &mut Frame, app: &App, area: Rect) {
     let list_area = Rect::new(inner.x, inner.y, inner.width, list_height as u16);
     f.render_widget(List::new(items), list_area);
 
-    // Separator
+    // Separator with scroll indicator
     let sep_y = inner.y + list_height as u16;
     let sep_area = Rect::new(inner.x, sep_y, inner.width, 1);
     f.render_widget(
         Paragraph::new(Line::from(Span::styled(
-            "\u{2500}".repeat(iw),
+            super::scroll_separator(iw, scroll, max_scroll),
             Style::default().fg(t.border_inactive),
         ))),
         sep_area,
     );
 
-    // Hint line
-    let hint_line = Line::from(vec![
-        Span::styled(" esc", Style::default().fg(accent)),
-        Span::styled(" close", Style::default().fg(t.fg_dim)),
-    ]);
+    // Hint line — advertise scroll keys only when there's something to scroll.
+    let mut hint_spans = Vec::new();
+    if max_scroll > 0 {
+        hint_spans.push(Span::styled(" j/k", Style::default().fg(accent)));
+        hint_spans.push(Span::styled(" scroll  ", Style::default().fg(t.fg_dim)));
+    } else {
+        hint_spans.push(Span::raw(" "));
+    }
+    hint_spans.push(Span::styled("esc", Style::default().fg(accent)));
+    hint_spans.push(Span::styled(" close", Style::default().fg(t.fg_dim)));
+    let hint_line = Line::from(hint_spans);
     let hint_y = inner.y + inner.height.saturating_sub(1);
     let hint_area = Rect::new(inner.x, hint_y, inner.width, 1);
     f.render_widget(Paragraph::new(hint_line), hint_area);

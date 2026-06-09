@@ -13,6 +13,15 @@ use crate::theme::Theme;
 
 use super::util::{centered_rect, display_width, truncate_to_width, truncate_to_width_left};
 
+/// Number of result rows shown in the find popup for a given screen area.
+/// Shared with the scroll-clamp logic in `ui::render` so the clamp height and the
+/// rendered height never disagree (which would let the selection scroll off-screen).
+pub(in crate::ui) fn find_results_height(area: Rect) -> usize {
+    let popup = centered_rect(80, 75, area);
+    let inner_h = popup.height.saturating_sub(2) as usize; // block borders
+    inner_h.saturating_sub(4) // input + separator + hint rows (+1 margin)
+}
+
 pub(super) fn render_find(f: &mut Frame, fs: &FindState, t: &Theme, area: Rect) {
     let popup = centered_rect(80, 75, area);
     f.render_widget(Clear, popup);
@@ -75,8 +84,9 @@ pub(super) fn render_find(f: &mut Frame, fs: &FindState, t: &Theme, area: Rect) 
     )));
     f.render_widget(sep, sep_area);
 
-    // Results (leave 1 row at bottom for hint)
-    let results_height = inner.height.saturating_sub(4) as usize;
+    // Results (leave 1 row at bottom for hint). Use the shared helper so this matches
+    // the scroll clamp in ui::render exactly.
+    let results_height = find_results_height(area);
     let results_area = Rect::new(left_x, inner.y + 2, left_w, results_height as u16);
 
     let lwidth = results_area.width as usize;

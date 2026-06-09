@@ -62,12 +62,12 @@ Legend: `[ ]` todo · `[~]` in progress · `[x]` done
 
 ### Broken modals on short terminals
 
-- [ ] **P1.5 Conflict popup clips buttons** — `src/ui/overlays/conflict.rs:154-180`
+- [x] **P1.5 Conflict popup clips buttons** — `src/ui/overlays/conflict.rs:154-180`
   Fixed height 14, all lines in one `Paragraph` with no scroll → action buttons clipped on
   ~12-row terminals, making the blocking modal unusable. Reserve button rows at a fixed
   bottom position / guard against tiny `inner.height`.
 
-- [ ] **P1.6 Find-overlay scroll-height mismatch** — `src/ui/mod.rs:72-77` vs `src/ui/find_overlay.rs:103`
+- [x] **P1.6 Find-overlay scroll-height mismatch** — `src/ui/mod.rs:72-77` vs `src/ui/find_overlay.rs:103`
   Scroll clamp uses `inner_h-5`, render uses `inner-4`; selected result can scroll
   off-screen. Compute results height once and share it.
 
@@ -114,9 +114,10 @@ Legend: `[ ]` todo · `[~]` in progress · `[x]` done
 
 ### Missing scroll indicators
 
-- [ ] **P1.16 Add scroll indicators + hint keys** — `confirm.rs`, `chown.rs`, `bookmarks.rs`, `info.rs`, `which_key.rs`
-  Long lists scroll with no "more above/below" indicator; some omit scroll keys from hints
-  (`info.rs` implements scroll but shows only `esc close`). Use `help.rs` `pct%` as the model.
+- [x] **P1.16 Add scroll indicators + hint keys** — `confirm.rs`, `bookmarks.rs`, `info.rs`, `which_key.rs`
+  Done via shared `scroll_separator`/`separator_with_indicator` helpers: info/confirm/bookmarks
+  show a `N%` indicator; info advertises `j/k` only when scrollable; which_key shows `+N more`
+  when truncated. NOTE: `chown.rs` (two-column user/group lists) deferred — see X.4.
 
 ---
 
@@ -125,7 +126,7 @@ Legend: `[ ]` todo · `[~]` in progress · `[x]` done
 - [ ] **P2.1 Bookmark empty-state names wrong key** — `src/app/bookmarks.rs:6`
   "Use **B** to add one" but `B` opens the list; `b` adds. Change to "Use **b** to add one."
 
-- [ ] **P2.2 Confirm dialog dead row highlight** — `src/ui/overlays/confirm.rs:69-74`
+- [x] **P2.2 Confirm dialog dead row highlight** — `src/ui/overlays/confirm.rs:69-74`
   Both `if/else` branches return `t.bg_light`; cursor row has no real highlight.
 
 - [ ] **P2.3 Panel name truncation loses extension** — `src/ui/panel.rs:117,144`

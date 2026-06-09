@@ -7,6 +7,7 @@ use ratatui::{
 };
 
 use crate::app::App;
+use crate::ui::util::{display_width, truncate_to_width_left};
 use crate::util::format_bytes;
 
 fn format_datetime(time: std::time::SystemTime) -> String {
@@ -77,13 +78,8 @@ pub(in crate::ui) fn render_conflict_popup(f: &mut Frame, app: &App, area: Rect)
     )));
 
     let icon = if info.is_dir { " \u{f115} " } else { " \u{f016} " };
-    let max_name = iw.saturating_sub(icon.len() + 1);
-    let name_disp = if src_name.chars().count() > max_name {
-        let truncated: String = src_name.chars().take(max_name.saturating_sub(1)).collect();
-        format!("{truncated}\u{2026}")
-    } else {
-        src_name
-    };
+    let max_name = iw.saturating_sub(display_width(icon) + 1);
+    let name_disp = truncate_to_width_left(&src_name, max_name);
     lines.push(Line::from(vec![
         Span::styled(icon, Style::default().fg(t.cyan)),
         Span::styled(name_disp, Style::default().fg(t.cyan)),
@@ -112,13 +108,8 @@ pub(in crate::ui) fn render_conflict_popup(f: &mut Frame, app: &App, area: Rect)
         Style::default().fg(t.fg_dim),
     )));
 
-    let max_name = iw.saturating_sub(icon.len() + 1);
-    let dst_disp = if dst_name.chars().count() > max_name {
-        let truncated: String = dst_name.chars().take(max_name.saturating_sub(1)).collect();
-        format!("{truncated}\u{2026}")
-    } else {
-        dst_name
-    };
+    let max_name = iw.saturating_sub(display_width(icon) + 1);
+    let dst_disp = truncate_to_width_left(&dst_name, max_name);
     lines.push(Line::from(vec![
         Span::styled(icon, Style::default().fg(t.fg)),
         Span::styled(dst_disp, Style::default().fg(t.fg)),
@@ -133,12 +124,9 @@ pub(in crate::ui) fn render_conflict_popup(f: &mut Frame, app: &App, area: Rect)
         Span::styled(newer_indicator, Style::default().fg(t.green)),
     ]));
 
-    // Separator
-    lines.push(Line::from(Span::styled(
-        "\u{2500}".repeat(iw),
-        Style::default().fg(t.border_inactive),
-    )));
-
+    // The action buttons and their separator are pinned to the bottom of the popup so
+    // they stay visible even on a short terminal (the file info above is what gets
+    // truncated instead of the controls the user must press).
     // Button rows: 2 rows x 3 cols
     // Row 1: [O]verwrite [S]kip  [A]ll
     // Row 2: skip al[N]  ne[W]er [Esc]
@@ -151,9 +139,9 @@ pub(in crate::ui) fn render_conflict_popup(f: &mut Frame, app: &App, area: Rect)
         ("[Esc] abort", 5),
     ];
 
+    let mut button_lines: Vec<Line> = Vec::new();
     for row in 0..2 {
-        let mut spans = Vec::new();
-        spans.push(Span::raw(" "));
+        let mut spans = vec![Span::raw(" ")];
         for col in 0..3 {
             let idx = row * 3 + col;
             let (label, btn_idx) = buttons[idx];
@@ -172,10 +160,33 @@ pub(in crate::ui) fn render_conflict_popup(f: &mut Frame, app: &App, area: Rect)
                 spans.push(Span::styled("  ", Style::default()));
             }
         }
-        lines.push(Line::from(spans));
+        button_lines.push(Line::from(spans));
     }
 
-    // Render all lines
-    let content_area = Rect::new(inner.x, inner.y, inner.width, inner.height);
-    f.render_widget(Paragraph::new(lines), content_area);
+    // Reserve the bottom rows: separator (1) + button rows (2).
+    let btn_h = button_lines.len() as u16;
+    let reserved = btn_h + 1;
+    let info_h = inner.height.saturating_sub(reserved);
+
+    // File info (flows from the top, truncated first if the popup is short).
+    if info_h > 0 {
+        let info_area = Rect::new(inner.x, inner.y, inner.width, info_h);
+        f.render_widget(Paragraph::new(lines), info_area);
+    }
+
+    // Separator just above the buttons.
+    if inner.height > btn_h {
+        let sep_area = Rect::new(inner.x, inner.y + inner.height - reserved, inner.width, 1);
+        f.render_widget(
+            Paragraph::new(Line::from(Span::styled(
+                "\u{2500}".repeat(iw),
+                Style::default().fg(t.border_inactive),
+            ))),
+            sep_area,
+        );
+    }
+
+    // Buttons pinned to the bottom.
+    let btn_area = Rect::new(inner.x, inner.y + inner.height.saturating_sub(btn_h), inner.width, btn_h);
+    f.render_widget(Paragraph::new(button_lines), btn_area);
 }
