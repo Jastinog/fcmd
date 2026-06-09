@@ -145,6 +145,31 @@ fn abort_error() -> std::io::Error {
     std::io::Error::new(std::io::ErrorKind::Interrupted, "Aborted by user")
 }
 
+/// True if `dst` is the same path as `src` or located inside `src` (a descendant).
+/// Used to prevent copying/moving a directory into itself or its own subtree,
+/// which would recurse infinitely and fill the disk, and to prevent copying a
+/// file onto itself (which would truncate it to zero bytes via `fs::copy`).
+///
+/// `dst` may not exist yet, so its parent is canonicalized and the final
+/// component re-joined. If either path cannot be canonicalized, returns false
+/// (no guard) rather than blocking a legitimate operation.
+fn is_self_or_descendant(src: &Path, dst: &Path) -> bool {
+    let src_canon = match src.canonicalize() {
+        Ok(p) => p,
+        Err(_) => return false,
+    };
+    let dst_canon = match (dst.parent(), dst.file_name()) {
+        (Some(parent), Some(name)) => match parent.canonicalize() {
+            Ok(p) => p.join(name),
+            Err(_) => return false,
+        },
+        _ => return false,
+    };
+    // Path::starts_with is component-wise, so "/a/b" is NOT considered inside
+    // "/a/bc" — no false positives for sibling names that share a prefix.
+    dst_canon == src_canon || dst_canon.starts_with(&src_canon)
+}
+
 /// Ask the UI for a conflict resolution. Returns the user's choice.
 /// If the channel is closed (e.g. app quit), returns Abort.
 fn ask_conflict(
@@ -310,6 +335,13 @@ fn copy_path_progress(
     let dst = dst_dir.join(&name);
     let meta = fs::symlink_metadata(src)?;
 
+    if is_self_or_descendant(src, &dst) {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::InvalidInput,
+            format!("Cannot copy {} into itself", src.display()),
+        ));
+    }
+
     if meta.is_symlink() {
         if dst.exists() || dst.symlink_metadata().is_ok() {
             if !resolve_file_conflict(src, &dst, false, conflict_tx, policy)? {
@@ -370,6 +402,13 @@ fn move_path_progress(
     let dst = dst_dir.join(&name);
     let meta = fs::symlink_metadata(src)?;
     let src_size = if meta.is_symlink() { meta.len() } else { path_size(src) };
+
+    if is_self_or_descendant(src, &dst) {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::InvalidInput,
+            format!("Cannot move {} into itself", src.display()),
+        ));
+    }
 
     // Handle conflicts before attempting rename
     if dst.exists() {
@@ -1565,5 +1604,69 @@ mod tests {
     fn filename_helper() {
         assert_eq!(filename(Path::new("/test/file.txt")).unwrap(), "file.txt");
         assert!(filename(Path::new("/")).is_err());
+    }
+
+    // --- self/descendant copy guard ---
+
+    #[test]
+    fn copy_dir_into_itself_is_rejected() {
+        let dir = tmp_dir();
+        let src = dir.join("a");
+        fs::create_dir_all(src.join("sub")).unwrap();
+        fs::write(src.join("file.txt"), "data").unwrap();
+
+        let (tx, _rx) = tokio::sync::mpsc::channel(64);
+        let mut ctx = ProgressCtx { tx, bytes_done: 0, bytes_total: 0, item_index: 0, item_total: 1 };
+        let (ctxt, _crx) = make_conflict_channel();
+        let mut policy = ConflictPolicy::default();
+
+        // Paste /a into /a → dst would be /a/a (descendant) → must error, not recurse.
+        let err = copy_path_progress(&src, &src, &mut ctx, &ctxt, &mut policy);
+        assert!(err.is_err());
+
+        // Paste /a into its own subdirectory /a/sub → also rejected.
+        let err = copy_path_progress(&src, &src.join("sub"), &mut ctx, &ctxt, &mut policy);
+        assert!(err.is_err());
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn copy_file_onto_itself_is_rejected() {
+        let dir = tmp_dir();
+        let src = dir.join("f.txt");
+        fs::write(&src, "important").unwrap();
+
+        let (tx, _rx) = tokio::sync::mpsc::channel(64);
+        let mut ctx = ProgressCtx { tx, bytes_done: 0, bytes_total: 0, item_index: 0, item_total: 1 };
+        let (ctxt, _crx) = make_conflict_channel();
+        let mut policy = ConflictPolicy::default();
+
+        // Copy a file into its own parent dir → dst == src → must error (no truncation).
+        let err = copy_path_progress(&src, &dir, &mut ctx, &ctxt, &mut policy);
+        assert!(err.is_err());
+        // Original content preserved.
+        assert_eq!(fs::read_to_string(&src).unwrap(), "important");
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn copy_to_sibling_with_shared_prefix_is_allowed() {
+        let dir = tmp_dir();
+        let src = dir.join("a");
+        fs::create_dir_all(&src).unwrap();
+        fs::write(src.join("x.txt"), "data").unwrap();
+        // Destination dir "ab" shares a string prefix with "a" but is NOT a descendant.
+        let dst_dir = dir.join("ab");
+        fs::create_dir_all(&dst_dir).unwrap();
+
+        let (tx, _rx) = tokio::sync::mpsc::channel(64);
+        let mut ctx = ProgressCtx { tx, bytes_done: 0, bytes_total: 0, item_index: 0, item_total: 1 };
+        let (ctxt, _crx) = make_conflict_channel();
+        let mut policy = ConflictPolicy::default();
+
+        let rec = copy_path_progress(&src, &dst_dir, &mut ctx, &ctxt, &mut policy).unwrap();
+        assert!(rec.is_some());
+        assert!(dst_dir.join("a/x.txt").exists());
+        let _ = fs::remove_dir_all(&dir);
     }
 }
