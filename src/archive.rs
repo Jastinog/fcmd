@@ -212,8 +212,11 @@ fn extract_zip_entry(
             continue;
         }
 
-        let out_path = dest.join(&name);
-        // Prevent path traversal
+        // Sanitize before joining: `name` is the raw archive path and may contain
+        // `..` components. Path::starts_with is lexical and would NOT catch `..`,
+        // so we must strip traversal components first (mirrors the tar path).
+        let safe_name = sanitize_archive_path(&name);
+        let out_path = dest.join(&safe_name);
         if !out_path.starts_with(dest) {
             continue;
         }
@@ -245,7 +248,9 @@ fn extract_zip_all(archive_path: &Path, dest: &Path) -> io::Result<Vec<PathBuf>>
             .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
 
         let name = entry.name().to_string();
-        let out_path = dest.join(&name);
+        // Sanitize raw archive path to strip `..`/`.`/leading `/` (Zip Slip guard).
+        let safe_name = sanitize_archive_path(&name);
+        let out_path = dest.join(&safe_name);
         if !out_path.starts_with(dest) {
             continue;
         }
@@ -719,5 +724,42 @@ mod tests {
         // Should have synthesized "a/" and "a/b/"
         assert!(entries.iter().any(|e| e.path == "a/" && e.is_dir));
         assert!(entries.iter().any(|e| e.path == "a/b/" && e.is_dir));
+    }
+
+    #[test]
+    fn zip_slip_traversal_is_neutralized() {
+        let dir = tempfile::tempdir().unwrap();
+        let zip_path = dir.path().join("evil.zip");
+
+        // Craft a zip whose entry name escapes via `..`.
+        {
+            let file = File::create(&zip_path).unwrap();
+            let mut writer = zip::ZipWriter::new(file);
+            let options = zip::write::SimpleFileOptions::default();
+            writer.start_file("../../escape.txt", options).unwrap();
+            writer.write_all(b"pwned").unwrap();
+            writer.finish().unwrap();
+        }
+
+        let dest = dir.path().join("out");
+        std::fs::create_dir(&dest).unwrap();
+        let extracted = extract_all(&zip_path, &dest).unwrap();
+
+        // The traversal must be stripped: the file lands inside `dest`, never above it.
+        let escaped = dir.path().join("escape.txt");
+        assert!(!escaped.exists(), "file escaped extraction dir via Zip Slip");
+        assert!(dest.join("escape.txt").exists());
+        for p in &extracted {
+            assert!(p.starts_with(&dest), "extracted path {p:?} escaped dest");
+        }
+    }
+
+    #[test]
+    fn sanitize_strips_traversal() {
+        assert_eq!(sanitize_archive_path("../../etc/passwd"), "etc/passwd");
+        assert_eq!(sanitize_archive_path("/abs/path"), "abs/path");
+        assert_eq!(sanitize_archive_path("a/../b"), "b");
+        assert_eq!(sanitize_archive_path("./foo/./bar"), "foo/bar");
+        assert_eq!(sanitize_archive_path("dir/"), "dir/");
     }
 }
