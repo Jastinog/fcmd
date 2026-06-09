@@ -262,19 +262,14 @@ impl App {
 
         match key.code {
             KeyCode::Esc => {
-                // Commit edit to entry
-                let input = state.edit_input.trim().to_string();
-                if !input.is_empty() {
-                    state.entries[state.cursor].new_name = input;
-                }
+                // Commit the edit. An empty name is kept so it surfaces as a
+                // conflict (highlighted, blocks apply) instead of being silently dropped.
+                state.entries[state.cursor].new_name = state.edit_input.trim().to_string();
                 state.sub_mode = BulkRenameSubMode::Nav;
             }
             KeyCode::Enter => {
-                // Commit edit and move to next
-                let input = state.edit_input.trim().to_string();
-                if !input.is_empty() {
-                    state.entries[state.cursor].new_name = input;
-                }
+                // Commit the edit (keeping an empty name) and move to the next row.
+                state.entries[state.cursor].new_name = state.edit_input.trim().to_string();
                 if state.cursor + 1 < state.entries.len() {
                     state.cursor += 1;
                     state.edit_input = state.entries[state.cursor].new_name.clone();
@@ -284,11 +279,8 @@ impl App {
                 }
             }
             KeyCode::Tab => {
-                // Commit and move to next, entering edit mode
-                let input = state.edit_input.trim().to_string();
-                if !input.is_empty() {
-                    state.entries[state.cursor].new_name = input;
-                }
+                // Commit the edit (keeping an empty name) and move to the next row, staying in edit mode.
+                state.entries[state.cursor].new_name = state.edit_input.trim().to_string();
                 if state.cursor + 1 < state.entries.len() {
                     state.cursor += 1;
                     state.edit_input = state.entries[state.cursor].new_name.clone();
@@ -298,11 +290,8 @@ impl App {
                 }
             }
             KeyCode::BackTab => {
-                // Commit and move to previous
-                let input = state.edit_input.trim().to_string();
-                if !input.is_empty() {
-                    state.entries[state.cursor].new_name = input;
-                }
+                // Commit the edit (keeping an empty name) and move to the previous row.
+                state.entries[state.cursor].new_name = state.edit_input.trim().to_string();
                 if state.cursor > 0 {
                     state.cursor -= 1;
                     state.edit_input = state.entries[state.cursor].new_name.clone();
@@ -357,6 +346,12 @@ impl App {
             self.bulk_rename = Some(state);
             if let Some(ref mut s) = self.bulk_rename {
                 s.error = Some("Fix conflicts before applying".into());
+                // Move the cursor to the first conflicting row so the user doesn't
+                // have to hunt for it in a long list.
+                if let Some(&first) = s.conflict_indices().iter().min() {
+                    s.cursor = first;
+                    s.adjust_scroll(self.visible_height.saturating_sub(6));
+                }
             }
             return;
         }
@@ -609,6 +604,26 @@ mod tests {
             BulkRenameSubMode::Nav
         );
         assert_eq!(app.bulk_rename.as_ref().unwrap().entries[0].new_name, "b.txt");
+    }
+
+    #[tokio::test]
+    async fn bulk_rename_empty_edit_kept_as_conflict() {
+        let entries = crate::app::make_test_entries(&["a.txt"]);
+        let mut app = App::new_for_test(entries);
+        app.active_panel_mut().selected = 1;
+        app.enter_bulk_rename();
+
+        // Enter edit, clear the whole name, then commit with Esc.
+        app.handle_bulk_rename(KeyEvent::new(KeyCode::Char('i'), KeyModifiers::NONE));
+        for _ in 0..10 {
+            app.handle_bulk_rename(KeyEvent::new(KeyCode::Backspace, KeyModifiers::NONE));
+        }
+        app.handle_bulk_rename(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
+
+        // The empty name is kept (not silently reverted) and flagged as a conflict.
+        let state = app.bulk_rename.as_ref().unwrap();
+        assert_eq!(state.entries[0].new_name, "");
+        assert!(state.has_conflicts());
     }
 
     #[tokio::test]

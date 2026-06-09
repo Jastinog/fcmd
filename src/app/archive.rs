@@ -24,6 +24,8 @@ pub struct ArchiveState {
     pub expanded: HashSet<String>,
     pub search_query: String,
     pub searching: bool,
+    /// Set after the first `X` press; the second `X` confirms extract-all.
+    pub confirm_extract_all: bool,
 }
 
 impl ArchiveState {
@@ -59,6 +61,7 @@ impl ArchiveState {
             expanded,
             search_query: String::new(),
             searching: false,
+            confirm_extract_all: false,
         };
         state.rebuild_tree();
         state
@@ -265,6 +268,11 @@ impl App {
         let len = state.tree.len();
         let state = self.archive_state.as_mut().unwrap();
 
+        // Any key other than a second 'X' cancels a pending extract-all confirmation.
+        if !matches!(key.code, KeyCode::Char('X')) {
+            state.confirm_extract_all = false;
+        }
+
         match key.code {
             KeyCode::Char('j') | KeyCode::Down => {
                 if state.cursor + 1 < len {
@@ -307,7 +315,16 @@ impl App {
                 return;
             }
             KeyCode::Char('X') => {
-                self.extract_archive_all();
+                if state.confirm_extract_all {
+                    self.extract_archive_all();
+                } else {
+                    state.confirm_extract_all = true;
+                    let n = state.file_count;
+                    let dest = self.active_panel().path.display();
+                    self.status_message = format!(
+                        "Extract all {n} file(s) to {dest} \u{2014} press X again to confirm"
+                    );
+                }
                 return;
             }
             KeyCode::Char('/') => {
@@ -376,6 +393,7 @@ impl App {
             });
         });
 
+        self.status_message = "Extracting...".into();
         self.archive_state = None;
         self.mode = Mode::Normal;
     }
@@ -399,12 +417,14 @@ impl App {
             });
         });
 
+        self.status_message = "Extracting all...".into();
         self.archive_state = None;
         self.mode = Mode::Normal;
     }
 
     /// Create archive from selected files. Called via `:archive <name>`.
-    pub(super) fn create_archive(&mut self, name: &str) {
+    /// When `force` is false, refuses to overwrite an existing file.
+    pub(super) fn create_archive(&mut self, name: &str, force: bool) {
         let panel = self.active_panel();
         let targeted = panel.targeted_register_entries();
         if targeted.is_empty() {
@@ -416,6 +436,11 @@ impl App {
         if archive::ArchiveFormat::from_path(&output).is_none() {
             self.status_message =
                 "Unknown format. Use .zip, .tar, .tar.gz, .tar.bz2, .tar.xz".into();
+            return;
+        }
+        if !force && output.exists() {
+            self.status_message =
+                format!("{name} already exists \u{2014} use :archive! to overwrite");
             return;
         }
 
@@ -436,6 +461,8 @@ impl App {
                 result,
             });
         });
+
+        self.status_message = format!("Creating archive ({count} item(s))...");
     }
 }
 
@@ -513,6 +540,33 @@ mod tests {
         // Expand
         state.toggle_expand();
         assert_eq!(state.tree.len(), 2);
+    }
+
+    #[tokio::test]
+    async fn extract_all_requires_double_x() {
+        use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+        let entries = vec![ArchiveEntry {
+            path: "file.txt".into(),
+            size: 10,
+            is_dir: false,
+            modified: None,
+        }];
+        let mut app = App::new_for_test(crate::app::make_test_entries(&["a.txt"]));
+        app.archive_state = Some(ArchiveState::new(
+            PathBuf::from("test.zip"),
+            ArchiveFormat::Zip,
+            entries,
+        ));
+        app.mode = Mode::Archive;
+
+        // First X arms the confirmation but does not extract.
+        app.handle_archive(KeyEvent::new(KeyCode::Char('X'), KeyModifiers::NONE));
+        assert!(app.archive_state.as_ref().unwrap().confirm_extract_all);
+        assert!(app.status_message.contains("press X again"));
+
+        // Any other key cancels it.
+        app.handle_archive(KeyEvent::new(KeyCode::Char('j'), KeyModifiers::NONE));
+        assert!(!app.archive_state.as_ref().unwrap().confirm_extract_all);
     }
 
     #[test]

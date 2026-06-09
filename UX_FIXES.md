@@ -97,19 +97,20 @@ Legend: `[ ]` todo · `[~]` in progress · `[x]` done
 
 ### Operations without feedback / progress
 
-- [ ] **P1.12 Archive ops: no confirm, no overwrite handling, no progress** — `src/app/archive.rs:305-438`
-  Extract / extract-all (`X`) / create run as oneshot blocking with no confirmation, no
-  conflict handling (silent clobber), no progress (UI looks frozen). Add confirm for
-  extract-all, route conflicts through conflict UX, stream progress via task_manager.
+- [x] **P1.12 Archive ops: no confirm, no overwrite handling, no progress** — `src/app/archive.rs:305-438`
+  Done (pragmatic subset): extract-all (`X`) now needs a double-press to confirm; create/
+  extract/extract-all set an immediate status ("Extracting...", etc.) so the UI isn't silent.
+  DEFERRED to X.3: full streaming progress + conflict-routing for archive ops would require
+  archive::* to emit progress/conflict callbacks like ops::paste (large refactor).
 
-- [ ] **P1.13 `:archive` overwrites existing archive silently** — `src/app/command.rs:264`, `src/app/archive.rs:407-439`
+- [x] **P1.13 `:archive` overwrites existing archive silently** — `src/app/command.rs:264`, `src/app/archive.rs:407-439`
   No check whether output exists. Prompt overwrite/abort.
 
-- [ ] **P1.14 Bulk-rename: cursor not moved to first conflict** — `src/app/bulk_rename.rs:356-362`
+- [x] **P1.14 Bulk-rename: cursor not moved to first conflict** — `src/app/bulk_rename.rs:356-362`
   On rejected apply, jump `cursor` to first `conflict_indices()`. Also: empty edit silently
   discarded (`:266-277`) — give feedback or keep empty so conflict highlight triggers.
 
-- [ ] **P1.15 chown applies with no summary** — `src/app/chmod.rs:266-302`
+- [x] **P1.15 chown applies with no summary** — `src/app/chmod.rs:266-302`
   Privileged op applied on Enter with no "change owner of N items to user:group?" affordance.
 
 ### Missing scroll indicators
@@ -168,3 +169,6 @@ Legend: `[ ]` todo · `[~]` in progress · `[x]` done
   `truncate_to_width_left` / `visible_input_tail` and shared `input_field_line`;
   tree/find/input fields now display-width aware; panel drops meta column on narrow
   panels. 613 tests pass, clippy clean.
+- 2026-06-09: **P1 complete** (P1.1–P1.16). Modal rendering, scroll indicators,
+  focus/selection/search/mark interactions, archive/bulk-rename/chown feedback. 619 tests,
+  clippy clean. P1.12 progress-streaming and chown scroll indicators deferred to X.3/X.4.

@@ -256,7 +256,9 @@ impl App {
             "du" => self.start_du(),
             "bulkrename" | "brn" => self.enter_bulk_rename(),
 
-            "archive" | "ar" => {
+            // `:archive!` overwrites an existing archive; `:archive` refuses to clobber.
+            "archive" | "ar" | "archive!" | "ar!" => {
+                let force = cmd.ends_with('!');
                 let name = match arg.filter(|a| !a.is_empty()) {
                     Some(n) => n,
                     None => {
@@ -265,7 +267,7 @@ impl App {
                         return;
                     }
                 };
-                self.create_archive(name);
+                self.create_archive(name, force);
             }
 
             "marks" => {
