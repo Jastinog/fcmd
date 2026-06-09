@@ -20,14 +20,14 @@ impl App {
         let shift = key.modifiers.contains(KeyModifiers::SHIFT);
 
         match key.code {
-            KeyCode::Char('q') => self.should_quit = true,
+            KeyCode::Char('q') => self.request_quit(),
             KeyCode::F(1) => self.mode = Mode::Help,
             KeyCode::F(2) => self.enter_rename(),
             KeyCode::F(5) => self.copy_to_other_panel(),
             KeyCode::F(6) => self.move_to_other_panel(),
             KeyCode::F(7) => self.enter_create(),
             KeyCode::F(8) => self.request_delete(),
-            KeyCode::F(10) => self.should_quit = true,
+            KeyCode::F(10) => self.request_quit(),
             KeyCode::F(4) => {
                 if let Some(entry) = self.active_panel().selected_entry()
                     && !entry.is_dir

@@ -5,8 +5,10 @@ impl App {
     pub(super) fn handle_command(&mut self, key: KeyEvent) {
         match key.code {
             KeyCode::Enter => {
-                self.execute_command();
+                // Reset to Normal first so a command may override the mode
+                // (e.g. `:q` switching to ConfirmQuit when tasks are running).
                 self.mode = Mode::Normal;
+                self.execute_command();
             }
             KeyCode::Esc => {
                 self.mode = Mode::Normal;
@@ -39,7 +41,9 @@ impl App {
         };
 
         match cmd {
-            "q" | "quit" | "q!" => self.should_quit = true,
+            // `:q!` force-quits even with running tasks; `:q`/`:quit` warn first.
+            "q!" => self.should_quit = true,
+            "q" | "quit" => self.request_quit(),
 
             "mkdir" => {
                 let name = match arg.filter(|a| !a.is_empty()) {

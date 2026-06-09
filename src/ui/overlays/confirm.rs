@@ -106,3 +106,48 @@ pub(in crate::ui) fn render_confirm_popup(f: &mut Frame, app: &App, area: Rect) 
     let hint_area = Rect::new(inner.x, hint_y, inner.width, 1);
     f.render_widget(Paragraph::new(hint_line), hint_area);
 }
+
+/// Confirmation shown when the user tries to quit while background tasks are running.
+pub(in crate::ui) fn render_quit_confirm(f: &mut Frame, app: &App, area: Rect) {
+    let t = &app.theme;
+    let accent = t.yellow;
+    let n = app.task_manager.active_count();
+
+    let w = 50u16.min(area.width.saturating_sub(4)).max(30);
+    let h = 6u16.min(area.height);
+    let x = (area.width.saturating_sub(w)) / 2;
+    let y = (area.height.saturating_sub(h)) / 2;
+    let popup = Rect::new(area.x + x, area.y + y, w, h);
+
+    f.render_widget(Clear, popup);
+
+    let block = Block::default()
+        .borders(Borders::ALL)
+        .border_style(Style::default().fg(accent))
+        .title(" \u{f0a48} Quit ")
+        .title_style(Style::default().fg(accent))
+        .style(Style::default().bg(t.bg));
+    let inner = block.inner(popup);
+    f.render_widget(block, popup);
+
+    let task_word = if n == 1 { "task is" } else { "tasks are" };
+    let msg = Line::from(Span::styled(
+        format!("{n} {task_word} still running."),
+        Style::default().fg(t.fg),
+    ));
+    let sub = Line::from(Span::styled(
+        "Quitting now will abort them.",
+        Style::default().fg(t.fg_dim),
+    ));
+    let hint = Line::from(vec![
+        Span::styled("y", Style::default().fg(accent)),
+        Span::styled(" quit anyway  ", Style::default().fg(t.fg_dim)),
+        Span::styled("esc", Style::default().fg(accent)),
+        Span::styled(" stay", Style::default().fg(t.fg_dim)),
+    ]);
+
+    f.render_widget(
+        Paragraph::new(vec![msg, sub, Line::from(""), hint]),
+        Rect::new(inner.x + 1, inner.y, inner.width.saturating_sub(2), inner.height),
+    );
+}

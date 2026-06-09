@@ -83,7 +83,7 @@ impl App {
             }
 
             // Global keys
-            KeyCode::Char('q') => self.should_quit = true,
+            KeyCode::Char('q') => self.request_quit(),
             KeyCode::Char('t') => {
                 self.show_tree = false;
                 self.tree_focused = false;

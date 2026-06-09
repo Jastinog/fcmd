@@ -42,6 +42,7 @@ pub enum Mode {
     Select,
     Command,
     Confirm,
+    ConfirmQuit,
     Search,
     Find,
     Help,
@@ -195,8 +196,12 @@ pub struct App {
     // Task manager (copy/move/delete operations)
     pub task_manager: task_manager::TaskManager,
     pub task_notification: Option<String>,
+    /// `tick_count` when the current task notification was set, used to auto-expire it.
+    pub task_notification_tick: Option<u32>,
     // Conflict resolution
-    pub conflict_rx: Option<tokio::sync::mpsc::Receiver<crate::ops::ConflictInfo>>,
+    /// One conflict channel per in-flight paste task; polled round-robin so concurrent
+    /// pastes don't clobber each other's conflict prompts.
+    pub conflict_rxs: Vec<tokio::sync::mpsc::Receiver<crate::ops::ConflictInfo>>,
     pub conflict_info: Option<crate::ops::ConflictInfo>,
     pub conflict_selected: usize,
     // Directory sizes
@@ -385,7 +390,8 @@ impl App {
             tick_count: 0,
             task_manager: task_manager::TaskManager::new(),
             task_notification: None,
-            conflict_rx: None,
+            task_notification_tick: None,
+            conflict_rxs: Vec::new(),
             conflict_info: None,
             conflict_selected: 0,
             dir_sizes: HashMap::new(),
@@ -837,7 +843,9 @@ impl App {
 
     pub fn handle_key(&mut self, key: KeyEvent) {
         self.status_message.clear();
-        self.task_notification = None;
+        // NOTE: task_notification is intentionally NOT cleared here. It is auto-expired
+        // by poll_tasks after a few seconds so a completion summary (incl. failures)
+        // survives the next keypress instead of vanishing in a single frame.
 
         match self.mode {
             Mode::Normal => self.handle_normal(key),
@@ -845,6 +853,7 @@ impl App {
             Mode::Select => self.handle_select(key),
             Mode::Command => self.handle_command(key),
             Mode::Confirm => self.handle_confirm(key),
+            Mode::ConfirmQuit => self.handle_confirm_quit(key),
             Mode::Search => self.handle_search(key),
             Mode::Find => self.handle_find(key),
             Mode::Help => self.handle_help(key),
@@ -964,7 +973,8 @@ impl App {
             tick_count: 0,
             task_manager: task_manager::TaskManager::new(),
             task_notification: None,
-            conflict_rx: None,
+            task_notification_tick: None,
+            conflict_rxs: Vec::new(),
             conflict_info: None,
             conflict_selected: 0,
             dir_sizes: HashMap::new(),

@@ -202,6 +202,10 @@ pub fn render(f: &mut Frame, app: &mut App) {
         overlays::render_confirm_popup(f, app, full_area);
     }
 
+    if app.mode == Mode::ConfirmQuit {
+        overlays::render_quit_confirm(f, app, full_area);
+    }
+
     if app.mode == Mode::Conflict {
         overlays::render_conflict_popup(f, app, full_area);
     }

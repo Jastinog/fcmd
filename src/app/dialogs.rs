@@ -1,9 +1,35 @@
 use super::*;
 
 impl App {
+    /// Request application exit. If background tasks (copy/move/delete) are still
+    /// running, ask for confirmation first so the user doesn't silently abort them.
+    pub(super) fn request_quit(&mut self) {
+        if self.task_manager.active_count() > 0 {
+            self.mode = Mode::ConfirmQuit;
+        } else {
+            self.should_quit = true;
+        }
+    }
+
+    pub(super) fn handle_confirm_quit(&mut self, key: KeyEvent) {
+        match key.code {
+            KeyCode::Char('y') | KeyCode::Char('Y') => {
+                self.should_quit = true;
+            }
+            // Enter is intentionally not a confirm key here (safe default = cancel).
+            _ => {
+                self.mode = Mode::Normal;
+                self.status_message = "Quit cancelled".into();
+            }
+        }
+    }
+
     pub(super) fn handle_confirm(&mut self, key: KeyEvent) {
         match key.code {
-            KeyCode::Char('y') | KeyCode::Char('Y') | KeyCode::Enter => {
+            // Require an explicit 'y'. Enter is intentionally NOT a confirm key here:
+            // the list is scrollable with j/k/arrows, so a reflexive Enter must not
+            // trigger a destructive delete. Enter falls through to the cancel arm.
+            KeyCode::Char('y') | KeyCode::Char('Y') => {
                 self.execute_delete();
                 self.active_panel_mut().marked.clear();
                 self.mode = Mode::Normal;
@@ -377,6 +403,60 @@ mod tests {
         assert_eq!(app.confirm_scroll, 2);
         app.handle_confirm(KeyEvent::new(KeyCode::Up, KeyModifiers::NONE));
         assert_eq!(app.confirm_scroll, 1);
+    }
+
+    #[tokio::test]
+    async fn handle_confirm_enter_does_not_delete() {
+        // Enter must NOT confirm a destructive delete; it falls through to cancel.
+        let entries = crate::app::make_test_entries(&["a.txt"]);
+        let mut app = App::new_for_test(entries);
+        app.mode = Mode::Confirm;
+        app.confirm_paths = vec![(PathBuf::from("/test/a.txt"), false)];
+
+        app.handle_confirm(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+        // No task spawned, list cleared, returned to Normal with a cancel message.
+        assert!(app.task_manager.tasks().is_empty());
+        assert!(app.confirm_paths.is_empty());
+        assert_eq!(app.mode, Mode::Normal);
+        assert_eq!(app.status_message, "Cancelled");
+    }
+
+    #[tokio::test]
+    async fn request_quit_no_tasks_quits_immediately() {
+        let entries = crate::app::make_test_entries(&["a.txt"]);
+        let mut app = App::new_for_test(entries);
+        app.request_quit();
+        assert!(app.should_quit);
+        assert_ne!(app.mode, Mode::ConfirmQuit);
+    }
+
+    #[tokio::test]
+    async fn request_quit_with_running_task_asks_first() {
+        let entries = crate::app::make_test_entries(&["a.txt"]);
+        let mut app = App::new_for_test(entries);
+        // Spawn a delete task so a task is Running.
+        app.confirm_paths = vec![(PathBuf::from("/tmp/nonexistent_test_file"), false)];
+        app.confirm_permanent = true;
+        app.execute_delete();
+        assert!(app.task_manager.active_count() > 0);
+
+        app.request_quit();
+        assert!(!app.should_quit);
+        assert_eq!(app.mode, Mode::ConfirmQuit);
+
+        // 'y' confirms; 'esc'/other cancels.
+        app.handle_confirm_quit(KeyEvent::new(KeyCode::Char('y'), KeyModifiers::NONE));
+        assert!(app.should_quit);
+    }
+
+    #[tokio::test]
+    async fn handle_confirm_quit_cancel_returns_normal() {
+        let entries = crate::app::make_test_entries(&["a.txt"]);
+        let mut app = App::new_for_test(entries);
+        app.mode = Mode::ConfirmQuit;
+        app.handle_confirm_quit(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
+        assert!(!app.should_quit);
+        assert_eq!(app.mode, Mode::Normal);
     }
 
     #[tokio::test]

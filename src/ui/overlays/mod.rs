@@ -19,6 +19,7 @@ pub(super) use command::render_command_popup;
 pub(super) use help::render_help;
 pub(super) use input::render_input_popup;
 pub(super) use confirm::render_confirm_popup;
+pub(super) use confirm::render_quit_confirm;
 pub(super) use preview::render_preview_popup;
 pub(super) use theme_picker::render_theme_picker;
 pub(super) use bookmarks::render_bookmarks;

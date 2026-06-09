@@ -150,7 +150,9 @@ impl App {
         let (tx, rx) = tokio::sync::mpsc::channel(64);
         let (conflict_tx, conflict_rx) = tokio::sync::mpsc::channel(4);
         ops::paste_in_background(paths, dst_dir.clone(), op, tx, conflict_tx);
-        self.conflict_rx = Some(conflict_rx);
+        // Track per-task: a concurrent paste must not clobber an earlier paste's
+        // conflict channel, which would make the earlier task silently skip conflicts.
+        self.conflict_rxs.push(conflict_rx);
 
         if op == RegisterOp::Yank {
             self.task_manager.add_copy(rx, dst_dir, phantoms);

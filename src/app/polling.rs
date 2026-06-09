@@ -2,6 +2,10 @@ use super::*;
 use super::task_manager::TaskEvent;
 use crate::util::format_bytes;
 
+/// How many ticks (250ms each) a finished-task notification stays on screen
+/// before auto-expiring. ~5 seconds.
+const TASK_NOTIFICATION_TICKS: u32 = 20;
+
 impl App {
     pub fn poll_find(&mut self) {
         if let Some(ref mut fs) = self.find_state {
@@ -36,9 +40,18 @@ impl App {
             if let Some(task) = self.task_manager.tasks().last()
                 && let task_manager::TaskState::Finished { summary, .. } = &task.state {
                     self.task_notification = Some(summary.clone());
+                    self.task_notification_tick = Some(self.tick_count);
                 }
             self.task_manager.remove_finished();
         }
+
+        // Auto-expire the completion notification after a few seconds so it stays
+        // visible across keypresses but doesn't linger forever.
+        if let Some(set_tick) = self.task_notification_tick
+            && self.tick_count.wrapping_sub(set_tick) >= TASK_NOTIFICATION_TICKS {
+                self.task_notification = None;
+                self.task_notification_tick = None;
+            }
 
         if needs_refresh {
             self.refresh_panels();
@@ -46,20 +59,32 @@ impl App {
     }
 
     pub fn poll_conflicts(&mut self) {
-        let rx = match self.conflict_rx.as_mut() {
-            Some(rx) => rx,
-            None => return,
-        };
-        match rx.try_recv() {
-            Ok(info) => {
-                self.conflict_info = Some(info);
-                self.conflict_selected = 0;
-                self.mode = Mode::Conflict;
+        use tokio::sync::mpsc::error::TryRecvError;
+
+        // Only one conflict dialog can be shown at a time, so we look for a new conflict
+        // only when none is pending; other tasks' conflicts stay queued in their channels
+        // until the current one is resolved. While scanning we also prune channels whose
+        // paste task has finished (sender dropped).
+        if self.conflict_info.is_none() {
+            let mut i = 0;
+            while i < self.conflict_rxs.len() {
+                match self.conflict_rxs[i].try_recv() {
+                    Ok(info) => {
+                        self.conflict_info = Some(info);
+                        // Default to the safe, non-destructive option (Skip = index 1)
+                        // so a reflexive Enter never overwrites an existing file.
+                        self.conflict_selected = 1;
+                        self.mode = Mode::Conflict;
+                        return;
+                    }
+                    Err(TryRecvError::Disconnected) => {
+                        self.conflict_rxs.swap_remove(i);
+                    }
+                    Err(TryRecvError::Empty) => {
+                        i += 1;
+                    }
+                }
             }
-            Err(tokio::sync::mpsc::error::TryRecvError::Disconnected) => {
-                self.conflict_rx = None;
-            }
-            Err(tokio::sync::mpsc::error::TryRecvError::Empty) => {}
         }
     }
 
