@@ -437,7 +437,14 @@ impl App {
                             to: final_path,
                         });
                     }
-                    Err(e) => errors.push(format!("{}: {e}", final_name)),
+                    Err(e) => {
+                        errors.push(format!("{}: {e}", final_name));
+                        // Restore the temp file to its original name so we don't
+                        // leave a stray .fcmd_tmp_ file behind on failure.
+                        if let Some(orig) = path.file_name().and_then(|n| n.to_str()) {
+                            let _ = ops::rename_path(&temp_path, orig);
+                        }
+                    }
                 }
             }
 

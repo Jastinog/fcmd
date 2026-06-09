@@ -118,7 +118,9 @@ impl App {
                 };
                 let target = if path_str.starts_with('/') {
                     PathBuf::from(path_str)
-                } else if path_str.starts_with('~') {
+                } else if path_str == "~" || path_str.starts_with("~/") {
+                    // Only expand bare "~" and "~/...". Leave "~user" untouched
+                    // (we don't resolve other users' home dirs).
                     let home = std::env::var("HOME").unwrap_or_default();
                     PathBuf::from(path_str.replacen('~', &home, 1))
                 } else {

@@ -112,31 +112,9 @@ async fn compute_git_status(dirs: [PathBuf; 3]) -> GitResult {
         let stdout = String::from_utf8_lossy(&output.stdout);
 
         for line in stdout.lines() {
-            if line.len() < 4 {
+            let Some((status, abs_path)) = parse_status_line(line, &root) else {
                 continue;
-            }
-            let x = line.as_bytes()[0] as char;
-            let y = line.as_bytes()[1] as char;
-            let rel_path = &line[3..];
-            // For renames: "R  old -> new", use the new path
-            let rel_path = if let Some(pos) = rel_path.find(" -> ") {
-                &rel_path[pos + 4..]
-            } else {
-                rel_path
             };
-
-            let status = match (x, y) {
-                ('?', '?') => '?',
-                (_, 'M') => 'M',
-                (_, 'D') => 'D',
-                ('M', _) => 'M',
-                ('A', _) => 'A',
-                ('R', _) => 'R',
-                ('D', _) => 'D',
-                _ => 'M',
-            };
-
-            let abs_path = root.join(rel_path);
             statuses.insert(abs_path.clone(), status);
 
             // Propagate to parent directories up to root
@@ -186,7 +164,7 @@ fn git_priority(c: char) -> u8 {
     }
 }
 
-/// Parse a single line of `git status --porcelain=v1` into (status_char, relative_path).
+/// Parse a single line of `git status --porcelain=v1` into (status_char, absolute_path).
 fn parse_status_line(line: &str, root: &std::path::Path) -> Option<(char, PathBuf)> {
     if line.len() < 4 {
         return None;
@@ -194,6 +172,7 @@ fn parse_status_line(line: &str, root: &std::path::Path) -> Option<(char, PathBu
     let x = line.as_bytes()[0] as char;
     let y = line.as_bytes()[1] as char;
     let rel_path = &line[3..];
+    // For renames: "R  old -> new", use the new path.
     let rel_path = if let Some(pos) = rel_path.find(" -> ") {
         &rel_path[pos + 4..]
     } else {
@@ -211,7 +190,40 @@ fn parse_status_line(line: &str, root: &std::path::Path) -> Option<(char, PathBu
         _ => 'M',
     };
 
-    Some((status, root.join(rel_path)))
+    Some((status, root.join(unquote_git_path(rel_path))))
+}
+
+/// Git quotes paths containing special/non-ASCII chars in double quotes with
+/// C-style escapes (when `core.quotePath` is on, the default). Strip the quotes
+/// and unescape the common sequences so the path matches what's on disk.
+/// Octal byte escapes are left as-is (rare; only affects status-icon matching).
+fn unquote_git_path(s: &str) -> String {
+    if !(s.starts_with('"') && s.ends_with('"') && s.len() >= 2) {
+        return s.to_string();
+    }
+    let inner = &s[1..s.len() - 1];
+    let mut out = String::with_capacity(inner.len());
+    let mut chars = inner.chars();
+    while let Some(c) = chars.next() {
+        if c != '\\' {
+            out.push(c);
+            continue;
+        }
+        match chars.next() {
+            Some('n') => out.push('\n'),
+            Some('t') => out.push('\t'),
+            Some('r') => out.push('\r'),
+            Some('"') => out.push('"'),
+            Some('\\') => out.push('\\'),
+            Some(other) => {
+                // Unknown escape (e.g. octal \NNN): keep verbatim.
+                out.push('\\');
+                out.push(other);
+            }
+            None => out.push('\\'),
+        }
+    }
+    out
 }
 
 #[cfg(test)]
@@ -259,6 +271,23 @@ mod tests {
         let (status, path) = parse_status_line("?? temp.txt", root).unwrap();
         assert_eq!(status, '?');
         assert_eq!(path, PathBuf::from("/repo/temp.txt"));
+    }
+
+    #[test]
+    fn parse_quoted_path() {
+        let root = Path::new("/repo");
+        // Git quotes names with special chars; the quotes must be stripped.
+        let (status, path) = parse_status_line(" M \"src/файл.rs\"", root).unwrap();
+        assert_eq!(status, 'M');
+        assert_eq!(path, PathBuf::from("/repo/src/файл.rs"));
+    }
+
+    #[test]
+    fn unquote_handles_escapes() {
+        assert_eq!(unquote_git_path("plain.rs"), "plain.rs");
+        assert_eq!(unquote_git_path("\"a b.rs\""), "a b.rs");
+        assert_eq!(unquote_git_path("\"tab\\there\""), "tab\there");
+        assert_eq!(unquote_git_path("\"quote\\\"x\""), "quote\"x");
     }
 
     #[test]

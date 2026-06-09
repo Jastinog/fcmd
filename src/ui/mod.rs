@@ -322,7 +322,7 @@ fn render_tab_bar(f: &mut Frame, app: &App, area: Rect) {
         " \u{f0ae} TASKS ".into()
     };
     let tasks_sep_w = 1; // SEP_LEFT char
-    let tasks_w = tasks_label.chars().count() + tasks_sep_w;
+    let tasks_w = util::display_width(&tasks_label) + tasks_sep_w;
     let tasks_bg = if active_tasks > 0 { t.green } else { t.magenta };
 
     // Build info segment: running task status or finished notification
@@ -349,13 +349,13 @@ fn render_tab_bar(f: &mut Frame, app: &App, area: Rect) {
     };
 
     // Compute info segment width
-    let tabs_used: usize = spans.iter().map(|s| s.content.chars().count()).sum();
+    let tabs_used: usize = spans.iter().map(|s| util::display_width(&s.content)).sum();
     let total_w = area.width as usize;
 
     let (info_spans, info_w): (Option<Span>, usize) =
         if let Some((text, fg)) = &info_segment {
             let content = format!(" {text} ");
-            let needed = content.chars().count() + 1; // +1 for SEP_LEFT
+            let needed = util::display_width(&content) + 1; // +1 for SEP_LEFT
             let available = total_w.saturating_sub(tabs_used + tasks_w + 1);
 
             if needed <= available {
