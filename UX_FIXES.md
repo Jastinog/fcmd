@@ -124,7 +124,7 @@ Legend: `[ ]` todo · `[~]` in progress · `[x]` done
 
 ## 🟡 P2 — Minor (text, cosmetics)
 
-- [ ] **P2.1 Bookmark empty-state names wrong key** — `src/app/bookmarks.rs:6`
+- [x] **P2.1 Bookmark empty-state names wrong key** — `src/app/bookmarks.rs:6`
   "Use **B** to add one" but `B` opens the list; `b` adds. Change to "Use **b** to add one."
 
 - [x] **P2.2 Confirm dialog dead row highlight** — `src/ui/overlays/confirm.rs:69-74`
@@ -132,17 +132,19 @@ Legend: `[ ]` todo · `[~]` in progress · `[x]` done
 
 - [ ] **P2.3 Panel name truncation loses extension** — `src/ui/panel.rs:117,144`
   Right-side ellipsis drops the extension. Consider middle-ellipsis keeping head + ext.
+  DEFERRED: middle-ellipsis changes the look of every truncated filename (incl. dirs) —
+  a stylistic call left to the maintainer rather than imposed.
 
-- [ ] **P2.4 Hex span underflow panic risk** — `src/ui/preview.rs:31-34`
+- [x] **P2.4 Hex span underflow panic risk** — `src/ui/preview.rs:31-34`
   `pipe_start - offset_end` can underflow (usize panic) on malformed hex. Use `saturating_sub`.
 
-- [ ] **P2.5 Help table truncation/alignment** — `src/ui/overlays/help.rs:251,284`
+- [x] **P2.5 Help table truncation/alignment** — `src/ui/overlays/help.rs:251,284`
   Descriptions truncated with no `…`; hardcoded `key_width=14` misaligns long keys.
 
-- [ ] **P2.6 select_pattern: `*` default + backspace exits** — `src/app/select_pattern.rs:10,41-47`
+- [x] **P2.6 select_pattern: `*` default + backspace exits** — `src/app/select_pattern.rs:10,41-47`
   Default `*` selects all on stray Enter; backspace on empty field abruptly exits mode.
 
-- [ ] **P2.7 chmod input feedback** — `src/app/chmod.rs:149-200,255`
+- [x] **P2.7 chmod input feedback** — `src/app/chmod.rs:149-200,255`
   Rejected keys (`8`, >4 chars) silently ignored; Enter hint dimmed until 3 digits though
   shorter octals are valid.
 
@@ -172,3 +174,5 @@ Legend: `[ ]` todo · `[~]` in progress · `[x]` done
 - 2026-06-09: **P1 complete** (P1.1–P1.16). Modal rendering, scroll indicators,
   focus/selection/search/mark interactions, archive/bulk-rename/chown feedback. 619 tests,
   clippy clean. P1.12 progress-streaming and chown scroll indicators deferred to X.3/X.4.
+- 2026-06-09: **P2 done** (P2.1,2.2,2.4,2.5,2.6,2.7); P2.3 left as a design decision.
+  619 tests, clippy clean.

@@ -31,7 +31,9 @@ pub(super) fn build_hex_spans(line: &str, dim: Color, fg: Color, accent: Color) 
     if let Some(pipe_start) = line.find('|') {
         let offset_end = line.find("  ").unwrap_or(8).min(10);
         let offset_part: String = line.chars().take(offset_end).collect();
-        let hex_part: String = line.chars().skip(offset_end).take(pipe_start - offset_end).collect();
+        // saturating_sub: a malformed line whose pipe precedes offset_end must not
+        // underflow (usize) and panic.
+        let hex_part: String = line.chars().skip(offset_end).take(pipe_start.saturating_sub(offset_end)).collect();
         let ascii_part: String = line.chars().skip(pipe_start).collect();
         vec![
             Span::styled(offset_part, Style::default().fg(dim)),

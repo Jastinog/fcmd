@@ -198,6 +198,14 @@ impl App {
                 && self.rename_input.len() < 4 => {
                     self.rename_input.push(c);
                 }
+            // Reject out-of-range digits / overflow with feedback instead of silence.
+            KeyCode::Char(c) if c.is_ascii_digit() => {
+                self.status_message = if self.rename_input.len() >= 4 {
+                    "chmod: at most 4 octal digits".into()
+                } else {
+                    "chmod: octal digits 0-7 only".into()
+                };
+            }
             _ => {}
         }
     }

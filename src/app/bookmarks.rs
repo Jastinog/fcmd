@@ -3,7 +3,7 @@ use super::*;
 impl App {
     pub(super) fn open_bookmarks(&mut self) {
         if self.bookmarks.is_empty() {
-            self.status_message = "No bookmarks set. Use B to add one.".into();
+            self.status_message = "No bookmarks set. Use b to add one.".into();
             return;
         }
         self.bookmark_cursor = 0;

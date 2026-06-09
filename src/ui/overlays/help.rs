@@ -8,7 +8,7 @@ use ratatui::{
 
 use crate::app::App;
 use crate::theme::Theme;
-use crate::ui::util::centered_rect;
+use crate::ui::util::{centered_rect, pad_to_width, truncate_to_width};
 
 #[derive(Clone, Copy)]
 enum Cell {
@@ -248,12 +248,9 @@ fn render_cell(
             let key_text = format!("  {key:<width$}", width = key_width);
             let key_used = key_text.chars().count();
             let desc_space = col_w.saturating_sub(key_used);
-            let desc_text: String = if desc.chars().count() > desc_space {
-                desc.chars().take(desc_space).collect()
-            } else {
-                let pad = desc_space.saturating_sub(desc.chars().count());
-                format!("{desc}{}", " ".repeat(pad))
-            };
+            // Truncate (with an ellipsis) if too wide, then pad to fill the column;
+            // both helpers are no-ops when the text already fits.
+            let desc_text = pad_to_width(&truncate_to_width(desc, desc_space), desc_space);
             spans.push(Span::styled(key_text, Style::default().fg(t.yellow)));
             spans.push(Span::styled(desc_text, Style::default().fg(t.fg)));
         }

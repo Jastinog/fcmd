@@ -39,11 +39,9 @@ impl App {
                 self.mode = Mode::Normal;
             }
             KeyCode::Backspace => {
-                if self.rename_input.is_empty() {
-                    self.mode = Mode::Normal;
-                } else {
-                    self.rename_input.pop();
-                }
+                // No-op on empty (use Esc to cancel) so backspacing through the
+                // pattern doesn't unexpectedly drop out of the mode.
+                self.rename_input.pop();
             }
             KeyCode::Char(c) => {
                 self.rename_input.push(c);
@@ -94,15 +92,8 @@ impl App {
                 };
             }
             KeyCode::Backspace => {
-                if self.rename_input.is_empty() {
-                    self.mode = if self.active_panel().marked.is_empty() {
-                        Mode::Normal
-                    } else {
-                        Mode::Select
-                    };
-                } else {
-                    self.rename_input.pop();
-                }
+                // No-op on empty (use Esc to cancel).
+                self.rename_input.pop();
             }
             KeyCode::Char(c) => {
                 self.rename_input.push(c);
@@ -218,13 +209,14 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn select_pattern_backspace_empty_exits() {
+    async fn select_pattern_backspace_empty_is_noop() {
         let entries = make_test_entries(&["a.txt"]);
         let mut app = App::new_for_test(entries);
         app.mode = Mode::SelectPattern;
         app.rename_input = String::new();
         app.handle_select_pattern(key(KeyCode::Backspace));
-        assert_eq!(app.mode, Mode::Normal);
+        // Backspace on an empty field no longer drops out of the mode (use Esc).
+        assert_eq!(app.mode, Mode::SelectPattern);
     }
 
     #[tokio::test]
