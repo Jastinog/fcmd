@@ -1697,6 +1697,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[allow(non_snake_case)]
     async fn visual_G_goes_to_bottom() {
         let entries = make_test_entries(&["a.txt", "b.txt", "c.txt"]);
         let mut app = App::new_for_test(entries);
@@ -1806,6 +1807,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[allow(non_snake_case)]
     async fn select_G_goes_bottom() {
         let entries = make_test_entries(&["a.txt", "b.txt", "c.txt"]);
         let mut app = App::new_for_test(entries);

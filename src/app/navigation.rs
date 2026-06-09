@@ -460,7 +460,6 @@ impl App {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
     #[tokio::test]
     async fn toggle_tree_enables_and_focuses() {

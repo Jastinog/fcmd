@@ -179,6 +179,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[allow(non_snake_case)]
     async fn handle_preview_g_and_G() {
         let entries = crate::app::make_test_entries(&["a.txt"]);
         let mut app = App::new_for_test(entries);

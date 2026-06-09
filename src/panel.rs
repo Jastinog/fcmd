@@ -26,6 +26,7 @@ pub enum SortMode {
 }
 
 impl SortMode {
+    #[cfg(test)]
     pub const ALL: &[SortMode] = &[
         SortMode::Name,
         SortMode::Size,
@@ -97,10 +98,12 @@ impl Panel {
         }
     }
 
+    #[cfg(test)]
     pub fn load_dir(&mut self) -> std::io::Result<()> {
         self.load_dir_with_sizes(&HashMap::new())
     }
 
+    #[cfg(test)]
     pub fn load_dir_with_sizes(
         &mut self,
         dir_sizes: &HashMap<PathBuf, u64>,

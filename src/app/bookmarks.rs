@@ -263,6 +263,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[allow(non_snake_case)]
     async fn handle_bookmarks_G_g() {
         let mut app = app_with_bookmarks();
         app.mode = Mode::Bookmarks;

@@ -267,6 +267,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[allow(non_snake_case)]
     async fn tree_G_goes_to_last() {
         let entries = crate::app::make_test_entries(&["a.txt"]);
         let mut app = App::new_for_test(entries);
