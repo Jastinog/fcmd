@@ -243,6 +243,11 @@ fn format_datetime(time: std::time::SystemTime) -> String {
 
 #[cfg(unix)]
 fn get_user_name(uid: u32) -> Option<String> {
+    // getpwuid shares static libc storage with getpwent (and other lookups),
+    // so hold the same lock to avoid a data race across blocking threads.
+    let _guard = crate::app::chmod::PWGRP_LOCK
+        .lock()
+        .unwrap_or_else(|e| e.into_inner());
     unsafe {
         let pw = libc::getpwuid(uid);
         if pw.is_null() {
@@ -263,6 +268,10 @@ fn get_user_name(_uid: u32) -> Option<String> {
 
 #[cfg(unix)]
 fn get_group_name(gid: u32) -> Option<String> {
+    // See get_user_name: getgrgid shares static libc storage; hold the lock.
+    let _guard = crate::app::chmod::PWGRP_LOCK
+        .lock()
+        .unwrap_or_else(|e| e.into_inner());
     unsafe {
         let gr = libc::getgrgid(gid);
         if gr.is_null() {

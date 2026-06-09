@@ -349,9 +349,12 @@ fn read_uid_gid(_path: &std::path::Path) -> Option<(u32, u32)> {
 }
 
 /// Global mutex to serialize access to non-thread-safe POSIX passwd/group
-/// iterators (setpwent/getpwent/endpwent, setgrent/getgrent/endgrent).
+/// functions: the iterators (setpwent/getpwent/endpwent, setgrent/getgrent/
+/// endgrent) AND the single-lookup variants getpwuid/getgrgid, which all
+/// return pointers into shared static libc storage. Anything calling these
+/// from a blocking thread must hold this lock (see also info.rs).
 #[cfg(unix)]
-static PWGRP_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+pub(crate) static PWGRP_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
 
 #[cfg(unix)]
 fn list_system_users() -> Vec<(String, u32)> {
