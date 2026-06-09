@@ -8,6 +8,7 @@ use ratatui::{
 
 use crate::app::bulk_rename::BulkRenameSubMode;
 use crate::app::App;
+use crate::ui::util::{display_width, visible_input_tail};
 
 pub(in crate::ui) fn render_bulk_rename(f: &mut Frame, app: &App, area: Rect) {
     let state = match app.bulk_rename {
@@ -115,25 +116,12 @@ pub(in crate::ui) fn render_bulk_rename(f: &mut Frame, app: &App, area: Rect) {
         ];
 
         if is_active && state.sub_mode == BulkRenameSubMode::Edit {
-            // Render edit input with cursor block
-            let input = &state.edit_input;
-            let field_w = new_col_w.saturating_sub(1);
-            let input_chars: Vec<char> = input.chars().collect();
-            let (visible, cpos) = if input_chars.len() < field_w {
-                (input.clone(), input_chars.len())
-            } else {
-                let start = input_chars.len() + 1 - field_w;
-                let s: String = input_chars[start..].iter().collect();
-                (s, field_w - 1)
-            };
-            let before: String = visible.chars().take(cpos).collect();
-            let after: String = visible.chars().skip(cpos).collect();
-            let used = before.chars().count() + 1 + after.chars().count();
-            let epad = new_col_w.saturating_sub(used);
+            // Render edit input with cursor block (cursor at end; tail scrolls in).
+            let visible = visible_input_tail(&state.edit_input, new_col_w.saturating_sub(1));
+            let epad = new_col_w.saturating_sub(display_width(&visible) + 1);
 
-            spans.push(Span::styled(before, Style::default().fg(new_fg).bg(new_bg)));
+            spans.push(Span::styled(visible, Style::default().fg(new_fg).bg(new_bg)));
             spans.push(Span::styled("\u{2588}", Style::default().fg(t.yellow).bg(new_bg)));
-            spans.push(Span::styled(after, Style::default().fg(new_fg).bg(new_bg)));
             spans.push(Span::styled(" ".repeat(epad), Style::default().bg(new_bg)));
         } else {
             spans.push(Span::styled(

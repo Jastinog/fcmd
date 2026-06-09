@@ -11,7 +11,7 @@ use crate::find::{FindScope, FindState};
 use crate::util::icons::file_icon;
 use crate::theme::Theme;
 
-use super::util::centered_rect;
+use super::util::{centered_rect, display_width, truncate_to_width, truncate_to_width_left};
 
 pub(super) fn render_find(f: &mut Frame, fs: &FindState, t: &Theme, area: Rect) {
     let popup = centered_rect(80, 75, area);
@@ -62,33 +62,9 @@ pub(super) fn render_find(f: &mut Frame, fs: &FindState, t: &Theme, area: Rect) 
 
     // === LEFT SIDE: input + separator + results + hint ===
 
-    // Input line (unified cursor-block style)
+    // Input line (cursor stays at the end; text scrolls to show the tail)
     let input_area = Rect::new(left_x, inner.y, left_w, 1);
-    let lw = left_w as usize;
-    let prefix = " \u{276f} ";
-    let prefix_len = prefix.chars().count();
-    let field_w = lw.saturating_sub(prefix_len).max(1);
-    let input = &fs.query;
-    let input_chars: Vec<char> = input.chars().collect();
-    let input_char_len = input_chars.len();
-    let (visible_input, cursor_pos) = if input_char_len < field_w {
-        (input.clone(), input_char_len)
-    } else {
-        let start = input_char_len + 1 - field_w;
-        let s: String = input_chars[start..].iter().collect();
-        (s, field_w - 1)
-    };
-    let before: String = visible_input.chars().take(cursor_pos).collect();
-    let after: String = visible_input.chars().skip(cursor_pos).collect();
-    let used_input = prefix_len + before.chars().count() + 1 + after.chars().count();
-    let pad_input = lw.saturating_sub(used_input);
-    let input_line = Line::from(vec![
-        Span::styled(prefix, Style::default().fg(scope_color)),
-        Span::styled(before, Style::default().fg(t.fg).bg(t.bg_light)),
-        Span::styled("\u{2588}", Style::default().fg(scope_color).bg(t.bg_light)),
-        Span::styled(after, Style::default().fg(t.fg).bg(t.bg_light)),
-        Span::styled(" ".repeat(pad_input), Style::default().bg(t.bg_light)),
-    ]);
+    let input_line = super::overlays::input_field_line(&fs.query, " \u{276f} ", left_w as usize, scope_color, t);
     f.render_widget(Paragraph::new(input_line), input_area);
 
     // Separator
@@ -133,15 +109,9 @@ pub(super) fn render_find(f: &mut Frame, fs: &FindState, t: &Theme, area: Rect) 
                     rel_path.to_string()
                 };
 
-                let max_display = lwidth.saturating_sub(4 + icon.chars().count());
-                let display_chars: Vec<char> = display.chars().collect();
-                let truncated = if display_chars.len() > max_display {
-                    let start = display_chars.len() - max_display.saturating_sub(1);
-                    let tail: String = display_chars[start..].iter().collect();
-                    format!("\u{2026}{tail}")
-                } else {
-                    display
-                };
+                // Keep the tail (filename) when a path is too long, by display width.
+                let max_display = lwidth.saturating_sub(4 + display_width(icon));
+                let truncated = truncate_to_width_left(&display, max_display);
 
                 let prefix = if is_selected { "> " } else { "  " };
 
@@ -223,15 +193,7 @@ pub(super) fn render_find(f: &mut Frame, fs: &FindState, t: &Theme, area: Rect) 
         Some(p) => {
             // Preview title
             let preview_title = format!(" 󰈈 {} [{}] ", p.title, p.info);
-            let title_chars: Vec<char> = preview_title.chars().collect();
-            let title_display = if title_chars.len() > right_w as usize {
-                let truncated: String = title_chars[..right_w.saturating_sub(2) as usize]
-                    .iter()
-                    .collect();
-                format!("{truncated}\u{2026} ")
-            } else {
-                preview_title
-            };
+            let title_display = truncate_to_width(&preview_title, right_w as usize);
             let title_area = Rect::new(right_x, inner.y, right_w, 1);
             f.render_widget(
                 Paragraph::new(Line::from(Span::styled(

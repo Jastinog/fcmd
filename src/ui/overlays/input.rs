@@ -7,6 +7,9 @@ use ratatui::{
 };
 
 use crate::app::{App, Mode};
+use crate::ui::util::{display_width, truncate_to_width_left};
+
+use super::input_field_line;
 
 pub(in crate::ui) fn render_input_popup(f: &mut Frame, app: &App, area: Rect) {
     let t = &app.theme;
@@ -63,16 +66,9 @@ pub(in crate::ui) fn render_input_popup(f: &mut Frame, app: &App, area: Rect) {
     // Context line (original name for rename)
     if let Some(ref orig) = context {
         let label = " 󰈔 ";
-        let max_name = iw.saturating_sub(label.chars().count());
-        let orig_chars: Vec<char> = orig.chars().collect();
-        let name_display = if orig_chars.len() > max_name {
-            let start = orig_chars.len() - max_name.saturating_sub(1);
-            let tail: String = orig_chars[start..].iter().collect();
-            format!("\u{2026}{tail}")
-        } else {
-            orig.clone()
-        };
-        let pad = iw.saturating_sub(label.chars().count() + name_display.chars().count());
+        let max_name = iw.saturating_sub(display_width(label));
+        let name_display = truncate_to_width_left(orig, max_name);
+        let pad = iw.saturating_sub(display_width(label) + display_width(&name_display));
         let ctx_line = Line::from(vec![
             Span::styled(label, Style::default().fg(t.fg_dim)),
             Span::styled(name_display, Style::default().fg(t.fg)),
@@ -83,35 +79,8 @@ pub(in crate::ui) fn render_input_popup(f: &mut Frame, app: &App, area: Rect) {
         row += 1;
     }
 
-    // Input field
-    let input = &app.rename_input;
-    let prefix = " \u{276f} ";
-    let prefix_len = prefix.chars().count();
-    let field_w = iw.saturating_sub(prefix_len).max(1);
-
-    let input_chars: Vec<char> = input.chars().collect();
-    let input_char_len = input_chars.len();
-    let (visible_input, cursor_pos) = if input_char_len < field_w {
-        (input.clone(), input_char_len)
-    } else {
-        let start = input_char_len + 1 - field_w;
-        let s: String = input_chars[start..].iter().collect();
-        (s, field_w - 1)
-    };
-
-    // Build input spans: prefix + text before cursor + cursor char + text after cursor + padding
-    let before: String = visible_input.chars().take(cursor_pos).collect();
-    let after: String = visible_input.chars().skip(cursor_pos).collect();
-    let used = prefix_len + before.chars().count() + 1 + after.chars().count();
-    let pad = iw.saturating_sub(used);
-
-    let input_line = Line::from(vec![
-        Span::styled(prefix, Style::default().fg(accent)),
-        Span::styled(before, Style::default().fg(t.fg).bg(t.bg_light)),
-        Span::styled("\u{2588}", Style::default().fg(accent).bg(t.bg_light)),
-        Span::styled(after, Style::default().fg(t.fg).bg(t.bg_light)),
-        Span::styled(" ".repeat(pad), Style::default().bg(t.bg_light)),
-    ]);
+    // Input field (cursor stays at the end; text scrolls to show the tail)
+    let input_line = input_field_line(&app.rename_input, " \u{276f} ", iw, accent, t);
     let input_area = Rect::new(inner.x, inner.y + row, inner.width, 1);
     f.render_widget(Paragraph::new(input_line), input_area);
     row += 1;

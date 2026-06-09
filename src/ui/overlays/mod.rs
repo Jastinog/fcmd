@@ -31,6 +31,34 @@ pub(super) use conflict::render_conflict_popup;
 pub(super) use archive::render_archive;
 pub(super) use bulk_rename::render_bulk_rename;
 
+/// Render a single-line text input field: `<prefix><text>█` with the visible text
+/// scrolled to keep the tail (where the cursor sits) in view, padded to `total_cols`.
+/// Width-aware so CJK/emoji input doesn't overflow.
+pub(in crate::ui) fn input_field_line<'a>(
+    input: &str,
+    prefix: &'a str,
+    total_cols: usize,
+    accent: ratatui::style::Color,
+    t: &crate::theme::Theme,
+) -> ratatui::text::Line<'a> {
+    use crate::ui::util::{display_width, visible_input_tail};
+    use ratatui::{style::Style, text::{Line, Span}};
+
+    let prefix_w = display_width(prefix);
+    // Reserve 1 column for the cursor block at the end.
+    let field_w = total_cols.saturating_sub(prefix_w).max(1).saturating_sub(1);
+    let visible = visible_input_tail(input, field_w);
+    let used = prefix_w + display_width(&visible) + 1;
+    let pad = total_cols.saturating_sub(used);
+
+    Line::from(vec![
+        Span::styled(prefix, Style::default().fg(accent)),
+        Span::styled(visible, Style::default().fg(t.fg).bg(t.bg_light)),
+        Span::styled("\u{2588}", Style::default().fg(accent).bg(t.bg_light)),
+        Span::styled(" ".repeat(pad), Style::default().bg(t.bg_light)),
+    ])
+}
+
 pub(super) fn format_binary_size(bytes: usize) -> String {
     if bytes >= 1_048_576 {
         format!("{:.1} MB", bytes as f64 / 1_048_576.0)

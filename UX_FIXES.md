@@ -45,18 +45,18 @@ Legend: `[ ]` todo · `[~]` in progress · `[x]` done
 
 ### Rendering / wide-char (CJK, emoji, nerd-font)
 
-- [ ] **P1.1 Tree truncation by char count** — `src/ui/tree.rs:62-104`
+- [x] **P1.1 Tree truncation by char count** — `src/ui/tree.rs:62-104`
   Uses `chars().count()` instead of display width; wide names overflow and misalign.
   Switch to `util::truncate_to_width` / `display_width`. Also pad cursor line to full width.
 
-- [ ] **P1.2 Find-overlay truncation by char count** — `src/ui/find_overlay.rs:136-144`, `:227-260`
+- [x] **P1.2 Find-overlay truncation by char count** — `src/ui/find_overlay.rs:136-144`, `:227-260`
   Same char-count issue for results, hex preview, and title. Use display-width helpers.
 
-- [ ] **P1.3 Text-input horizontal scroll by char count** — `src/app/input.rs:94`, `src/app/command.rs:47`, `src/app/search.rs:65`, `src/app/bulk_rename.rs:120`
+- [x] **P1.3 Text-input horizontal scroll by char count** — `src/app/input.rs:94`, `src/app/command.rs:47`, `src/app/search.rs:65`, `src/app/bulk_rename.rs:120`
   Visible-window math mixes char count with column width; cursor/text spill on CJK/emoji.
   Compute the visible window by display width.
 
-- [ ] **P1.4 Narrow-terminal layout has no minimum widths** — `src/ui/mod.rs:238`, `src/ui/panel.rs:81`
+- [x] **P1.4 Narrow-terminal layout has no minimum widths** — `src/ui/mod.rs:238`, `src/ui/panel.rs:81`
   Columns collapse / meta column overflows and gets clipped with no graceful degradation.
   Add min-width guard (collapse tree / drop meta column when too narrow).
 
@@ -162,3 +162,7 @@ Legend: `[ ]` todo · `[~]` in progress · `[x]` done
 - 2026-06-09: Plan created from full-codebase UI/UX review.
 - 2026-06-09: **P0 complete** (P0.1–P0.5). 605 tests pass, clippy clean.
   Added regression tests for delete-Enter, quit-with-tasks, conflict-channel handling.
+- 2026-06-09: **P1 wide-char group complete** (P1.1–P1.4). Added util helpers
+  `truncate_to_width_left` / `visible_input_tail` and shared `input_field_line`;
+  tree/find/input fields now display-width aware; panel drops meta column on narrow
+  panels. 613 tests pass, clippy clean.

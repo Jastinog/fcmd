@@ -44,6 +44,41 @@ pub(crate) fn truncate_to_width(s: &str, max_cols: usize) -> String {
     out
 }
 
+/// Truncate a string to fit within `max_cols` columns, keeping the TAIL (right side).
+/// Prepends `…` if truncated. Useful for paths, where the filename at the end matters
+/// more than the leading directories.
+pub(crate) fn truncate_to_width_left(s: &str, max_cols: usize) -> String {
+    let width = display_width(s);
+    if width <= max_cols {
+        return s.to_string();
+    }
+    if max_cols <= 1 {
+        return "\u{2026}".to_string();
+    }
+    // Reserve 1 col for the leading … and keep the widest fitting suffix.
+    let tail = visible_input_tail(s, max_cols - 1);
+    format!("\u{2026}{tail}")
+}
+
+/// Return the longest suffix of `input` that fits within `cols` terminal columns.
+/// Used by single-line input fields where the cursor stays at the end and the text
+/// scrolls horizontally to keep the tail visible. Width-aware, so CJK/emoji input
+/// doesn't overflow the field.
+pub(crate) fn visible_input_tail(input: &str, cols: usize) -> String {
+    let mut out: Vec<char> = Vec::new();
+    let mut col = 0;
+    for c in input.chars().rev() {
+        let w = UnicodeWidthChar::width(c).unwrap_or(0);
+        if col + w > cols {
+            break;
+        }
+        out.push(c);
+        col += w;
+    }
+    out.reverse();
+    out.into_iter().collect()
+}
+
 /// Pad a string with spaces to fill exactly `target_cols` terminal columns.
 /// If the string is already wider, returns it as-is.
 pub(crate) fn pad_to_width(s: &str, target_cols: usize) -> String {
@@ -140,6 +175,65 @@ mod tests {
     #[test]
     fn truncate_empty_string() {
         assert_eq!(truncate_to_width("", 5), "");
+    }
+
+    // ── truncate_to_width_left ─────────────────────────────────────
+
+    #[test]
+    fn truncate_left_no_truncation_needed() {
+        assert_eq!(truncate_to_width_left("file.txt", 10), "file.txt");
+        assert_eq!(truncate_to_width_left("file.txt", 8), "file.txt");
+    }
+
+    #[test]
+    fn truncate_left_keeps_tail() {
+        // Path truncated from the left keeps the filename, prepends …
+        let r = truncate_to_width_left("/very/long/path/file.txt", 10);
+        assert!(r.starts_with('\u{2026}'));
+        assert!(r.ends_with("file.txt"));
+        assert_eq!(display_width(&r), 10);
+    }
+
+    #[test]
+    fn truncate_left_tiny_budget() {
+        assert_eq!(truncate_to_width_left("hello", 1), "\u{2026}");
+        assert_eq!(truncate_to_width_left("hello", 0), "\u{2026}");
+    }
+
+    #[test]
+    fn truncate_left_cjk_boundary() {
+        // Wide chars must not be split; result width stays within budget.
+        let r = truncate_to_width_left("日本語テスト", 5);
+        assert!(display_width(&r) <= 5);
+        assert!(r.starts_with('\u{2026}'));
+    }
+
+    // ── visible_input_tail ─────────────────────────────────────────
+
+    #[test]
+    fn visible_tail_fits() {
+        assert_eq!(visible_input_tail("hello", 10), "hello");
+        assert_eq!(visible_input_tail("hello", 5), "hello");
+    }
+
+    #[test]
+    fn visible_tail_scrolls() {
+        // Shows the rightmost chars that fit.
+        assert_eq!(visible_input_tail("hello world", 5), "world");
+        assert_eq!(display_width(&visible_input_tail("hello world", 5)), 5);
+    }
+
+    #[test]
+    fn visible_tail_cjk_no_overflow() {
+        // 3 CJK chars = 6 cols; budget 5 fits only 2 (4 cols), never splits one.
+        let r = visible_input_tail("日本語", 5);
+        assert!(display_width(&r) <= 5);
+        assert_eq!(r, "本語");
+    }
+
+    #[test]
+    fn visible_tail_zero() {
+        assert_eq!(visible_input_tail("hello", 0), "");
     }
 
     // ── pad_to_width ──────────────────────────────────────────────

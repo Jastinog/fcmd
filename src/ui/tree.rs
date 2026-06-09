@@ -9,6 +9,8 @@ use ratatui::{
 use crate::app::App;
 use crate::util::icons::file_icon;
 
+use super::util::{display_width, pad_to_width, truncate_to_width};
+
 pub(super) fn render_tree(f: &mut Frame, app: &App, area: Rect) {
     let t = &app.theme;
     let is_focused = app.tree_focused;
@@ -56,17 +58,11 @@ pub(super) fn render_tree(f: &mut Frame, app: &App, area: Rect) {
 
             let is_cursor = i == app.tree_selected;
 
-            // Cursor row: uniform style for the whole line
+            // Cursor row: uniform style for the whole line, padded so the
+            // highlight bar spans the full panel width.
             if is_cursor && is_focused {
                 let full = format!("{}{}{}", line.prefix, icon, line.name);
-                let chars: Vec<char> = full.chars().collect();
-                let text = if chars.len() > width {
-                    let mut s: String = chars[..width.saturating_sub(1)].iter().collect();
-                    s.push('\u{2026}');
-                    s
-                } else {
-                    full
-                };
+                let text = pad_to_width(&truncate_to_width(&full, width), width);
                 return ListItem::new(Line::from(Span::styled(
                     text,
                     Style::default().fg(t.bg_text).bg(t.blue),
@@ -87,20 +83,13 @@ pub(super) fn render_tree(f: &mut Frame, app: &App, area: Rect) {
                 )
             };
 
-            // Truncate name if needed
-            let prefix_chars: usize = line.prefix.chars().count();
-            let icon_chars: usize = icon.chars().count();
-            let name_chars: usize = line.name.chars().count();
-            let total = prefix_chars + icon_chars + name_chars;
-
-            let name_display = if total > width && width > prefix_chars + icon_chars {
-                let avail = width - prefix_chars - icon_chars;
-                let chars: Vec<char> = line.name.chars().collect();
-                let mut s: String = chars[..avail.saturating_sub(1)].iter().collect();
-                s.push('\u{2026}');
-                s
+            // Truncate the name by display width so wide chars don't overflow.
+            let fixed_w = display_width(&line.prefix) + display_width(icon);
+            let avail = width.saturating_sub(fixed_w);
+            let name_display = if avail == 0 {
+                String::new()
             } else {
-                line.name.clone()
+                truncate_to_width(&line.name, avail)
             };
 
             ListItem::new(Line::from(vec![

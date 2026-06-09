@@ -54,34 +54,8 @@ pub(in crate::ui) fn render_search_popup(f: &mut Frame, app: &App, area: Rect) {
     let iw = inner.width as usize;
     let mut row = 0u16;
 
-    // Input field
-    let input = &app.search_query;
-    let prefix = " / ";
-    let prefix_len = prefix.chars().count();
-    let field_w = iw.saturating_sub(prefix_len).max(1);
-
-    let input_chars: Vec<char> = input.chars().collect();
-    let input_char_len = input_chars.len();
-    let (visible_input, cursor_pos) = if input_char_len < field_w {
-        (input.clone(), input_char_len)
-    } else {
-        let start = input_char_len + 1 - field_w;
-        let s: String = input_chars[start..].iter().collect();
-        (s, field_w - 1)
-    };
-
-    let before: String = visible_input.chars().take(cursor_pos).collect();
-    let after: String = visible_input.chars().skip(cursor_pos).collect();
-    let used = prefix_len + before.chars().count() + 1 + after.chars().count();
-    let pad = iw.saturating_sub(used);
-
-    let input_line = Line::from(vec![
-        Span::styled(prefix, Style::default().fg(accent)),
-        Span::styled(before, Style::default().fg(t.fg).bg(t.bg_light)),
-        Span::styled("\u{2588}", Style::default().fg(accent).bg(t.bg_light)),
-        Span::styled(after, Style::default().fg(t.fg).bg(t.bg_light)),
-        Span::styled(" ".repeat(pad), Style::default().bg(t.bg_light)),
-    ]);
+    // Input field (cursor stays at the end; text scrolls to show the tail)
+    let input_line = super::input_field_line(&app.search_query, " / ", iw, accent, t);
     let input_area = Rect::new(inner.x, inner.y + row, inner.width, 1);
     f.render_widget(Paragraph::new(input_line), input_area);
     row += 1;

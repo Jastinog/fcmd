@@ -76,8 +76,11 @@ pub(super) fn render_panel(
 
     let icon_width = 2;
     let sign_width = 2; // 1 git + 1 reg
-    let meta_width = 16;
-    let vm_width = 1; // visual mark on the right
+    // On a narrow panel the fixed-width size/date column would overflow and clip,
+    // so drop it and give all remaining space to the name.
+    let show_meta = inner_width >= 30;
+    let meta_width = if show_meta { 16 } else { 0 };
+    let vm_width = if show_meta { 1 } else { 0 }; // visual mark on the right
     let name_width = inner_width.saturating_sub(meta_width + icon_width + sign_width + vm_width);
 
     let visual_range = panel.visual_range();
@@ -119,14 +122,16 @@ pub(super) fn render_panel(
                 };
                 const SPINNER: [&str; 4] = ["\u{25d0}", "\u{25d3}", "\u{25d1}", "\u{25d2}"];
                 let spin_char = SPINNER[(ctx.tick_count % 4) as usize];
-                let line = Line::from(vec![
+                let mut spans = vec![
                     Span::styled(spin_char, ghost_style),
                     Span::styled(" ", ghost_style),
                     Span::styled(icon, ghost_style),
                     Span::styled(name_col, ghost_style),
-                    Span::styled(" ".repeat(meta_width + vm_width), ghost_style),
-                ]);
-                items.push(ListItem::new(line));
+                ];
+                if show_meta {
+                    spans.push(Span::styled(" ".repeat(meta_width + vm_width), ghost_style));
+                }
+                items.push(ListItem::new(Line::from(spans)));
             }
             DisplaySlot::Real(idx) => {
                 let i = *idx;
@@ -277,15 +282,17 @@ pub(super) fn render_panel(
                     (" ", s)
                 };
 
-                let line = Line::from(vec![
+                let mut spans = vec![
                     Span::styled(git_icon, git_style),
                     Span::styled(sign_text, sign_style),
                     Span::styled(icon, icon_style),
                     Span::styled(name_col, name_style),
-                    Span::styled(meta_text, meta_style),
-                    Span::styled(vm_text, vm_style),
-                ]);
-                items.push(ListItem::new(line));
+                ];
+                if show_meta {
+                    spans.push(Span::styled(meta_text, meta_style));
+                    spans.push(Span::styled(vm_text, vm_style));
+                }
+                items.push(ListItem::new(Line::from(spans)));
             }
         }
     }
