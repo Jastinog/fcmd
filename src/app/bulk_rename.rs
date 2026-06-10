@@ -23,6 +23,11 @@ pub struct BulkRenameState {
     pub edit_input: String,
     pub find_replace_input: String,
     pub error: Option<String>,
+    /// Names already present in the target directory, captured once when the
+    /// dialog opens. Used for conflict detection without per-frame disk stats —
+    /// `conflict_indices` runs on every redraw, so it must stay allocation-free
+    /// of filesystem I/O.
+    pub existing_names: HashSet<String>,
 }
 
 impl BulkRenameState {
@@ -35,6 +40,7 @@ impl BulkRenameState {
             edit_input: String::new(),
             find_replace_input: String::new(),
             error: None,
+            existing_names: HashSet::new(),
         }
     }
 
@@ -56,13 +62,15 @@ impl BulkRenameState {
             if !seen.insert(&e.new_name) {
                 return true;
             }
-            // Check filesystem: if target name differs and exists on disk,
-            // and is not another entry in this batch (which will be renamed away)
-            if e.new_name != e.original_name && !original_names.contains(e.new_name.as_str())
-                && let Some(parent) = e.original_path.parent()
-                    && parent.join(&e.new_name).exists() {
-                        return true;
-                    }
+            // Conflict if the target name differs, already exists in the
+            // directory, and is not another entry in this batch (which will be
+            // renamed away). Checked against the in-memory sibling-name set.
+            if e.new_name != e.original_name
+                && !original_names.contains(e.new_name.as_str())
+                && self.existing_names.contains(&e.new_name)
+            {
+                return true;
+            }
         }
         false
     }
@@ -83,12 +91,13 @@ impl BulkRenameState {
             } else {
                 seen.insert(&e.new_name, i);
             }
-            // Check filesystem conflict
-            if e.new_name != e.original_name && !original_names.contains(e.new_name.as_str())
-                && let Some(parent) = e.original_path.parent()
-                    && parent.join(&e.new_name).exists() {
-                        result.insert(i);
-                    }
+            // Conflict with an existing sibling (in-memory check, no disk stat)
+            if e.new_name != e.original_name
+                && !original_names.contains(e.new_name.as_str())
+                && self.existing_names.contains(&e.new_name)
+            {
+                result.insert(i);
+            }
         }
         result
     }
@@ -169,7 +178,19 @@ impl App {
             return;
         }
 
-        self.bulk_rename = Some(BulkRenameState::new(entries));
+        // Snapshot sibling names from the already-loaded panel so conflict
+        // detection during editing is a pure in-memory lookup (no disk stats).
+        let existing_names: HashSet<String> = self
+            .active_panel()
+            .entries
+            .iter()
+            .filter(|e| e.name != "..")
+            .map(|e| e.name.clone())
+            .collect();
+
+        let mut state = BulkRenameState::new(entries);
+        state.existing_names = existing_names;
+        self.bulk_rename = Some(state);
         self.mode = Mode::BulkRename;
     }
 
@@ -496,6 +517,27 @@ mod tests {
     #[test]
     fn no_conflicts_when_valid() {
         let state = BulkRenameState::new(make_bulk_entries(&["a.txt", "b.txt"]));
+        assert!(!state.has_conflicts());
+    }
+
+    #[test]
+    fn has_conflicts_existing_sibling_on_disk() {
+        let mut state = BulkRenameState::new(make_bulk_entries(&["a.txt"]));
+        state.existing_names = HashSet::from(["existing.txt".to_string()]);
+        // Renaming onto a name already present in the directory is a conflict.
+        state.entries[0].new_name = "existing.txt".into();
+        assert!(state.has_conflicts());
+        assert!(state.conflict_indices().contains(&0));
+    }
+
+    #[test]
+    fn no_conflict_renaming_onto_a_batch_members_original_name() {
+        // "a.txt" exists in the directory but is itself part of the batch and
+        // will be renamed away, so renaming "b.txt" -> "a.txt" is allowed.
+        let mut state = BulkRenameState::new(make_bulk_entries(&["a.txt", "b.txt"]));
+        state.existing_names = HashSet::from(["a.txt".to_string(), "b.txt".to_string()]);
+        state.entries[0].new_name = "renamed.txt".into();
+        state.entries[1].new_name = "a.txt".into();
         assert!(!state.has_conflicts());
     }
 
