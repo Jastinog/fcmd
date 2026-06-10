@@ -221,35 +221,43 @@ async fn run(
                 }
             }
             Some(msg) = app.dir_load_rx.recv() => {
+                // A `Finished` message is the authoritative, final result of a
+                // directory load the user just triggered (e.g. by entering a dir).
+                // It must render right away. Streaming `Batch` messages are cosmetic
+                // progressive hints for very large dirs and stay throttled to avoid
+                // redraw storms.
+                if matches!(msg, app::DirLoadMsg::Finished { .. }) {
+                    draw_immediately = true;
+                }
                 app.handle_dir_load_msg(msg);
                 app.needs_redraw = true;
             }
             result = recv_or_pend(&mut app.preview_load_rx) => {
-                if let Some(r) = result { app.apply_preview_load(r); app.needs_redraw = true; }
+                if let Some(r) = result { app.apply_preview_load(r); app.needs_redraw = true; draw_immediately = true; }
             }
             result = recv_or_pend(&mut app.file_preview_rx) => {
-                if let Some(r) = result { app.apply_file_preview_load(r); app.needs_redraw = true; }
+                if let Some(r) = result { app.apply_file_preview_load(r); app.needs_redraw = true; draw_immediately = true; }
             }
             result = recv_or_pend(&mut app.tree_load_rx) => {
-                if let Some(r) = result { app.apply_tree_data(r); app.needs_redraw = true; }
+                if let Some(r) = result { app.apply_tree_data(r); app.needs_redraw = true; draw_immediately = true; }
             }
             result = recv_or_pend(&mut app.info_load_rx) => {
-                if let Some(r) = result { app.apply_info_load(r); app.needs_redraw = true; }
+                if let Some(r) = result { app.apply_info_load(r); app.needs_redraw = true; draw_immediately = true; }
             }
             result = recv_or_pend(&mut app.chown_load_rx) => {
-                if let Some(r) = result { app.apply_chown_load(r); app.needs_redraw = true; }
+                if let Some(r) = result { app.apply_chown_load(r); app.needs_redraw = true; draw_immediately = true; }
             }
             result = recv_or_pend(&mut app.nav_check_rx) => {
-                if let Some(r) = result { app.apply_nav_check(r); app.needs_redraw = true; }
+                if let Some(r) = result { app.apply_nav_check(r); app.needs_redraw = true; draw_immediately = true; }
             }
             result = recv_or_pend(&mut app.file_op_rx) => {
-                if let Some(r) = result { app.apply_file_op(r); app.needs_redraw = true; }
+                if let Some(r) = result { app.apply_file_op(r); app.needs_redraw = true; draw_immediately = true; }
             }
             result = recv_or_pend(&mut app.theme_load_rx) => {
-                if let Some(r) = result { app.apply_theme_preview(r); app.needs_redraw = true; }
+                if let Some(r) = result { app.apply_theme_preview(r); app.needs_redraw = true; draw_immediately = true; }
             }
             result = recv_or_pend(&mut app.archive_load_rx) => {
-                if let Some(r) = result { app.handle_archive_load(r); app.needs_redraw = true; }
+                if let Some(r) = result { app.handle_archive_load(r); app.needs_redraw = true; draw_immediately = true; }
             }
         }
 
