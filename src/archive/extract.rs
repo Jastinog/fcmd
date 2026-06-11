@@ -103,12 +103,22 @@ pub fn extract_all(archive_path: &Path, dest: &Path) -> io::Result<Vec<PathBuf>>
     Ok(outcome.extracted)
 }
 
+/// The data inputs to an extraction (everything that isn't a callback or the
+/// cancel flag), bundled so the worker functions take a handful of args.
+struct ExtractRequest<'a> {
+    archive_path: &'a Path,
+    /// Selects which entries to extract: `None` extracts everything, `Some(path)`
+    /// extracts a single file (exact match) or a directory subtree (trailing `/`).
+    filter: Option<&'a str>,
+    dest: &'a Path,
+    /// Best-effort hint for the progress denominator (0 if unknown).
+    total: usize,
+}
+
 /// Extract entries, streaming progress and routing per-file overwrite conflicts.
 ///
-/// `filter` selects which entries to extract: `None` extracts everything, `Some(path)`
-/// extracts a single file (exact match) or a directory subtree (trailing `/`). `total`
-/// is a best-effort hint for the progress denominator (0 if unknown). Cancellation is
-/// honoured between entries; a single in-flight file is not interrupted.
+/// See [`ExtractRequest`] for the data inputs. Cancellation is honoured between
+/// entries and within a single large file (`cancel`).
 pub fn extract_stream(
     archive_path: &Path,
     filter: Option<&str>,
@@ -121,20 +131,15 @@ pub fn extract_stream(
     let format = ArchiveFormat::from_path(archive_path)
         .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidInput, "Unknown archive format"))?;
 
+    let req = ExtractRequest {
+        archive_path,
+        filter,
+        dest,
+        total,
+    };
     match format {
-        ArchiveFormat::Zip => {
-            extract_zip_stream(archive_path, filter, dest, total, on_progress, resolve, cancel)
-        }
-        _ => extract_tar_stream(
-            archive_path,
-            filter,
-            dest,
-            total,
-            tar_compression(format),
-            on_progress,
-            resolve,
-            cancel,
-        ),
+        ArchiveFormat::Zip => extract_zip_stream(&req, on_progress, resolve, cancel),
+        _ => extract_tar_stream(&req, tar_compression(format), on_progress, resolve, cancel),
     }
 }
 
@@ -264,16 +269,18 @@ fn zip_datetime_to_systemtime(dt: Option<zip::DateTime>) -> Option<SystemTime> {
     Some(SystemTime::from(naive))
 }
 
-#[allow(clippy::too_many_arguments)]
 fn extract_zip_stream(
-    archive_path: &Path,
-    filter: Option<&str>,
-    dest: &Path,
-    total: usize,
+    req: &ExtractRequest,
     on_progress: &mut ProgressFn,
     resolve: &mut ConflictFn,
     cancel: &AtomicBool,
 ) -> io::Result<ExtractOutcome> {
+    let ExtractRequest {
+        archive_path,
+        filter,
+        dest,
+        total,
+    } = *req;
     let file = File::open(archive_path)?;
     let reader = BufReader::new(file);
     let mut archive = zip::ZipArchive::new(reader)
@@ -454,17 +461,19 @@ fn list_tar(path: &Path, compression: TarCompression) -> io::Result<Vec<ArchiveE
     Ok(entries)
 }
 
-#[allow(clippy::too_many_arguments)]
 fn extract_tar_stream(
-    archive_path: &Path,
-    filter: Option<&str>,
-    dest: &Path,
-    total: usize,
+    req: &ExtractRequest,
     compression: TarCompression,
     on_progress: &mut ProgressFn,
     resolve: &mut ConflictFn,
     cancel: &AtomicBool,
 ) -> io::Result<ExtractOutcome> {
+    let ExtractRequest {
+        archive_path,
+        filter,
+        dest,
+        total,
+    } = *req;
     let reader = open_tar_reader(archive_path, compression)?;
     let mut archive = tar::Archive::new(reader);
     let mut outcome = ExtractOutcome::default();
