@@ -174,6 +174,50 @@ fn create_symlink(target: &Path, link: &Path) -> io::Result<()> {
     std::os::unix::fs::symlink(target, link)
 }
 
+// ── Symlink-slip defence ─────────────────────────────────────────────
+//
+// Sanitizing the entry *name* keeps `out_path` lexically under `dest`, but an
+// attacker can still escape by planting a symlink and then writing *through* it
+// (entry A: symlink `foo` → `/etc`; entry B: regular file `foo/evil`). A
+// pre-existing symlink in `dest` is the same hazard. We therefore never let a
+// write descend through a symlinked path component.
+
+/// Create every directory component of `dir` under `dest`, refusing to descend
+/// through any component that already exists as a symlink (or as a non-dir).
+/// Returns `Ok(false)` — caller skips the entry — if descent would leave `dest`.
+/// `dir` must already be `dest`-joined and lexically sanitized.
+fn ensure_dir_within(dest: &Path, dir: &Path) -> io::Result<bool> {
+    let Ok(rel) = dir.strip_prefix(dest) else {
+        return Ok(false);
+    };
+    let mut cur = dest.to_path_buf();
+    for comp in rel.components() {
+        cur.push(comp);
+        match std::fs::symlink_metadata(&cur) {
+            Ok(meta) => {
+                let ft = meta.file_type();
+                if ft.is_symlink() || !ft.is_dir() {
+                    // Descending here would follow a symlink (or clobber a file)
+                    // and could redirect the write outside `dest`.
+                    return Ok(false);
+                }
+            }
+            Err(_) => std::fs::create_dir(&cur)?,
+        }
+    }
+    Ok(true)
+}
+
+/// Remove `path` if it is itself a symlink, so a following `File::create` writes
+/// a fresh regular file instead of being redirected through the link.
+fn remove_if_symlink(path: &Path) {
+    if let Ok(meta) = std::fs::symlink_metadata(path)
+        && meta.file_type().is_symlink()
+    {
+        let _ = std::fs::remove_file(path);
+    }
+}
+
 // ── Zip ──────────────────────────────────────────────────────────────
 
 fn list_zip(path: &Path) -> io::Result<Vec<ArchiveEntry>> {
@@ -276,10 +320,14 @@ fn extract_zip_stream(
         on_progress(done, total, &name);
 
         if entry.is_dir() {
-            std::fs::create_dir_all(&out_path)?;
+            if !ensure_dir_within(dest, &out_path)? {
+                continue;
+            }
         } else {
-            if let Some(parent) = out_path.parent() {
-                std::fs::create_dir_all(parent)?;
+            if let Some(parent) = out_path.parent()
+                && !ensure_dir_within(dest, parent)?
+            {
+                continue;
             }
             if out_path.exists() {
                 let modified = zip_datetime_to_systemtime(entry.last_modified());
@@ -306,6 +354,8 @@ fn extract_zip_stream(
                     entry.read_to_string(&mut target)?;
                     create_symlink(Path::new(&target), &out_path)?;
                 } else {
+                    // Never write through an existing symlink at this path.
+                    remove_if_symlink(&out_path);
                     let mut out_file = File::create(&out_path)?;
                     io::copy(&mut entry, &mut out_file)?;
                     if let Some(m) = mode {
@@ -315,6 +365,7 @@ fn extract_zip_stream(
             }
             #[cfg(not(unix))]
             {
+                remove_if_symlink(&out_path);
                 let mut out_file = File::create(&out_path)?;
                 io::copy(&mut entry, &mut out_file)?;
             }
@@ -442,10 +493,14 @@ fn extract_tar_stream(
 
         let entry_type = entry.header().entry_type();
         if entry_type.is_dir() {
-            std::fs::create_dir_all(&out_path)?;
+            if !ensure_dir_within(dest, &out_path)? {
+                continue;
+            }
         } else {
-            if let Some(parent) = out_path.parent() {
-                std::fs::create_dir_all(parent)?;
+            if let Some(parent) = out_path.parent()
+                && !ensure_dir_within(dest, parent)?
+            {
+                continue;
             }
             if out_path.exists() {
                 let size = entry.size();
@@ -486,6 +541,8 @@ fn extract_tar_stream(
                     std::fs::hard_link(&link_target, &out_path)?;
                 }
             } else {
+                // Never write through an existing symlink at this path.
+                remove_if_symlink(&out_path);
                 let mut out_file = File::create(&out_path)?;
                 io::copy(&mut entry, &mut out_file)?;
                 #[cfg(unix)]

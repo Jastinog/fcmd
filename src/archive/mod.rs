@@ -564,6 +564,37 @@ mod tests {
         );
     }
 
+    #[cfg(unix)]
+    #[test]
+    fn symlink_slip_through_planted_symlink_is_blocked() {
+        // entry A plants a symlink pointing outside dest; entry B tries to write
+        // through it. The write must be refused, not escape into `outside`.
+        let dir = tempfile::tempdir().unwrap();
+        let outside = dir.path().join("outside");
+        std::fs::create_dir(&outside).unwrap();
+
+        let zip = dir.path().join("evil.zip");
+        {
+            let file = File::create(&zip).unwrap();
+            let mut w = zip::ZipWriter::new(file);
+            let opt = zip::write::SimpleFileOptions::default();
+            w.add_symlink("foo", outside.to_string_lossy().as_ref(), opt)
+                .unwrap();
+            w.start_file("foo/evil.txt", opt).unwrap();
+            w.write_all(b"pwned").unwrap();
+            w.finish().unwrap();
+        }
+
+        let dest = dir.path().join("dest");
+        std::fs::create_dir(&dest).unwrap();
+        extract_all(&zip, &dest).unwrap();
+
+        assert!(
+            !outside.join("evil.txt").exists(),
+            "symlink slip escaped dest via a planted symlink"
+        );
+    }
+
     #[test]
     fn create_stream_honours_cancel_flag() {
         let dir = tempfile::tempdir().unwrap();
