@@ -5,7 +5,7 @@ use std::io;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 
-use super::{ArchiveFormat, ProgressFn, never_cancel};
+use super::{ArchiveFormat, ProgressFn, copy_with_cancel, never_cancel};
 
 /// Create an archive from a list of file/directory paths.
 ///
@@ -170,20 +170,26 @@ impl ArchiveSink {
         }
     }
 
-    fn add_file(&mut self, rel: &str, abs: &Path, mode: u32) -> io::Result<()> {
+    /// Add a regular file. Returns `Ok(false)` if cancelled mid-file (zip only;
+    /// see below) so the caller can stop. The archive stays valid either way.
+    fn add_file(&mut self, rel: &str, abs: &Path, mode: u32, cancel: &AtomicBool) -> io::Result<bool> {
         match self {
             ArchiveSink::Zip { writer, options } => {
                 writer
                     .start_file(rel, options.unix_permissions(mode))
                     .map_err(io::Error::other)?;
                 let mut f = File::open(abs)?;
-                io::copy(&mut f, writer)?;
-                Ok(())
+                // zip finalizes the started entry with the bytes written so far on
+                // `finish()`, so a cancelled file becomes a valid truncated entry.
+                copy_with_cancel(&mut f, writer, cancel)
             }
             ArchiveSink::Tar(b) => {
-                // `append_file` derives the header (including mode) from the open file.
+                // `append_file` derives the header (including mode) from the open
+                // file and copies it in one opaque call, so tar creation can only
+                // be cancelled between files (handled by the loop).
                 let mut f = File::open(abs)?;
-                b.append_file(rel, &mut f)
+                b.append_file(rel, &mut f)?;
+                Ok(true)
             }
         }
     }
@@ -292,7 +298,13 @@ fn create_stream_inner(
         on_progress(done, total, &entry.rel);
         match entry.kind {
             EntryKind::Dir => sink.add_dir(&entry.rel, &entry.abs, entry.mode)?,
-            EntryKind::File => sink.add_file(&entry.rel, &entry.abs, entry.mode)?,
+            EntryKind::File => {
+                // Mid-file cancel: stop without counting the partial entry.
+                if !sink.add_file(&entry.rel, &entry.abs, entry.mode, cancel)? {
+                    cancelled = true;
+                    break;
+                }
+            }
             EntryKind::Symlink => sink.add_symlink(&entry.rel, &entry.abs, entry.mode)?,
         }
         written += 1;

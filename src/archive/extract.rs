@@ -9,7 +9,7 @@ use std::time::SystemTime;
 
 use super::{
     ArchiveEntry, ArchiveFormat, ConflictDecision, ConflictFn, ExtractOutcome, ProgressFn,
-    never_cancel,
+    copy_with_cancel, never_cancel,
 };
 
 /// List all entries in an archive. Returns a flat list sorted by path.
@@ -347,7 +347,12 @@ fn extract_zip_stream(
                     // Never write through an existing symlink at this path.
                     remove_if_symlink(&out_path);
                     let mut out_file = File::create(&out_path)?;
-                    io::copy(&mut entry, &mut out_file)?;
+                    if !copy_with_cancel(&mut entry, &mut out_file, cancel)? {
+                        drop(out_file);
+                        let _ = std::fs::remove_file(&out_path);
+                        outcome.cancelled = true;
+                        break;
+                    }
                     if let Some(m) = mode {
                         apply_mode(&out_path, m)?;
                     }
@@ -357,7 +362,12 @@ fn extract_zip_stream(
             {
                 remove_if_symlink(&out_path);
                 let mut out_file = File::create(&out_path)?;
-                io::copy(&mut entry, &mut out_file)?;
+                if !copy_with_cancel(&mut entry, &mut out_file, cancel)? {
+                    drop(out_file);
+                    let _ = std::fs::remove_file(&out_path);
+                    outcome.cancelled = true;
+                    break;
+                }
             }
         }
         outcome.extracted.push(out_path);
@@ -534,7 +544,12 @@ fn extract_tar_stream(
                 // Never write through an existing symlink at this path.
                 remove_if_symlink(&out_path);
                 let mut out_file = File::create(&out_path)?;
-                io::copy(&mut entry, &mut out_file)?;
+                if !copy_with_cancel(&mut entry, &mut out_file, cancel)? {
+                    drop(out_file);
+                    let _ = std::fs::remove_file(&out_path);
+                    outcome.cancelled = true;
+                    break;
+                }
                 #[cfg(unix)]
                 if let Ok(mode) = entry.header().mode() {
                     apply_mode(&out_path, mode)?;

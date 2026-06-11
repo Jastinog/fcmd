@@ -3,8 +3,9 @@
 //! Shared types ([`ArchiveFormat`], [`ArchiveEntry`], conflict/progress callbacks)
 //! live here; the heavy lifting is split between [`extract`] and [`create`].
 
+use std::io::{self, Read, Write};
 use std::path::{Path, PathBuf};
-use std::sync::atomic::AtomicBool;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::SystemTime;
 
 mod create;
@@ -12,6 +13,28 @@ mod extract;
 
 pub use create::*;
 pub use extract::*;
+
+/// Copy `reader` into `writer` in chunks, checking `cancel` between chunks so a
+/// single huge entry can be interrupted (plain `io::copy` only lets callers
+/// cancel between entries). Returns `Ok(true)` on completion, `Ok(false)` if
+/// cancelled mid-copy.
+pub(crate) fn copy_with_cancel<R: Read + ?Sized, W: Write + ?Sized>(
+    reader: &mut R,
+    writer: &mut W,
+    cancel: &AtomicBool,
+) -> io::Result<bool> {
+    let mut buf = vec![0u8; 128 * 1024];
+    loop {
+        if cancel.load(Ordering::Relaxed) {
+            return Ok(false);
+        }
+        let n = reader.read(&mut buf)?;
+        if n == 0 {
+            return Ok(true);
+        }
+        writer.write_all(&buf[..n])?;
+    }
+}
 
 #[derive(Clone, Debug)]
 pub struct ArchiveEntry {
@@ -107,6 +130,39 @@ mod tests {
     use super::*;
     use std::fs::File;
     use std::io::Write;
+
+    #[test]
+    fn copy_with_cancel_stops_midstream() {
+        use std::sync::atomic::Ordering;
+
+        // A reader that requests cancellation right after handing out its first
+        // chunk, so the next loop iteration must bail.
+        struct FlipReader<'a> {
+            remaining: usize,
+            cancel: &'a AtomicBool,
+        }
+        impl Read for FlipReader<'_> {
+            fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+                if self.remaining == 0 {
+                    return Ok(0);
+                }
+                let n = buf.len().min(self.remaining);
+                self.remaining -= n;
+                self.cancel.store(true, Ordering::Relaxed);
+                Ok(n)
+            }
+        }
+
+        let cancel = AtomicBool::new(false);
+        let mut reader = FlipReader {
+            remaining: 10 * 1024 * 1024,
+            cancel: &cancel,
+        };
+        let mut sink: Vec<u8> = Vec::new();
+        let completed = copy_with_cancel(&mut reader, &mut sink, &cancel).unwrap();
+        assert!(!completed, "copy should report it was cancelled");
+        assert_eq!(sink.len(), 128 * 1024, "exactly one chunk copied before cancel");
+    }
 
     #[test]
     fn format_detection() {
