@@ -245,33 +245,23 @@ fn list_zip(path: &Path) -> io::Result<Vec<ArchiveEntry>> {
     Ok(entries)
 }
 
-/// Approximate a zip `DateTime` as a `SystemTime`. Good enough for display
-/// and conflict prompts; not used for any correctness-sensitive comparison.
+/// Convert a zip `DateTime` (stored in local time, but treated as UTC here —
+/// zip carries no zone) to a `SystemTime`. Used for display and conflict
+/// prompts, so an exact zone is unnecessary; correctness across leap years is.
 fn zip_datetime_to_systemtime(dt: Option<zip::DateTime>) -> Option<SystemTime> {
-    dt.map(|dt| {
-        let (year, month, day, hour, min, sec) = (
-            dt.year() as i64,
-            dt.month() as u64,
-            dt.day() as u64,
-            dt.hour() as u64,
-            dt.minute() as u64,
-            dt.second() as u64,
-        );
-        let days = (year - 1970) * 365 + (year - 1969) / 4
-            + match month {
-                1 => 0,
-                2 => 31,
-                _ => {
-                    let m = month - 1;
-                    let leap = if year % 4 == 0 { 1 } else { 0 };
-                    (m * 30 + m.div_ceil(2) - 2 + leap) as i64
-                }
-            }
-            + day as i64
-            - 1;
-        let secs = days as u64 * 86400 + hour * 3600 + min * 60 + sec;
-        SystemTime::UNIX_EPOCH + std::time::Duration::from_secs(secs)
-    })
+    use chrono::{TimeZone, Utc};
+    let dt = dt?;
+    let naive = Utc
+        .with_ymd_and_hms(
+            dt.year() as i32,
+            dt.month() as u32,
+            dt.day() as u32,
+            dt.hour() as u32,
+            dt.minute() as u32,
+            dt.second() as u32,
+        )
+        .single()?;
+    Some(SystemTime::from(naive))
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -560,6 +550,15 @@ fn extract_tar_stream(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn zip_datetime_maps_to_expected_systemtime() {
+        // 2021-06-15 12:00:00 UTC == unix timestamp 1623758400.
+        let dt = zip::DateTime::from_date_and_time(2021, 6, 15, 12, 0, 0).unwrap();
+        let st = zip_datetime_to_systemtime(Some(dt)).unwrap();
+        let secs = st.duration_since(SystemTime::UNIX_EPOCH).unwrap().as_secs();
+        assert_eq!(secs, 1_623_758_400);
+    }
 
     #[test]
     fn sanitize_strips_traversal() {
