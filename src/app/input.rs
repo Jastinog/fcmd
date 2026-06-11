@@ -43,10 +43,7 @@ impl App {
                     && entry.name != ".."
                 {
                     let path = entry.path.clone();
-                    self.file_preview_path = Some(path.clone());
-                    self.file_preview = Some(Preview::loading_placeholder(&path));
-                    self.mode = Mode::Preview;
-                    self.spawn_file_preview_load(path);
+                    self.open_viewer(path);
                 }
             }
             KeyCode::Esc => {
@@ -91,12 +88,9 @@ impl App {
                             if crate::archive::is_archive(&entry.path) {
                                 self.open_archive();
                             } else {
-                                // Enter on file → open preview
+                                // Enter on file → open viewer
                                 let path = entry.path.clone();
-                                self.file_preview_path = Some(path.clone());
-                                self.file_preview = Some(Preview::loading_placeholder(&path));
-                                self.mode = Mode::Preview;
-                                self.spawn_file_preview_load(path);
+                                self.open_viewer(path);
                             }
                         }
                     }

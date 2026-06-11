@@ -68,8 +68,8 @@ pub(super) fn render_status(f: &mut Frame, app: &App, area: Rect) {
                 mode_str = "\u{f002} FIND".to_string();     //
                 (mode_str.as_str(), t.cyan)
             }
-            Mode::Preview => {
-                mode_str = "\u{f0208} PREVIEW".to_string(); // 󰈈
+            Mode::Viewer => {
+                mode_str = "\u{f0208} VIEW".to_string(); // 󰈈
                 (mode_str.as_str(), t.cyan)
             }
             Mode::Help => {

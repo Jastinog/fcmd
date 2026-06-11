@@ -180,8 +180,8 @@ pub fn render(f: &mut Frame, app: &mut App) {
         overlays::render_help(f, app, full_area);
     }
 
-    if matches!(app.mode, Mode::Preview | Mode::PreviewSearch) {
-        overlays::render_preview_popup(f, app, full_area);
+    if matches!(app.mode, Mode::Viewer | Mode::ViewerSearch) {
+        overlays::render_viewer(f, app, full_area);
     }
 
     if app.mode == Mode::ThemePicker {

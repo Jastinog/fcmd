@@ -220,21 +220,6 @@ impl App {
         });
     }
 
-    /// Spawn async preview load for the file preview popup.
-    pub(super) fn spawn_file_preview_load(&mut self, path: PathBuf) {
-        let (tx, rx) = tokio::sync::oneshot::channel();
-        // Drop old receiver (cancels stale load)
-        self.file_preview_rx = Some(rx);
-
-        tokio::task::spawn_blocking(move || {
-            let preview = Preview::load(&path, crate::preview::MAX_LINES);
-            let _ = tx.send(super::PreviewLoadResult {
-                path,
-                preview,
-            });
-        });
-    }
-
     /// Enter selected directory on the active panel (async).
     pub(super) fn enter_dir_async(&mut self) {
         let panel = self.active_panel();
@@ -314,10 +299,9 @@ impl App {
 
     pub(super) fn request_open_editor(&mut self, path: PathBuf) {
         self.open_editor = Some(path);
-        // If we're in preview mode, close it
-        if self.mode == Mode::Preview {
-            self.file_preview = None;
-            self.file_preview_path = None;
+        // If the viewer is open, close it.
+        if matches!(self.mode, Mode::Viewer | Mode::ViewerSearch) {
+            self.viewer = None;
             self.mode = Mode::Normal;
         }
     }
@@ -531,15 +515,14 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn request_open_editor_closes_preview() {
+    async fn request_open_editor_closes_viewer() {
         let entries = crate::app::make_test_entries(&["a.txt"]);
         let mut app = App::new_for_test(entries);
-        app.mode = Mode::Preview;
-        app.file_preview = Some(Preview::loading_placeholder(&PathBuf::from("/x")));
-        app.file_preview_path = Some(PathBuf::from("/x"));
+        app.mode = Mode::Viewer;
+        app.viewer = Some(crate::viewer::Viewer::loading(PathBuf::from("/x")));
         app.request_open_editor(PathBuf::from("/test/a.txt"));
         assert_eq!(app.mode, Mode::Normal);
-        assert!(app.file_preview.is_none());
+        assert!(app.viewer.is_none());
     }
 
     #[tokio::test]

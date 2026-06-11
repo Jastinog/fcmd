@@ -22,6 +22,7 @@ mod theme;
 mod tree;
 mod ui;
 mod util;
+mod viewer;
 
 #[tokio::main]
 async fn main() -> io::Result<()> {
@@ -235,8 +236,14 @@ async fn run(
             result = recv_or_pend(&mut app.preview_load_rx) => {
                 if let Some(r) = result { app.apply_preview_load(r); app.needs_redraw = true; draw_immediately = true; }
             }
-            result = recv_or_pend(&mut app.file_preview_rx) => {
-                if let Some(r) = result { app.apply_file_preview_load(r); app.needs_redraw = true; draw_immediately = true; }
+            result = recv_or_pend(&mut app.viewer_load_rx) => {
+                if let Some(r) = result { app.apply_viewer_load(r); app.needs_redraw = true; draw_immediately = true; }
+            }
+            result = recv_or_pend(&mut app.viewer_chunk_rx) => {
+                if let Some(r) = result { app.apply_viewer_chunk(r); app.needs_redraw = true; draw_immediately = true; }
+            }
+            result = recv_or_pend(&mut app.viewer_hl_rx) => {
+                if let Some(r) = result { app.apply_viewer_highlight(r); app.needs_redraw = true; draw_immediately = true; }
             }
             result = recv_or_pend(&mut app.tree_load_rx) => {
                 if let Some(r) = result { app.apply_tree_data(r); app.needs_redraw = true; draw_immediately = true; }

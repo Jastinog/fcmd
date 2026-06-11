@@ -9,6 +9,7 @@ pub(crate) use crate::ops::{self, DuMsg, Register, RegisterOp, UndoStack};
 pub(crate) use crate::panel::{self, DirCache, FileEntry, Panel, SortMode};
 pub(crate) use crate::preview::Preview;
 pub(crate) use crate::theme::Theme;
+pub(crate) use crate::viewer::Viewer;
 
 pub(crate) mod archive;
 mod bookmarks;
@@ -25,13 +26,13 @@ mod marks;
 pub mod messages;
 mod navigation;
 mod polling;
-mod preview_mode;
 mod rename;
 pub(crate) mod task_manager;
 mod search;
 mod select_pattern;
 mod tasks;
 mod tree;
+mod viewer;
 mod visual;
 
 pub use messages::*;
@@ -49,8 +50,8 @@ pub enum Mode {
     Help,
     Rename,
     Create,
-    Preview,
-    PreviewSearch,
+    Viewer,
+    ViewerSearch,
     ThemePicker,
     Bookmarks,
     BookmarkAdd,
@@ -173,13 +174,10 @@ pub struct App {
     pub preview_mode: bool,
     pub preview: Option<Preview>,
     pub(super) preview_path: Option<PathBuf>,
-    // File preview popup
-    pub file_preview: Option<Preview>,
-    pub file_preview_path: Option<PathBuf>,
-    // Preview search
-    pub preview_search_query: String,
-    pub preview_search_matches: Vec<(usize, usize)>, // (line_idx, char_offset)
-    pub preview_search_current: usize,
+    // Full-screen viewer (file/dir content)
+    pub viewer: Option<Viewer>,
+    /// Content rows visible in the viewer; set during render, used by nav math.
+    pub viewer_visible_height: usize,
     // Tree
     pub show_tree: bool,
     pub tree_focused: bool,
@@ -261,7 +259,9 @@ pub struct App {
     pub dir_load_rx: tokio::sync::mpsc::Receiver<DirLoadMsg>,
     // Async preview loading
     pub preview_load_rx: Option<tokio::sync::oneshot::Receiver<PreviewLoadResult>>,
-    pub file_preview_rx: Option<tokio::sync::oneshot::Receiver<PreviewLoadResult>>,
+    pub viewer_load_rx: Option<tokio::sync::oneshot::Receiver<ViewerLoadResult>>,
+    pub viewer_chunk_rx: Option<tokio::sync::oneshot::Receiver<ViewerChunkResult>>,
+    pub viewer_hl_rx: Option<tokio::sync::oneshot::Receiver<ViewerHlResult>>,
     // Async tree loading
     pub tree_load_rx: Option<tokio::sync::oneshot::Receiver<TreeLoadResult>>,
     // Async info metadata loading
@@ -380,11 +380,8 @@ impl App {
             preview_mode: false,
             preview: None,
             preview_path: None,
-            file_preview: None,
-            file_preview_path: None,
-            preview_search_query: String::new(),
-            preview_search_matches: Vec::new(),
-            preview_search_current: 0,
+            viewer: None,
+            viewer_visible_height: 20,
             show_tree: false,
             tree_focused: false,
             tree_selected: 0,
@@ -443,7 +440,9 @@ impl App {
             dir_load_tx,
             dir_load_rx,
             preview_load_rx: None,
-            file_preview_rx: None,
+            viewer_load_rx: None,
+            viewer_chunk_rx: None,
+            viewer_hl_rx: None,
             tree_load_rx: None,
             info_load_rx: None,
             chown_load_rx: None,
@@ -611,13 +610,6 @@ impl App {
         // Only apply if still looking at the same path
         if self.preview_path.as_ref() == Some(&result.path) {
             self.preview = Some(result.preview);
-        }
-    }
-
-    /// Apply file preview loaded asynchronously (popup preview).
-    pub fn apply_file_preview_load(&mut self, result: PreviewLoadResult) {
-        if self.file_preview_path.as_ref() == Some(&result.path) {
-            self.file_preview = Some(result.preview);
         }
     }
 
@@ -841,8 +833,8 @@ impl App {
             Mode::Help => self.handle_help(key),
             Mode::Rename => self.handle_rename(key),
             Mode::Create => self.handle_create(key),
-            Mode::Preview => self.handle_preview(key),
-            Mode::PreviewSearch => self.handle_preview_search(key),
+            Mode::Viewer => self.handle_viewer(key),
+            Mode::ViewerSearch => self.handle_viewer_search(key),
             Mode::ThemePicker => self.handle_theme_picker(key),
             Mode::Bookmarks => self.handle_bookmarks(key),
             Mode::BookmarkAdd => self.handle_bookmark_add(key),
@@ -937,11 +929,8 @@ impl App {
             preview_mode: false,
             preview: None,
             preview_path: None,
-            file_preview: None,
-            file_preview_path: None,
-            preview_search_query: String::new(),
-            preview_search_matches: Vec::new(),
-            preview_search_current: 0,
+            viewer: None,
+            viewer_visible_height: 20,
             show_tree: false,
             tree_focused: false,
             tree_selected: 0,
@@ -1000,7 +989,9 @@ impl App {
             dir_load_tx,
             dir_load_rx,
             preview_load_rx: None,
-            file_preview_rx: None,
+            viewer_load_rx: None,
+            viewer_chunk_rx: None,
+            viewer_hl_rx: None,
             tree_load_rx: None,
             info_load_rx: None,
             chown_load_rx: None,

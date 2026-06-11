@@ -29,6 +29,16 @@ pub const MAX_LINES: usize = 50_000;
 const MAX_FILE_SIZE: u64 = 50 * 1_048_576; // 50 MB
 pub const HEX_DUMP_MAX: usize = 262_144; // 256 KB
 
+/// Lines loaded per incremental chunk after the first block (viewer paging).
+pub const CHUNK_LINES: usize = 20_000;
+
+/// Result of an incremental viewer load: a slice of lines plus, when the file
+/// continues past them, the byte offset to resume reading from.
+pub struct ChunkLoad {
+    pub preview: Preview,
+    pub next_byte: Option<u64>,
+}
+
 pub struct Preview {
     pub lines: Vec<String>,
     pub scroll: usize,
@@ -100,6 +110,52 @@ impl Preview {
         Self::load_partial(path, title, file_size, max_lines)
     }
 
+    /// Load `path` as a hex dump regardless of its detected content type.
+    /// Directories fall back to a normal listing.
+    pub fn load_hex(path: &Path) -> Self {
+        let title = path
+            .file_name()
+            .map(|n| n.to_string_lossy().into_owned())
+            .unwrap_or_else(|| path.to_string_lossy().into_owned());
+
+        if path.is_dir() {
+            return Self::load_dir(path, title);
+        }
+
+        let meta = match fs::metadata(path) {
+            Ok(m) => m,
+            Err(_) => {
+                return Preview {
+                    lines: vec!["[Cannot read]".into()],
+                    scroll: 0,
+                    title,
+                    info: "error".into(),
+                    is_binary: false,
+                    binary_size: 0,
+                };
+            }
+        };
+
+        let total_size = meta.len() as usize;
+        let file = match fs::File::open(path) {
+            Ok(f) => f,
+            Err(_) => {
+                return Preview {
+                    lines: vec!["[Cannot read]".into()],
+                    scroll: 0,
+                    title,
+                    info: "error".into(),
+                    is_binary: false,
+                    binary_size: 0,
+                };
+            }
+        };
+        let limit = total_size.min(HEX_DUMP_MAX);
+        let mut bytes = Vec::with_capacity(limit);
+        let _ = file.take(limit as u64).read_to_end(&mut bytes);
+        Self::load_binary(&bytes, title, total_size)
+    }
+
     fn load_full(path: &Path, title: String, file_size: usize) -> Self {
         match fs::read(path) {
             Ok(bytes) => {
@@ -117,17 +173,7 @@ impl Preview {
                     return Preview::load_binary(&bytes, title, file_size);
                 }
 
-                let text = String::from_utf8_lossy(&bytes);
-                let lines: Vec<String> = text.lines().take(MAX_LINES).map(sanitize_line).collect();
-                let info = format!("{} lines", lines.len());
-                Preview {
-                    lines,
-                    scroll: 0,
-                    title,
-                    info,
-                    is_binary: false,
-                    binary_size: 0,
-                }
+                Self::text_preview(&bytes, title)
             }
             Err(_) => Preview {
                 lines: vec!["[Cannot read]".into()],
@@ -137,6 +183,126 @@ impl Preview {
                 is_binary: false,
                 binary_size: 0,
             },
+        }
+    }
+
+    /// Decode `bytes` as UTF-8 (lossy) text, sanitize, and cap at `MAX_LINES`.
+    fn text_preview(bytes: &[u8], title: String) -> Self {
+        let text = String::from_utf8_lossy(bytes);
+        let lines: Vec<String> = text.lines().take(MAX_LINES).map(sanitize_line).collect();
+        let info = format!("{} lines", lines.len());
+        Preview {
+            lines,
+            scroll: 0,
+            title,
+            info,
+            is_binary: false,
+            binary_size: 0,
+        }
+    }
+
+    /// Load the first block of a file as text for the viewer, reading at most
+    /// `max_lines`. If the file continues past that, `next_byte` carries the
+    /// offset to resume from (incremental paging); otherwise it's `None` and the
+    /// whole file is loaded. Directories fall back to a normal listing.
+    pub fn load_first(path: &Path, max_lines: usize) -> ChunkLoad {
+        let title = path
+            .file_name()
+            .map(|n| n.to_string_lossy().into_owned())
+            .unwrap_or_else(|| path.to_string_lossy().into_owned());
+
+        if path.is_dir() {
+            return ChunkLoad { preview: Self::load_dir(path, title), next_byte: None };
+        }
+
+        let file = match fs::File::open(path) {
+            Ok(f) => f,
+            Err(_) => return ChunkLoad { preview: Self::read_error(title), next_byte: None },
+        };
+
+        match Self::read_lines_from(file, 0, max_lines) {
+            Ok((lines, next_byte)) => {
+                let info = Self::lines_info(lines.len(), next_byte.is_some());
+                let preview = Preview {
+                    lines,
+                    scroll: 0,
+                    title,
+                    info,
+                    is_binary: false,
+                    binary_size: 0,
+                };
+                ChunkLoad { preview, next_byte }
+            }
+            Err(_) => ChunkLoad { preview: Self::read_error(title), next_byte: None },
+        }
+    }
+
+    /// Read up to `max_lines` more lines starting at byte `start` (used to page in
+    /// the next block of a large file). Returns the lines and the next resume
+    /// offset, or `None` when the end of file is reached.
+    pub fn read_more(
+        path: &Path,
+        start: u64,
+        max_lines: usize,
+    ) -> std::io::Result<(Vec<String>, Option<u64>)> {
+        let file = fs::File::open(path)?;
+        Self::read_lines_from(file, start, max_lines)
+    }
+
+    /// Read at most `max_lines` newline-terminated lines from `file` starting at
+    /// byte `start`. Decodes lossily (tolerates non-UTF-8) and sanitizes each
+    /// line. Returns the lines plus the resume offset (`None` at EOF). Resume
+    /// offsets always fall on a line boundary, so chunks never split a line.
+    fn read_lines_from(
+        mut file: fs::File,
+        start: u64,
+        max_lines: usize,
+    ) -> std::io::Result<(Vec<String>, Option<u64>)> {
+        let total = file.metadata().map(|m| m.len()).unwrap_or(0);
+        if start > 0 {
+            file.seek(SeekFrom::Start(start))?;
+        }
+        // Cap a single line's read so a pathological newline-free file can't pull
+        // the whole thing into one buffer; over-long lines are split into pieces.
+        const MAX_LINE_BYTES: u64 = 65_536;
+        let mut reader = BufReader::new(file);
+        let mut lines = Vec::with_capacity(max_lines.min(4096));
+        let mut consumed = start;
+        let mut buf: Vec<u8> = Vec::new();
+        for _ in 0..max_lines {
+            buf.clear();
+            let n = (&mut reader).take(MAX_LINE_BYTES).read_until(b'\n', &mut buf)?;
+            if n == 0 {
+                return Ok((lines, None)); // EOF
+            }
+            consumed += n as u64;
+            while matches!(buf.last(), Some(b'\n' | b'\r')) {
+                buf.pop();
+            }
+            let text = String::from_utf8_lossy(&buf);
+            lines.push(sanitize_line(&text));
+        }
+        let next_byte = if consumed < total { Some(consumed) } else { None };
+        Ok((lines, next_byte))
+    }
+
+    fn read_error(title: String) -> Self {
+        Preview {
+            lines: vec!["[Cannot read]".into()],
+            scroll: 0,
+            title,
+            info: "error".into(),
+            is_binary: false,
+            binary_size: 0,
+        }
+    }
+
+    /// Format the line-count info string, marking partial loads with a `+`.
+    pub fn lines_info(count: usize, more: bool) -> String {
+        if more {
+            format!("{count}+ lines")
+        } else {
+            format!("{count} lines")
         }
     }
 
@@ -677,6 +843,41 @@ mod tests {
         std::fs::write(&path, &data).unwrap();
         let p = Preview::load(&path, MAX_LINES);
         assert!(p.is_binary);
+    }
+
+    #[test]
+    fn load_first_never_switches_to_hex() {
+        // A file with NUL bytes auto-detects as binary via `load`, but the viewer's
+        // `load_first` must always render it as text (default open behavior).
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("data.bin");
+        std::fs::write(&path, [0x89, 0x50, 0x00, b'h', b'i']).unwrap();
+
+        assert!(Preview::load(&path, MAX_LINES).is_binary);
+        let cl = Preview::load_first(&path, MAX_LINES);
+        assert!(!cl.preview.is_binary);
+        assert!(cl.preview.info.contains("lines"));
+        assert!(cl.next_byte.is_none()); // tiny file fully loaded
+    }
+
+    #[test]
+    fn load_first_pages_large_files() {
+        // More lines than the chunk limit → first block is partial with a resume offset.
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("big.txt");
+        let content: String = (0..100).map(|i| format!("line {i}\n")).collect();
+        std::fs::write(&path, &content).unwrap();
+
+        let cl = Preview::load_first(&path, 10);
+        assert_eq!(cl.preview.lines.len(), 10);
+        assert!(cl.preview.info.contains("10+ lines"));
+        let start = cl.next_byte.expect("more to read");
+
+        // Resume reading the rest from the offset.
+        let (more, next) = Preview::read_more(&path, start, 10).unwrap();
+        assert_eq!(more.len(), 10);
+        assert_eq!(more[0], "line 10");
+        assert!(next.is_some());
     }
 
     #[test]

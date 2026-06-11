@@ -90,6 +90,29 @@ pub struct PreviewLoadResult {
     pub preview: Preview,
 }
 
+/// Initial viewer content load. `next_byte` is `Some` when the file continues
+/// past the first block and should be paged in incrementally.
+pub struct ViewerLoadResult {
+    pub path: PathBuf,
+    pub preview: Preview,
+    pub next_byte: Option<u64>,
+}
+
+/// An incremental block of additional viewer lines appended on scroll.
+pub struct ViewerChunkResult {
+    pub path: PathBuf,
+    pub lines: Vec<String>,
+    pub next_byte: Option<u64>,
+}
+
+/// Async syntax-highlight result for the viewer. `line_count` guards against
+/// applying a cache to content that has since changed (e.g. a mode toggle).
+pub struct ViewerHlResult {
+    pub path: PathBuf,
+    pub line_count: usize,
+    pub cache: crate::viewer::HlCache,
+}
+
 pub struct TreeLoadResult {
     pub start_dir: PathBuf,
     pub current_path: PathBuf,

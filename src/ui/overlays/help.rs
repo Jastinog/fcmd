@@ -39,7 +39,7 @@ fn build_help_rows() -> (Vec<Cell>, Vec<Cell>) {
     push_section(&mut l, " Navigation", &[
         ("j k / \u{2191}\u{2193}", "Move down / up"),
         ("h l / \u{2190}\u{2192}", "Parent / Enter dir"),
-        ("Enter", "Open dir or preview"),
+        ("Enter", "Open dir or view file"),
         ("gg G", "Top / Bottom"),
         ("Ctrl-d/u", "Half page \u{2195}"),
         ("Ctrl-l/h", "Focus panel \u{2192}/\u{2190}"),
@@ -81,17 +81,20 @@ fn build_help_rows() -> (Vec<Cell>, Vec<Cell>) {
         ("i", "File info"),
         ("o F4", "Open in editor"),
         ("u", "Undo last operation"),
-        ("F3", "Preview popup"),
+        ("F3", "View file"),
         ("F5 / F6", "Copy / Move to other"),
     ]);
-    push_section(&mut r, "\u{f06e} Preview  (Enter / F3)", &[
+    push_section(&mut r, "\u{f06e} Viewer  (Enter / F3)", &[
         ("j k", "Scroll \u{2193}/\u{2191}"),
         ("Ctrl-d/u", "Half page \u{2195}"),
         ("Ctrl-f/b", "Full page \u{2195}"),
         ("G / g", "Bottom / Top"),
+        ("w #", "Wrap / line numbers"),
+        ("x Tab", "Toggle hex view"),
+        ("h l 0", "Scroll \u{2190}/\u{2192} / start"),
         ("/ n N", "Search / Next / Prev"),
         ("o", "Open in editor"),
-        ("q Esc", "Close preview"),
+        ("q Esc", "Close viewer"),
     ]);
     r.push(Cell::Blank);
     push_section(&mut r, "\u{f002} Search  (/)", &[

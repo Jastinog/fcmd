@@ -70,11 +70,11 @@ Press `i` on any file or directory to see detailed information: type, full path,
 
 `Space t` toggles a tree view on the left (20% width). Navigate with `j`/`k`, expand/collapse directories, and jump to any location.
 
-### File Preview
+### File Viewer
 
-`Enter` on a file opens a preview popup. Binary files are displayed as hex dumps. `Space p` toggles a persistent side preview panel. Scroll with `j`/`k`, search within preview with `/`, navigate matches with `n`/`N`, open in your editor with `o`.
+`Enter` (or `F3`) on a file opens a full-screen viewer with syntax highlighting for source code. Toggle soft-wrap with `w`, line numbers with `#`, and a hex view of any file with `x`. Binary files open as hex dumps automatically. Scroll with `j`/`k` (`Ctrl-d`/`u`/`f`/`b` for pages), jump with `g`/`G`, scroll horizontally with `h`/`l` when wrap is off, search with `/` (smart-case) and navigate matches with `n`/`N`, open in your editor with `o`, close with `q`. `Space p` toggles a persistent side preview panel.
 
-![File preview popup](assets/file-preview.png)
+![File viewer](assets/file-preview.png)
 
 ### Tabs
 
@@ -144,7 +144,7 @@ cargo install --path .
 |-----|--------|
 | `j` / `k` | Move down / up |
 | `h` / `l` | Go to parent / enter directory |
-| `Enter` | Enter directory / preview file |
+| `Enter` | Enter directory / view file |
 | `gg` / `G` | Jump to top / bottom |
 | `Ctrl-d` / `Ctrl-u` | Half-page down / up |
 | `Tab` | Switch panel |
@@ -209,19 +209,23 @@ cargo install --path .
 | `Space ,` | Find local (alternative) |
 | `Space .` | Find global (alternative) |
 
-### Preview Popup
+### File Viewer
 
 | Key | Action |
 |-----|--------|
-| `Enter` | Open preview on a file |
+| `Enter` / `F3` | Open the viewer on a file |
 | `j` / `k` | Scroll down / up |
 | `G` / `g` | Jump to bottom / top |
 | `Ctrl-d` / `Ctrl-u` | Half-page down / up |
 | `Ctrl-f` / `Ctrl-b` | Full page down / up |
-| `/` | Search within preview |
+| `w` | Toggle soft-wrap |
+| `#` | Toggle line numbers |
+| `x` / `Tab` | Toggle hex view |
+| `h` / `l` / `0` | Scroll left / right / line start (wrap off) |
+| `/` | Search within file (smart-case) |
 | `n` / `N` | Next / previous match |
 | `o` | Open in editor |
-| `Esc` / `q` | Close preview |
+| `Esc` / `q` | Close viewer |
 
 ### Info Popup
 
