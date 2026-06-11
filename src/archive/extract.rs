@@ -132,6 +132,11 @@ pub fn extract_stream(
     let format = ArchiveFormat::detect(archive_path)
         .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidInput, "Unknown archive format"))?;
 
+    // `dest` may be a not-yet-existing subfolder (e.g. extract-into-subfolder);
+    // create it up front so per-entry writes and the symlink-slip guard, which
+    // both treat `dest` as an existing trusted root, behave correctly.
+    std::fs::create_dir_all(dest)?;
+
     let req = ExtractRequest {
         archive_path,
         filter,

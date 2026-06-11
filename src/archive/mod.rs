@@ -125,6 +125,34 @@ pub fn is_archive(path: &Path) -> bool {
     ArchiveFormat::detect(path).is_some()
 }
 
+/// The archive's base name with its format extension removed, for use as an
+/// "extract into a subfolder" target: `data.tar.gz` → `data`, `pkg.zip` → `pkg`.
+/// Compound extensions are matched before their single-suffix forms. Falls back
+/// to the full file name when no known extension matches or stripping leaves it
+/// empty (e.g. a dotfile like `.zip`).
+pub fn archive_stem(path: &Path) -> String {
+    let name = path
+        .file_name()
+        .map(|n| n.to_string_lossy().into_owned())
+        .unwrap_or_default();
+    let lower = name.to_ascii_lowercase();
+    // Longest/compound-first so `.tar.gz` wins over `.gz`/`.tar`.
+    const EXTS: &[&str] = &[
+        ".tar.gz", ".tar.bz2", ".tar.xz", ".tar.zst", ".tgz", ".tbz2", ".txz", ".tzst", ".tar",
+        ".zip",
+    ];
+    for ext in EXTS {
+        // Extensions are ASCII, so byte lengths match between `lower` and `name`
+        // and the cut lands on a char boundary.
+        if let Some(stem) = lower.strip_suffix(ext)
+            && !stem.is_empty()
+        {
+            return name[..stem.len()].to_string();
+        }
+    }
+    name
+}
+
 // ── Streaming hooks (progress / conflict / cancel) ───────────────────
 //
 // These let the app layer stream archive create/extract through the task
@@ -228,6 +256,21 @@ mod tests {
             Some(ArchiveFormat::Tar)
         );
         assert_eq!(ArchiveFormat::from_path(Path::new("test.txt")), None);
+    }
+
+    #[test]
+    fn archive_stem_strips_known_extensions() {
+        let stem = |p: &str| archive_stem(Path::new(p));
+        assert_eq!(stem("data.tar.gz"), "data");
+        assert_eq!(stem("/tmp/foo.tar.bz2"), "foo");
+        assert_eq!(stem("pkg.zip"), "pkg");
+        assert_eq!(stem("x.tgz"), "x");
+        assert_eq!(stem("a.tar.zst"), "a");
+        assert_eq!(stem("archive.tar"), "archive");
+        assert_eq!(stem("MyArchive.ZIP"), "MyArchive"); // case-insensitive match
+        assert_eq!(stem("report.2024.tar.xz"), "report.2024"); // only the format ext goes
+        assert_eq!(stem("noext"), "noext"); // unknown → unchanged
+        assert_eq!(stem(".zip"), ".zip"); // dotfile, empty stem → fall back
     }
 
     #[test]

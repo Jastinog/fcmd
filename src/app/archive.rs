@@ -416,7 +416,15 @@ impl App {
         total: usize,
         label: String,
     ) {
-        let dest = self.active_panel().path.clone();
+        // Extract next to the archive, into a subfolder named after it
+        // (`data.tar.gz` → `data/`) so contents never spill loose into the
+        // directory. Falls back to the active panel if the archive somehow has
+        // no parent (e.g. a filesystem root).
+        let base = archive_path
+            .parent()
+            .map(|p| p.to_path_buf())
+            .unwrap_or_else(|| self.active_panel().path.clone());
+        let dest = base.join(archive::archive_stem(&archive_path));
 
         let (tx, rx) = tokio::sync::mpsc::channel(64);
         let (conflict_tx, conflict_rx) = tokio::sync::mpsc::channel(4);
