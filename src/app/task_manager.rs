@@ -5,7 +5,7 @@ use std::time::Instant;
 
 use tokio::sync::mpsc;
 
-use crate::ops::{OpRecord, ProgressMsg};
+use crate::fs::ops::{OpRecord, ProgressMsg};
 
 use super::messages::{ArchiveMsg, DeleteMsg, PhantomEntry};
 

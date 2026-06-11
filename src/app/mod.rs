@@ -4,9 +4,11 @@ pub(crate) use std::time::Instant;
 
 pub(crate) use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
-pub(crate) use crate::find::{FindScope, FindState};
-pub(crate) use crate::ops::{self, DuMsg, Register, RegisterOp, UndoStack};
-pub(crate) use crate::panel::{self, DirCache, FileEntry, Panel, SortMode};
+pub(crate) use crate::search::{FindScope, FindState};
+pub(crate) use crate::fs::du::{self, DuMsg};
+pub(crate) use crate::fs::ops::{self, Register, RegisterOp, UndoStack};
+pub(crate) use crate::fs::perms;
+pub(crate) use crate::model::panel::{self, DirCache, FileEntry, Panel, SortMode};
 pub(crate) use crate::preview::Preview;
 pub(crate) use crate::theme::Theme;
 pub(crate) use crate::viewer::Viewer;
@@ -184,13 +186,13 @@ pub struct App {
     pub tree_selected: usize,
     pub tree_scroll: usize,
     pub start_dir: PathBuf,
-    pub tree_data: Vec<crate::tree::TreeLine>,
+    pub tree_data: Vec<crate::model::tree::TreeLine>,
     pub tree_collapsed: HashSet<PathBuf>,
     pub tree_expanded: HashSet<PathBuf>,
     // Visual marks (persistent colored dots, level 1-3)
     pub visual_marks: HashMap<PathBuf, u8>,
     // Database
-    pub db: Option<std::sync::Arc<std::sync::Mutex<crate::db::Db>>>,
+    pub db: Option<std::sync::Arc<std::sync::Mutex<crate::storage::Db>>>,
     // Animation tick counter (incremented every 250ms for spinner etc.)
     pub tick_count: u32,
     // Task manager (copy/move/delete operations)
@@ -204,8 +206,8 @@ pub struct App {
     // Conflict resolution
     /// One conflict channel per in-flight paste task; polled round-robin so concurrent
     /// pastes don't clobber each other's conflict prompts.
-    pub conflict_rxs: Vec<tokio::sync::mpsc::Receiver<crate::ops::ConflictInfo>>,
-    pub conflict_info: Option<crate::ops::ConflictInfo>,
+    pub conflict_rxs: Vec<tokio::sync::mpsc::Receiver<crate::fs::ops::ConflictInfo>>,
+    pub conflict_info: Option<crate::fs::ops::ConflictInfo>,
     pub conflict_selected: usize,
     // Directory sizes
     pub dir_sizes: HashMap<PathBuf, u64>,
@@ -289,7 +291,7 @@ impl App {
     pub fn new() -> std::io::Result<Self> {
         let cwd = std::env::current_dir()?;
 
-        let (db, visual_marks, dir_sorts, bookmarks, git_statuses) = match crate::db::Db::init() {
+        let (db, visual_marks, dir_sorts, bookmarks, git_statuses) = match crate::storage::Db::init() {
             Ok(db) => {
                 let marks = db.load_visual_marks().unwrap_or_default();
                 let raw_sorts = db.load_dir_sorts().unwrap_or_default();
@@ -482,10 +484,10 @@ impl App {
     pub fn save_session(&self) {
         let Some(ref db) = self.db else { return };
         let Ok(db) = db.lock() else { return };
-        let tabs: Vec<crate::db::SavedTab> = self
+        let tabs: Vec<crate::storage::SavedTab> = self
             .tabs
             .iter()
-            .map(|t| crate::db::SavedTab {
+            .map(|t| crate::storage::SavedTab {
                 panel_paths: t.panels.iter().map(|p| p.path.clone()).collect(),
                 panel_cursors: t.panels.iter().map(|p| p.selected).collect(),
                 active_panel: t.active,
@@ -500,7 +502,7 @@ impl App {
     }
 
     /// Fire-and-forget DB write on the blocking thread pool.
-    pub(super) fn db_spawn(&self, f: impl FnOnce(&crate::db::Db) + Send + 'static) {
+    pub(super) fn db_spawn(&self, f: impl FnOnce(&crate::storage::Db) + Send + 'static) {
         if let Some(ref db) = self.db {
             let db = std::sync::Arc::clone(db);
             tokio::task::spawn_blocking(move || {
@@ -885,7 +887,7 @@ pub(crate) fn make_test_entries(names: &[&str]) -> Vec<FileEntry> {
 #[cfg(test)]
 impl App {
     pub(crate) fn new_for_test(entries: Vec<FileEntry>) -> Self {
-        let db = crate::db::Db::init_in_memory().unwrap();
+        let db = crate::storage::Db::init_in_memory().unwrap();
         let db = Some(std::sync::Arc::new(std::sync::Mutex::new(db)));
 
         let (dir_load_tx, dir_load_rx) = tokio::sync::mpsc::channel(64);
@@ -1584,7 +1586,7 @@ mod tests {
         let entries = make_test_entries(&["a.txt"]);
         let mut app = App::new_for_test(entries);
         app.tree_dirty = true;
-        let tree_line = crate::tree::TreeLine {
+        let tree_line = crate::model::tree::TreeLine {
             prefix: String::new(),
             name: "test".into(),
             path: PathBuf::from("/test"),

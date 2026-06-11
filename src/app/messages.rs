@@ -116,7 +116,7 @@ pub struct ViewerHlResult {
 pub struct TreeLoadResult {
     pub start_dir: PathBuf,
     pub current_path: PathBuf,
-    pub data: Vec<crate::tree::TreeLine>,
+    pub data: Vec<crate::model::tree::TreeLine>,
 }
 
 pub struct ChownLoadResult {

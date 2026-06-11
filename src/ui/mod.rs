@@ -10,7 +10,7 @@ use ratatui::{
 };
 
 use crate::app::{App, Mode, PanelLayout};
-use crate::ops::Register;
+use crate::fs::ops::Register;
 use crate::theme::Theme;
 
 mod find_overlay;

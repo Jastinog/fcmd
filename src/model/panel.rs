@@ -213,8 +213,8 @@ impl Panel {
     }
 
     /// Targeted entries with is_dir info (for Register).
-    pub fn targeted_register_entries(&self) -> Vec<crate::ops::RegisterEntry> {
-        let to_entry = |e: &FileEntry| crate::ops::RegisterEntry {
+    pub fn targeted_register_entries(&self) -> Vec<crate::fs::ops::RegisterEntry> {
+        let to_entry = |e: &FileEntry| crate::fs::ops::RegisterEntry {
             path: e.path.clone(),
             is_dir: e.is_dir,
         };

@@ -7,7 +7,7 @@ use ratatui::{
 };
 use unicode_width::UnicodeWidthStr;
 
-use crate::find::{FindScope, FindState};
+use crate::search::{FindScope, FindState};
 use crate::util::icons::file_icon;
 use crate::theme::Theme;
 

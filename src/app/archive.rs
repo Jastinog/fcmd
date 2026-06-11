@@ -3,7 +3,7 @@ use std::sync::atomic::AtomicBool;
 
 use super::*;
 use crate::archive::{self, ArchiveEntry, ArchiveFormat, ConflictDecision};
-use crate::ops::{ConflictChoice, ConflictInfo};
+use crate::fs::ops::{ConflictChoice, ConflictInfo};
 
 #[derive(Clone)]
 pub struct ArchiveTreeNode {
@@ -424,7 +424,7 @@ impl App {
             let mut last_report: Option<std::time::Instant> = None;
             let mut on_progress = |done: usize, total: usize, current: &str| {
                 let now = std::time::Instant::now();
-                if last_report.is_none_or(|t| now.duration_since(t) >= crate::ops::PROGRESS_INTERVAL) {
+                if last_report.is_none_or(|t| now.duration_since(t) >= crate::fs::ops::PROGRESS_INTERVAL) {
                     last_report = Some(now);
                     let _ = tx.try_send(ArchiveMsg::Progress {
                         done,
@@ -555,7 +555,7 @@ impl App {
             let mut last_report: Option<std::time::Instant> = None;
             let mut on_progress = |done: usize, total: usize, current: &str| {
                 let now = std::time::Instant::now();
-                if last_report.is_none_or(|t| now.duration_since(t) >= crate::ops::PROGRESS_INTERVAL) {
+                if last_report.is_none_or(|t| now.duration_since(t) >= crate::fs::ops::PROGRESS_INTERVAL) {
                     last_report = Some(now);
                     let _ = tx.try_send(ArchiveMsg::Progress {
                         done,

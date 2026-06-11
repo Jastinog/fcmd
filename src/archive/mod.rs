@@ -1,0 +1,480 @@
+//! Archive support: format detection plus listing, extraction and creation.
+//!
+//! Shared types ([`ArchiveFormat`], [`ArchiveEntry`], conflict/progress callbacks)
+//! live here; the heavy lifting is split between [`extract`] and [`create`].
+
+use std::path::{Path, PathBuf};
+use std::sync::atomic::AtomicBool;
+use std::time::SystemTime;
+
+mod create;
+mod extract;
+
+pub use create::*;
+pub use extract::*;
+
+#[derive(Clone, Debug)]
+pub struct ArchiveEntry {
+    pub path: String,
+    pub size: u64,
+    pub is_dir: bool,
+    #[allow(dead_code)]
+    pub modified: Option<SystemTime>,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ArchiveFormat {
+    Zip,
+    Tar,
+    TarGz,
+    TarBz2,
+    TarXz,
+}
+
+impl ArchiveFormat {
+    pub fn from_path(path: &Path) -> Option<Self> {
+        let name = path.file_name()?.to_string_lossy().to_ascii_lowercase();
+        if name.ends_with(".tar.gz") || name.ends_with(".tgz") {
+            Some(ArchiveFormat::TarGz)
+        } else if name.ends_with(".tar.bz2") || name.ends_with(".tbz2") {
+            Some(ArchiveFormat::TarBz2)
+        } else if name.ends_with(".tar.xz") || name.ends_with(".txz") {
+            Some(ArchiveFormat::TarXz)
+        } else if name.ends_with(".tar") {
+            Some(ArchiveFormat::Tar)
+        } else if name.ends_with(".zip") {
+            Some(ArchiveFormat::Zip)
+        } else {
+            None
+        }
+    }
+
+    #[allow(dead_code)]
+    pub fn label(self) -> &'static str {
+        match self {
+            ArchiveFormat::Zip => "zip",
+            ArchiveFormat::Tar => "tar",
+            ArchiveFormat::TarGz => "tar.gz",
+            ArchiveFormat::TarBz2 => "tar.bz2",
+            ArchiveFormat::TarXz => "tar.xz",
+        }
+    }
+}
+
+pub fn is_archive(path: &Path) -> bool {
+    ArchiveFormat::from_path(path).is_some()
+}
+
+// ── Streaming hooks (progress / conflict / cancel) ───────────────────
+//
+// These let the app layer stream archive create/extract through the task
+// manager the way `ops::paste` does, without `archive.rs` knowing about tokio:
+// the caller passes plain closures and an `AtomicBool` cancel flag.
+
+/// Per-entry overwrite decision for extract conflicts.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ConflictDecision {
+    Overwrite,
+    Skip,
+    /// Stop the whole operation, keeping what was already extracted.
+    Abort,
+}
+
+/// Reported before each entry is processed: `(done, total, current_name)`.
+pub type ProgressFn<'a> = dyn FnMut(usize, usize, &str) + 'a;
+
+/// Asked when an extracted file would overwrite an existing one. Receives the
+/// archive entry name, the destination path, and the source entry's size and
+/// mtime so the caller can build a conflict prompt.
+pub type ConflictFn<'a> = dyn FnMut(&str, &Path, u64, Option<SystemTime>) -> ConflictDecision + 'a;
+
+/// Result of a streaming extract.
+#[derive(Debug, Default)]
+pub struct ExtractOutcome {
+    pub extracted: Vec<PathBuf>,
+    pub skipped: usize,
+    /// True if cancelled (via the flag) or aborted at a conflict prompt.
+    pub cancelled: bool,
+}
+
+/// A cancel flag that is never set — for the synchronous wrappers / tests.
+#[allow(dead_code)]
+fn never_cancel() -> AtomicBool {
+    AtomicBool::new(false)
+}
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::fs::File;
+    use std::io::Write;
+
+    #[test]
+    fn format_detection() {
+        assert_eq!(
+            ArchiveFormat::from_path(Path::new("test.zip")),
+            Some(ArchiveFormat::Zip)
+        );
+        assert_eq!(
+            ArchiveFormat::from_path(Path::new("test.tar.gz")),
+            Some(ArchiveFormat::TarGz)
+        );
+        assert_eq!(
+            ArchiveFormat::from_path(Path::new("test.tgz")),
+            Some(ArchiveFormat::TarGz)
+        );
+        assert_eq!(
+            ArchiveFormat::from_path(Path::new("test.tar.bz2")),
+            Some(ArchiveFormat::TarBz2)
+        );
+        assert_eq!(
+            ArchiveFormat::from_path(Path::new("test.tar.xz")),
+            Some(ArchiveFormat::TarXz)
+        );
+        assert_eq!(
+            ArchiveFormat::from_path(Path::new("test.tar")),
+            Some(ArchiveFormat::Tar)
+        );
+        assert_eq!(ArchiveFormat::from_path(Path::new("test.txt")), None);
+    }
+
+    #[test]
+    fn is_archive_works() {
+        assert!(is_archive(Path::new("foo.zip")));
+        assert!(is_archive(Path::new("foo.tar.gz")));
+        assert!(!is_archive(Path::new("foo.rs")));
+    }
+
+    #[test]
+    fn list_and_extract_zip() {
+        let dir = tempfile::tempdir().unwrap();
+        let zip_path = dir.path().join("test.zip");
+
+        // Create a zip with two files
+        {
+            let file = File::create(&zip_path).unwrap();
+            let mut writer = zip::ZipWriter::new(file);
+            let options = zip::write::SimpleFileOptions::default();
+            writer.start_file("hello.txt", options).unwrap();
+            writer.write_all(b"Hello World").unwrap();
+            writer.start_file("sub/nested.txt", options).unwrap();
+            writer.write_all(b"Nested").unwrap();
+            writer.finish().unwrap();
+        }
+
+        // List
+        let (fmt, entries) = list_archive(&zip_path).unwrap();
+        assert_eq!(fmt, ArchiveFormat::Zip);
+        assert!(entries.iter().any(|e| e.path == "hello.txt"));
+        assert!(entries.iter().any(|e| e.path == "sub/nested.txt"));
+
+        // Extract single
+        let extract_dir = dir.path().join("out1");
+        std::fs::create_dir(&extract_dir).unwrap();
+        let extracted = extract_entry(&zip_path, "hello.txt", &extract_dir).unwrap();
+        assert_eq!(extracted.len(), 1);
+        assert!(extract_dir.join("hello.txt").exists());
+
+        // Extract all
+        let extract_all_dir = dir.path().join("out2");
+        std::fs::create_dir(&extract_all_dir).unwrap();
+        let extracted = extract_all(&zip_path, &extract_all_dir).unwrap();
+        assert!(extracted.len() >= 2);
+        assert!(extract_all_dir.join("hello.txt").exists());
+        assert!(extract_all_dir.join("sub/nested.txt").exists());
+    }
+
+    #[test]
+    fn list_and_extract_tar_gz() {
+        let dir = tempfile::tempdir().unwrap();
+        let tar_path = dir.path().join("test.tar.gz");
+
+        // Create test files
+        let src = dir.path().join("src_files");
+        std::fs::create_dir(&src).unwrap();
+        std::fs::write(src.join("a.txt"), "aaa").unwrap();
+        std::fs::create_dir(src.join("sub")).unwrap();
+        std::fs::write(src.join("sub/b.txt"), "bbb").unwrap();
+
+        // Create archive
+        create_archive(
+            &[src.join("a.txt"), src.join("sub")],
+            &src,
+            &tar_path,
+        )
+        .unwrap();
+
+        // List
+        let (fmt, entries) = list_archive(&tar_path).unwrap();
+        assert_eq!(fmt, ArchiveFormat::TarGz);
+        assert!(entries.iter().any(|e| e.path == "a.txt"));
+
+        // Extract all
+        let out = dir.path().join("out");
+        std::fs::create_dir(&out).unwrap();
+        extract_all(&tar_path, &out).unwrap();
+        assert!(out.join("a.txt").exists());
+    }
+
+    #[test]
+    fn create_zip_archive() {
+        let dir = tempfile::tempdir().unwrap();
+        let src = dir.path().join("src");
+        std::fs::create_dir(&src).unwrap();
+        std::fs::write(src.join("file.txt"), "content").unwrap();
+
+        let zip_path = dir.path().join("out.zip");
+        create_archive(&[src.join("file.txt")], &src, &zip_path).unwrap();
+
+        let (fmt, entries) = list_archive(&zip_path).unwrap();
+        assert_eq!(fmt, ArchiveFormat::Zip);
+        assert!(entries.iter().any(|e| e.path == "file.txt"));
+    }
+
+    #[test]
+    fn synthesizes_missing_dirs() {
+        let dir = tempfile::tempdir().unwrap();
+        let zip_path = dir.path().join("test.zip");
+
+        // Create zip with only files (no explicit dir entries)
+        {
+            let file = File::create(&zip_path).unwrap();
+            let mut writer = zip::ZipWriter::new(file);
+            let options = zip::write::SimpleFileOptions::default();
+            writer.start_file("a/b/c.txt", options).unwrap();
+            writer.write_all(b"deep").unwrap();
+            writer.finish().unwrap();
+        }
+
+        let (_, entries) = list_archive(&zip_path).unwrap();
+        // Should have synthesized "a/" and "a/b/"
+        assert!(entries.iter().any(|e| e.path == "a/" && e.is_dir));
+        assert!(entries.iter().any(|e| e.path == "a/b/" && e.is_dir));
+    }
+
+    #[test]
+    fn zip_slip_traversal_is_neutralized() {
+        let dir = tempfile::tempdir().unwrap();
+        let zip_path = dir.path().join("evil.zip");
+
+        // Craft a zip whose entry name escapes via `..`.
+        {
+            let file = File::create(&zip_path).unwrap();
+            let mut writer = zip::ZipWriter::new(file);
+            let options = zip::write::SimpleFileOptions::default();
+            writer.start_file("../../escape.txt", options).unwrap();
+            writer.write_all(b"pwned").unwrap();
+            writer.finish().unwrap();
+        }
+
+        let dest = dir.path().join("out");
+        std::fs::create_dir(&dest).unwrap();
+        let extracted = extract_all(&zip_path, &dest).unwrap();
+
+        // The traversal must be stripped: the file lands inside `dest`, never above it.
+        let escaped = dir.path().join("escape.txt");
+        assert!(!escaped.exists(), "file escaped extraction dir via Zip Slip");
+        assert!(dest.join("escape.txt").exists());
+        for p in &extracted {
+            assert!(p.starts_with(&dest), "extracted path {p:?} escaped dest");
+        }
+    }
+
+    /// Build a one-file zip at `path` whose `hello.txt` holds `content`.
+    fn make_hello_zip(path: &Path, content: &[u8]) {
+        let file = File::create(path).unwrap();
+        let mut w = zip::ZipWriter::new(file);
+        let opt = zip::write::SimpleFileOptions::default();
+        w.start_file("hello.txt", opt).unwrap();
+        w.write_all(content).unwrap();
+        w.finish().unwrap();
+    }
+
+    #[test]
+    fn extract_stream_skip_vs_overwrite_on_conflict() {
+        let dir = tempfile::tempdir().unwrap();
+        let zip_path = dir.path().join("t.zip");
+        make_hello_zip(&zip_path, b"new");
+
+        let dest = dir.path().join("out");
+        std::fs::create_dir(&dest).unwrap();
+        std::fs::write(dest.join("hello.txt"), b"old").unwrap();
+
+        let cancel = AtomicBool::new(false);
+
+        // Skip → existing content preserved, counted as skipped, not extracted.
+        let outcome = extract_stream(
+            &zip_path,
+            None,
+            &dest,
+            1,
+            &mut |_, _, _| {},
+            &mut |_, _, _, _| ConflictDecision::Skip,
+            &cancel,
+        )
+        .unwrap();
+        assert_eq!(outcome.skipped, 1);
+        assert!(outcome.extracted.is_empty());
+        assert_eq!(std::fs::read(dest.join("hello.txt")).unwrap(), b"old");
+
+        // Overwrite → file replaced.
+        let outcome = extract_stream(
+            &zip_path,
+            None,
+            &dest,
+            1,
+            &mut |_, _, _| {},
+            &mut |_, _, _, _| ConflictDecision::Overwrite,
+            &cancel,
+        )
+        .unwrap();
+        assert_eq!(outcome.skipped, 0);
+        assert_eq!(outcome.extracted.len(), 1);
+        assert_eq!(std::fs::read(dest.join("hello.txt")).unwrap(), b"new");
+    }
+
+    #[test]
+    fn extract_stream_resolver_only_called_on_existing() {
+        let dir = tempfile::tempdir().unwrap();
+        let zip_path = dir.path().join("t.zip");
+        make_hello_zip(&zip_path, b"data");
+        let dest = dir.path().join("out");
+        std::fs::create_dir(&dest).unwrap();
+
+        let cancel = AtomicBool::new(false);
+        let mut conflicts = 0;
+        let outcome = extract_stream(
+            &zip_path,
+            None,
+            &dest,
+            1,
+            &mut |_, _, _| {},
+            &mut |_, _, _, _| {
+                conflicts += 1;
+                ConflictDecision::Overwrite
+            },
+            &cancel,
+        )
+        .unwrap();
+        // No pre-existing file → resolver never consulted.
+        assert_eq!(conflicts, 0);
+        assert_eq!(outcome.extracted.len(), 1);
+    }
+
+    #[test]
+    fn extract_stream_abort_stops_early() {
+        let dir = tempfile::tempdir().unwrap();
+        let zip_path = dir.path().join("t.zip");
+        make_hello_zip(&zip_path, b"new");
+        let dest = dir.path().join("out");
+        std::fs::create_dir(&dest).unwrap();
+        std::fs::write(dest.join("hello.txt"), b"old").unwrap();
+
+        let cancel = AtomicBool::new(false);
+        let outcome = extract_stream(
+            &zip_path,
+            None,
+            &dest,
+            1,
+            &mut |_, _, _| {},
+            &mut |_, _, _, _| ConflictDecision::Abort,
+            &cancel,
+        )
+        .unwrap();
+        assert!(outcome.cancelled);
+        assert_eq!(std::fs::read(dest.join("hello.txt")).unwrap(), b"old");
+    }
+
+    #[test]
+    fn extract_stream_honours_cancel_flag() {
+        let dir = tempfile::tempdir().unwrap();
+        let zip_path = dir.path().join("t.zip");
+        make_hello_zip(&zip_path, b"data");
+        let dest = dir.path().join("out");
+        std::fs::create_dir(&dest).unwrap();
+
+        let cancel = AtomicBool::new(true); // pre-cancelled
+        let outcome = extract_stream(
+            &zip_path,
+            None,
+            &dest,
+            1,
+            &mut |_, _, _| {},
+            &mut |_, _, _, _| ConflictDecision::Overwrite,
+            &cancel,
+        )
+        .unwrap();
+        assert!(outcome.cancelled);
+        assert!(outcome.extracted.is_empty());
+        assert!(!dest.join("hello.txt").exists());
+    }
+
+    #[test]
+    fn extract_stream_reports_progress_with_total() {
+        let dir = tempfile::tempdir().unwrap();
+        let zip_path = dir.path().join("t.zip");
+        make_hello_zip(&zip_path, b"data");
+        let dest = dir.path().join("out");
+        std::fs::create_dir(&dest).unwrap();
+
+        let cancel = AtomicBool::new(false);
+        let mut calls: Vec<(usize, usize, String)> = Vec::new();
+        extract_stream(
+            &zip_path,
+            None,
+            &dest,
+            1,
+            &mut |d, t, name| calls.push((d, t, name.to_string())),
+            &mut |_, _, _, _| ConflictDecision::Overwrite,
+            &cancel,
+        )
+        .unwrap();
+        assert_eq!(calls.len(), 1);
+        assert_eq!(calls[0], (0, 1, "hello.txt".to_string()));
+    }
+
+    #[test]
+    fn create_stream_reports_progress_and_count() {
+        let dir = tempfile::tempdir().unwrap();
+        let src = dir.path().join("src");
+        std::fs::create_dir(&src).unwrap();
+        std::fs::write(src.join("a.txt"), "a").unwrap();
+        std::fs::create_dir(src.join("sub")).unwrap();
+        std::fs::write(src.join("sub/b.txt"), "b").unwrap();
+
+        let out = dir.path().join("out.zip");
+        let cancel = AtomicBool::new(false);
+        let mut calls = 0;
+        let (written, cancelled) = create_stream(
+            &[src.join("a.txt"), src.join("sub")],
+            &src,
+            &out,
+            &mut |_, _, _| calls += 1,
+            &cancel,
+        )
+        .unwrap();
+        assert!(!cancelled);
+        // Entries in pre-order: a.txt, sub/, sub/b.txt = 3.
+        assert_eq!(written, 3);
+        assert_eq!(calls, 3);
+
+        // The archive is valid and round-trips.
+        let (_, entries) = list_archive(&out).unwrap();
+        assert!(entries.iter().any(|e| e.path == "a.txt"));
+        assert!(entries.iter().any(|e| e.path == "sub/b.txt"));
+    }
+
+    #[test]
+    fn create_stream_honours_cancel_flag() {
+        let dir = tempfile::tempdir().unwrap();
+        let src = dir.path().join("src");
+        std::fs::create_dir(&src).unwrap();
+        std::fs::write(src.join("a.txt"), "a").unwrap();
+
+        let out = dir.path().join("out.zip");
+        let cancel = AtomicBool::new(true); // pre-cancelled
+        let (written, cancelled) =
+            create_stream(&[src.join("a.txt")], &src, &out, &mut |_, _, _| {}, &cancel).unwrap();
+        assert!(cancelled);
+        assert_eq!(written, 0);
+    }
+}

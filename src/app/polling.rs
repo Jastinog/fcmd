@@ -113,7 +113,7 @@ impl App {
         }
         let n = dirs.len();
         let (tx, rx) = tokio::sync::mpsc::channel(64);
-        ops::du_in_background(dirs, tx);
+        du::du_in_background(dirs, tx);
         self.du_progress = Some(DuProgress {
             rx,
             started_at: Instant::now(),

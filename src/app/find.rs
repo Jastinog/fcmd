@@ -104,7 +104,7 @@ impl App {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::find::FindState;
+    use crate::search::FindState;
 
     fn key(code: KeyCode) -> KeyEvent {
         KeyEvent::new(code, KeyModifiers::NONE)

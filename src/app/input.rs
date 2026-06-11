@@ -426,7 +426,7 @@ mod tests {
         let mut app = App::new_for_test(entries);
         app.show_tree = true;
         app.tree_focused = true;
-        app.tree_data = vec![crate::tree::TreeLine {
+        app.tree_data = vec![crate::model::tree::TreeLine {
             prefix: String::new(),
             name: "test".into(),
             path: PathBuf::from("/test"),

@@ -563,81 +563,6 @@ pub fn paste_in_background(
     });
 }
 
-// --- Directory size calculation ---
-
-pub enum DuMsg {
-    Progress {
-        done: usize,
-        total: usize,
-        current: String,
-    },
-    Finished {
-        sizes: Vec<(PathBuf, u64)>,
-    },
-}
-
-pub fn du_in_background(dirs: Vec<PathBuf>, tx: tokio::sync::mpsc::Sender<DuMsg>) {
-    tokio::task::spawn_blocking(move || {
-        let total = dirs.len();
-        let mut sizes = Vec::new();
-        let mut last_report: Option<Instant> = None;
-        for (i, dir) in dirs.iter().enumerate() {
-            let name = dir
-                .file_name()
-                .map(|n| n.to_string_lossy().into_owned())
-                .unwrap_or_default();
-            // Progress is cosmetic and the receiver only keeps the latest message,
-            // so use a throttled, non-blocking send: a full channel must never stall
-            // the size calculation (see ProgressCtx::report for the same rationale).
-            let now = Instant::now();
-            if last_report.is_none_or(|t| now.duration_since(t) >= PROGRESS_INTERVAL) {
-                last_report = Some(now);
-                let _ = tx.try_send(DuMsg::Progress {
-                    done: i,
-                    total,
-                    current: name,
-                });
-            }
-            let size = path_size(dir);
-            sizes.push((dir.clone(), size));
-        }
-        // Final result must be delivered reliably.
-        let _ = tx.blocking_send(DuMsg::Finished { sizes });
-    });
-}
-
-/// Recursive directory stats: (total_size, file_count, dir_count).
-pub fn dir_stats(p: &Path) -> (u64, usize, usize) {
-    let mut size = 0u64;
-    let mut files = 0usize;
-    let mut dirs = 0usize;
-    dir_stats_inner(p, &mut size, &mut files, &mut dirs);
-    (size, files, dirs)
-}
-
-fn dir_stats_inner(p: &Path, size: &mut u64, files: &mut usize, dirs: &mut usize) {
-    let rd = match fs::read_dir(p) {
-        Ok(rd) => rd,
-        Err(_) => return,
-    };
-    for entry in rd.flatten() {
-        let ft = match entry.file_type() {
-            Ok(ft) => ft,
-            Err(_) => continue,
-        };
-        if ft.is_symlink() {
-            *files += 1;
-            *size += fs::symlink_metadata(entry.path()).map(|m| m.len()).unwrap_or(0);
-        } else if ft.is_dir() {
-            *dirs += 1;
-            dir_stats_inner(&entry.path(), size, files, dirs);
-        } else {
-            *files += 1;
-            *size += entry.metadata().map(|m| m.len()).unwrap_or(0);
-        }
-    }
-}
-
 // --- Operations ---
 
 /// Validate that a user-supplied filename does not escape the parent directory.
@@ -739,46 +664,6 @@ pub fn undo(records: &[OpRecord]) -> std::io::Result<String> {
         }
     }
     Ok(format!("Undone {count} operation(s)"))
-}
-
-// --- chmod / chown ---
-
-#[cfg(unix)]
-pub fn chmod(path: &Path, mode: u32) -> std::io::Result<()> {
-    use std::os::unix::fs::PermissionsExt;
-    fs::set_permissions(path, fs::Permissions::from_mode(mode))
-}
-
-#[cfg(not(unix))]
-pub fn chmod(_path: &Path, _mode: u32) -> std::io::Result<()> {
-    Err(std::io::Error::new(
-        std::io::ErrorKind::Unsupported,
-        "chmod is not supported on this platform",
-    ))
-}
-
-#[cfg(unix)]
-pub fn chown(path: &Path, uid: Option<u32>, gid: Option<u32>) -> std::io::Result<()> {
-    use std::ffi::CString;
-    use std::os::unix::ffi::OsStrExt;
-    let c_path = CString::new(path.as_os_str().as_bytes())
-        .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidInput, e))?;
-    let uid = uid.map(|u| u as libc::uid_t).unwrap_or(u32::MAX);
-    let gid = gid.map(|g| g as libc::gid_t).unwrap_or(u32::MAX);
-    let ret = unsafe { libc::chown(c_path.as_ptr(), uid, gid) };
-    if ret == 0 {
-        Ok(())
-    } else {
-        Err(std::io::Error::last_os_error())
-    }
-}
-
-#[cfg(not(unix))]
-pub fn chown(_path: &Path, _uid: Option<u32>, _gid: Option<u32>) -> std::io::Result<()> {
-    Err(std::io::Error::new(
-        std::io::ErrorKind::Unsupported,
-        "chown is not supported on this platform",
-    ))
 }
 
 // --- Helpers ---
@@ -1214,33 +1099,6 @@ mod tests {
         assert!(msg.contains("2"));
     }
 
-    // --- dir_stats ---
-
-    #[test]
-    fn dir_stats_counts() {
-        let dir = tmp_dir();
-        fs::write(dir.join("a.txt"), "12345").unwrap();
-        fs::write(dir.join("b.txt"), "67").unwrap();
-        fs::create_dir(dir.join("sub")).unwrap();
-        fs::write(dir.join("sub/c.txt"), "890").unwrap();
-
-        let (size, files, dirs) = dir_stats(&dir);
-        assert_eq!(files, 3); // a.txt, b.txt, sub/c.txt
-        assert_eq!(dirs, 1);  // sub
-        assert_eq!(size, 10); // 5 + 2 + 3
-        let _ = fs::remove_dir_all(&dir);
-    }
-
-    #[test]
-    fn dir_stats_empty() {
-        let dir = tmp_dir();
-        let (size, files, dirs) = dir_stats(&dir);
-        assert_eq!(size, 0);
-        assert_eq!(files, 0);
-        assert_eq!(dirs, 0);
-        let _ = fs::remove_dir_all(&dir);
-    }
-
     // --- path_size edge cases ---
 
     #[test]
@@ -1343,28 +1201,6 @@ mod tests {
         let link_meta = fs::symlink_metadata(&link).unwrap();
         assert_eq!(link_size, link_meta.len());
         let _ = fs::remove_dir_all(&dir);
-    }
-
-    // --- chmod / chown on test files ---
-
-    #[cfg(unix)]
-    #[test]
-    fn chmod_changes_permissions() {
-        let dir = tmp_dir();
-        let f = dir.join("file.txt");
-        fs::write(&f, "data").unwrap();
-        chmod(&f, 0o644).unwrap();
-
-        use std::os::unix::fs::PermissionsExt;
-        let mode = fs::metadata(&f).unwrap().permissions().mode() & 0o7777;
-        assert_eq!(mode, 0o644);
-        let _ = fs::remove_dir_all(&dir);
-    }
-
-    #[cfg(unix)]
-    #[test]
-    fn chmod_nonexistent_fails() {
-        assert!(chmod(Path::new("/nonexistent/file"), 0o755).is_err());
     }
 
     // --- copy_dir_progress & copy_path_progress tests ---

@@ -9,11 +9,11 @@ use ratatui::{
 };
 
 use crate::app::PhantomEntry;
-use crate::panel::{Panel, SortMode};
+use crate::model::panel::{Panel, SortMode};
 use crate::util::icons::file_icon;
 use crate::util::format_bytes;
 use crate::util::natsort::natsort;
-use crate::ops::RegisterOp;
+use crate::fs::ops::RegisterOp;
 
 use super::RenderContext;
 use super::util::{display_width, truncate_to_width, pad_to_width};
@@ -309,7 +309,7 @@ pub(super) fn render_panel(
 /// should be the first visible real entry. Phantoms whose insertion position falls
 /// within the visible window are interleaved at the correct position.
 fn build_display_slots(
-    entries: &[crate::panel::FileEntry],
+    entries: &[crate::model::panel::FileEntry],
     phantoms: &[&PhantomEntry],
     offset: usize,
     visible_height: usize,

@@ -7,7 +7,7 @@ use ratatui::{
 };
 
 use crate::app::{App, Mode};
-use crate::panel::SortMode;
+use crate::model::panel::SortMode;
 
 use super::{SEP_LEFT, SEP_RIGHT};
 use super::util::display_width;
@@ -163,8 +163,8 @@ pub(super) fn render_status(f: &mut Frame, app: &App, area: Rect) {
     // Register segment
     if let Some(ref r) = app.register {
         let op = match r.op {
-            crate::ops::RegisterOp::Yank => "y",
-            crate::ops::RegisterOp::Cut => "d",
+            crate::fs::ops::RegisterOp::Yank => "y",
+            crate::fs::ops::RegisterOp::Cut => "d",
         };
         right_parts.push((format!(" {op}:{} ", r.entries.len()), t.yellow, t.bg_light));
     }

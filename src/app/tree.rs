@@ -174,7 +174,7 @@ impl App {
         self.tree_load_rx = Some(rx);
 
         tokio::task::spawn_blocking(move || {
-            let data = crate::tree::build_tree(
+            let data = crate::model::tree::build_tree(
                 &start_dir,
                 &current,
                 show_hidden,
@@ -220,7 +220,7 @@ impl App {
 mod tests {
     use super::*;
     use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
-    use crate::tree::TreeLine;
+    use crate::model::tree::TreeLine;
 
     fn make_tree_lines(n: usize) -> Vec<TreeLine> {
         (0..n)

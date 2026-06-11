@@ -81,7 +81,7 @@ impl App {
                 // rate) must never throttle deletion throughput. Progress is lossy;
                 // the final count is delivered by DeleteMsg::Finished below.
                 let now = std::time::Instant::now();
-                if last_report.is_none_or(|t| now.duration_since(t) >= crate::ops::PROGRESS_INTERVAL) {
+                if last_report.is_none_or(|t| now.duration_since(t) >= crate::fs::ops::PROGRESS_INTERVAL) {
                     last_report = Some(now);
                     let _ = tx.try_send(DeleteMsg::Progress {
                         done: i,
@@ -365,7 +365,7 @@ mod tests {
         let entries = make_test_entries(&["a.txt"]);
         let mut app = App::new_for_test(entries);
         app.register = Some(Register {
-            entries: vec![crate::ops::RegisterEntry {
+            entries: vec![crate::fs::ops::RegisterEntry {
                 path: PathBuf::from("/test/a.txt"),
                 is_dir: false,
             }],
@@ -379,7 +379,7 @@ mod tests {
     async fn undo_with_records_spawns_op() {
         let entries = make_test_entries(&["a.txt"]);
         let mut app = App::new_for_test(entries);
-        app.undo_stack.push(vec![crate::ops::OpRecord::Copied {
+        app.undo_stack.push(vec![crate::fs::ops::OpRecord::Copied {
             _src: PathBuf::from("/test/src.txt"),
             dst: PathBuf::from("/tmp/undo_test_nonexistent"),
         }]);
@@ -394,7 +394,7 @@ mod tests {
         let mut app = App::new_for_test(entries);
         let path = app.active_panel().path.clone();
         // Insert into cache
-        app.dir_cache.insert(path.clone(), crate::panel::DirCacheEntry {
+        app.dir_cache.insert(path.clone(), crate::model::panel::DirCacheEntry {
             entries: vec![],
             show_hidden: false,
             sort_mode: SortMode::Name,

@@ -56,7 +56,7 @@ impl App {
     }
 
     pub(super) fn handle_conflict(&mut self, key: KeyEvent) {
-        use crate::ops::ConflictChoice;
+        use crate::fs::ops::ConflictChoice;
         const BUTTON_COUNT: usize = 6;
 
         let choice = match key.code {

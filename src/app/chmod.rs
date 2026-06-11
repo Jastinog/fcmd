@@ -168,7 +168,7 @@ impl App {
                     let mut errors = 0;
                     let mut last_error = None;
                     for p in &paths {
-                        if let Err(e) = ops::chmod(p, mode) {
+                        if let Err(e) = perms::chmod(p, mode) {
                             last_error = Some(e.to_string());
                             errors += 1;
                         }
@@ -293,7 +293,7 @@ impl App {
                     let mut errors = 0;
                     let mut last_error = None;
                     for p in &paths {
-                        if let Err(e) = ops::chown(p, uid, gid) {
+                        if let Err(e) = perms::chown(p, uid, gid) {
                             last_error = Some(e.to_string());
                             errors += 1;
                         }

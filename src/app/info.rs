@@ -139,7 +139,7 @@ impl App {
         if is_dir_for_du {
             let (du_tx, du_rx) = tokio::sync::oneshot::channel();
             tokio::task::spawn_blocking(move || {
-                let (size, files, dirs) = ops::dir_stats(&du_path);
+                let (size, files, dirs) = du::dir_stats(&du_path);
                 let _ = du_tx.send((size, files, dirs));
             });
             self.info_du_rx = Some(du_rx);

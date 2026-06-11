@@ -13,13 +13,12 @@ use ratatui::{Terminal, backend::CrosstermBackend};
 
 mod app;
 mod archive;
-mod db;
-mod find;
-mod ops;
-mod panel;
+mod fs;
+mod model;
 mod preview;
+mod search;
+mod storage;
 mod theme;
-mod tree;
 mod ui;
 mod util;
 mod viewer;
