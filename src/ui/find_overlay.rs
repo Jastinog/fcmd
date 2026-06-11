@@ -8,8 +8,8 @@ use ratatui::{
 use unicode_width::UnicodeWidthStr;
 
 use crate::search::{FindScope, FindState};
-use crate::util::icons::file_icon;
 use crate::theme::Theme;
+use crate::util::icons::file_icon;
 
 use super::util::{centered_rect, display_width, truncate_to_width, truncate_to_width_left};
 
@@ -73,7 +73,8 @@ pub(super) fn render_find(f: &mut Frame, fs: &FindState, t: &Theme, area: Rect) 
 
     // Input line (cursor stays at the end; text scrolls to show the tail)
     let input_area = Rect::new(left_x, inner.y, left_w, 1);
-    let input_line = super::overlays::input_field_line(&fs.query, " \u{276f} ", left_w as usize, scope_color, t);
+    let input_line =
+        super::overlays::input_field_line(&fs.query, " \u{276f} ", left_w as usize, scope_color, t);
     f.render_widget(Paragraph::new(input_line), input_area);
 
     // Separator
@@ -219,21 +220,15 @@ pub(super) fn render_find(f: &mut Frame, fs: &FindState, t: &Theme, area: Rect) 
             let rwidth = right_w as usize;
 
             let items: Vec<ListItem> = if p.is_binary {
-                p.lines
-                    .iter()
-                    .skip(p.scroll)
-                    .take(content_height)
-                    .map(|line| {
-                        let max_content = rwidth;
-                        let content: String = if line.chars().count() > max_content {
-                            line.chars().take(max_content).collect()
-                        } else {
-                            line.clone()
-                        };
-                        let spans = super::preview::build_hex_spans(&content, t.fg_dim, t.fg, t.cyan);
-                        ListItem::new(Line::from(spans))
-                    })
-                    .collect()
+                super::hex::render_rows(
+                    p,
+                    p.scroll,
+                    content_height,
+                    crate::preview::HEX_COLS,
+                    t,
+                    None,
+                    &[],
+                )
             } else {
                 (0..content_height)
                     .filter_map(|i| {

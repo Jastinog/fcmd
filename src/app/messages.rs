@@ -2,7 +2,10 @@ use super::*;
 
 pub struct ArchiveLoadResult {
     pub archive_path: PathBuf,
-    pub result: std::io::Result<(crate::archive::ArchiveFormat, Vec<crate::archive::ArchiveEntry>)>,
+    pub result: std::io::Result<(
+        crate::archive::ArchiveFormat,
+        Vec<crate::archive::ArchiveEntry>,
+    )>,
 }
 
 pub struct PhantomEntry {
@@ -98,10 +101,13 @@ pub struct ViewerLoadResult {
     pub next_byte: Option<u64>,
 }
 
-/// An incremental block of additional viewer lines appended on scroll.
+/// An incremental block appended on scroll. For text content `lines` carries the
+/// new rows; for hex content `hex_bytes` carries the next raw byte block (the
+/// other is empty).
 pub struct ViewerChunkResult {
     pub path: PathBuf,
     pub lines: Vec<String>,
+    pub hex_bytes: Vec<u8>,
     pub next_byte: Option<u64>,
 }
 

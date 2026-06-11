@@ -24,12 +24,19 @@ impl App {
             // The viewer always opens as text; hex is an explicit toggle, so the
             // binary → hex auto-switch in `Preview::load` is intentionally bypassed.
             let (preview, next_byte) = if force_hex {
-                (Preview::load_hex(&path), None)
+                let p = Preview::load_hex(&path);
+                // Page in the rest of the file as the user scrolls.
+                let next = (p.hex_bytes.len() < p.binary_size).then_some(p.hex_bytes.len() as u64);
+                (p, next)
             } else {
                 let cl = Preview::load_first(&path, crate::preview::MAX_LINES);
                 (cl.preview, cl.next_byte)
             };
-            let _ = tx.send(super::ViewerLoadResult { path, preview, next_byte });
+            let _ = tx.send(super::ViewerLoadResult {
+                path,
+                preview,
+                next_byte,
+            });
         });
     }
 
@@ -37,32 +44,56 @@ impl App {
     /// spawn a load of the next block.
     pub(super) fn viewer_maybe_load_more(&mut self) {
         let visible = self.viewer_visible_height.max(1);
-        let Some(v) = self.viewer.as_mut() else { return };
+        let Some(v) = self.viewer.as_mut() else {
+            return;
+        };
         if !v.wants_more(visible) {
             return;
         }
         let Some(start) = v.next_byte else { return };
+        let is_binary = v.content.is_binary;
         v.loading_more = true;
         let path = v.path.clone();
         let (tx, rx) = tokio::sync::oneshot::channel();
         self.viewer_chunk_rx = Some(rx);
         tokio::task::spawn_blocking(move || {
-            if let Ok((lines, next_byte)) =
+            if is_binary {
+                if let Ok((hex_bytes, next_byte)) =
+                    Preview::read_more_hex(&path, start, crate::preview::HEX_CHUNK)
+                {
+                    let _ = tx.send(super::ViewerChunkResult {
+                        path,
+                        lines: Vec::new(),
+                        hex_bytes,
+                        next_byte,
+                    });
+                }
+            } else if let Ok((lines, next_byte)) =
                 Preview::read_more(&path, start, crate::preview::CHUNK_LINES)
             {
-                let _ = tx.send(super::ViewerChunkResult { path, lines, next_byte });
+                let _ = tx.send(super::ViewerChunkResult {
+                    path,
+                    lines,
+                    hex_bytes: Vec::new(),
+                    next_byte,
+                });
             }
         });
     }
 
     /// Apply an incrementally-loaded block, appending it to the viewer content.
     pub fn apply_viewer_chunk(&mut self, result: ViewerChunkResult) {
-        let Some(v) = self.viewer.as_mut() else { return };
+        let Some(v) = self.viewer.as_mut() else {
+            return;
+        };
         if v.path != result.path {
             return;
         }
-        v.append_lines(result.lines, result.next_byte);
-        if !v.content.is_binary {
+        if v.content.is_binary {
+            v.append_hex(result.hex_bytes, result.next_byte);
+            v.rescan_hex_search();
+        } else {
+            v.append_lines(result.lines, result.next_byte);
             self.spawn_viewer_highlight();
         }
         // Keep paging until the viewport's prefetch margin is satisfied.
@@ -71,7 +102,9 @@ impl App {
 
     /// Toggle the forced-hex view and reload the content in the new mode.
     fn toggle_hex(&mut self) {
-        let Some(v) = self.viewer.as_mut() else { return };
+        let Some(v) = self.viewer.as_mut() else {
+            return;
+        };
         v.force_hex = !v.force_hex;
         let path = v.path.clone();
         let force_hex = v.force_hex;
@@ -81,7 +114,9 @@ impl App {
     /// Apply an async viewer content load, guarding against stale results.
     /// Kicks off syntax highlighting and any further paging needed.
     pub fn apply_viewer_load(&mut self, result: ViewerLoadResult) {
-        let Some(v) = self.viewer.as_mut() else { return };
+        let Some(v) = self.viewer.as_mut() else {
+            return;
+        };
         if v.path != result.path {
             return;
         }
@@ -96,7 +131,9 @@ impl App {
 
     /// Spawn async syntax highlighting for the current viewer content.
     fn spawn_viewer_highlight(&mut self) {
-        let Some(v) = self.viewer.as_ref() else { return };
+        let Some(v) = self.viewer.as_ref() else {
+            return;
+        };
         let path = v.path.clone();
         let lines = v.content.lines.clone();
         let line_count = lines.len();
@@ -105,7 +142,11 @@ impl App {
         self.viewer_hl_rx = Some(rx);
         tokio::task::spawn_blocking(move || {
             if let Some(cache) = crate::viewer::highlight(&lines, &path, dark) {
-                let _ = tx.send(super::ViewerHlResult { path, line_count, cache });
+                let _ = tx.send(super::ViewerHlResult {
+                    path,
+                    line_count,
+                    cache,
+                });
             }
         });
     }
@@ -147,84 +188,13 @@ impl App {
     pub(super) fn handle_viewer(&mut self, key: KeyEvent) {
         let ctrl = key.modifiers.contains(KeyModifiers::CONTROL);
         let visible = self.viewer_visible();
+        let is_binary = self.viewer.as_ref().is_some_and(|v| v.content.is_binary);
+        // Motion and search keys are routed by content type inside the `Viewer`
+        // helpers (hex moves the byte cursor, text scrolls); arms that change app
+        // state (`self`) re-borrow the viewer themselves.
         match key.code {
             KeyCode::Esc | KeyCode::Char('q') => self.close_viewer(),
-            KeyCode::Char('j') | KeyCode::Down => {
-                if let Some(ref mut v) = self.viewer {
-                    v.scroll_down(1, visible);
-                }
-            }
-            KeyCode::Char('k') | KeyCode::Up => {
-                if let Some(ref mut v) = self.viewer {
-                    v.scroll_up(1);
-                }
-            }
-            KeyCode::Char('d') if ctrl => {
-                if let Some(ref mut v) = self.viewer {
-                    v.scroll_down(visible / 2, visible);
-                }
-            }
-            KeyCode::Char('u') if ctrl => {
-                if let Some(ref mut v) = self.viewer {
-                    v.scroll_up(visible / 2);
-                }
-            }
-            KeyCode::Char('f') if ctrl => {
-                if let Some(ref mut v) = self.viewer {
-                    v.scroll_down(visible, visible);
-                }
-            }
-            KeyCode::PageDown => {
-                if let Some(ref mut v) = self.viewer {
-                    v.scroll_down(visible, visible);
-                }
-            }
-            KeyCode::Char('b') if ctrl => {
-                if let Some(ref mut v) = self.viewer {
-                    v.scroll_up(visible);
-                }
-            }
-            KeyCode::PageUp => {
-                if let Some(ref mut v) = self.viewer {
-                    v.scroll_up(visible);
-                }
-            }
-            KeyCode::Char('G') => {
-                if let Some(ref mut v) = self.viewer {
-                    v.goto_bottom(visible);
-                }
-            }
-            KeyCode::Char('g') => {
-                if let Some(ref mut v) = self.viewer {
-                    v.goto_top();
-                }
-            }
-            KeyCode::Char('w') => {
-                if let Some(ref mut v) = self.viewer {
-                    v.toggle_wrap();
-                }
-            }
-            KeyCode::Char('#') => {
-                if let Some(ref mut v) = self.viewer {
-                    v.toggle_line_numbers();
-                }
-            }
             KeyCode::Char('x') | KeyCode::Tab => self.toggle_hex(),
-            KeyCode::Char('l') | KeyCode::Right => {
-                if let Some(ref mut v) = self.viewer {
-                    v.scroll_right(8);
-                }
-            }
-            KeyCode::Char('h') | KeyCode::Left => {
-                if let Some(ref mut v) = self.viewer {
-                    v.scroll_left(8);
-                }
-            }
-            KeyCode::Char('0') => {
-                if let Some(ref mut v) = self.viewer {
-                    v.scroll_line_start();
-                }
-            }
             KeyCode::Char('o') => {
                 if let Some(v) = self.viewer.as_ref() {
                     let path = v.path.clone();
@@ -232,22 +202,42 @@ impl App {
                 }
             }
             KeyCode::Char('/') => {
-                if let Some(ref mut v) = self.viewer {
-                    v.search.clear();
+                if let Some(v) = self.viewer.as_mut() {
+                    v.search_clear();
                 }
                 self.mode = Mode::ViewerSearch;
             }
-            KeyCode::Char('n') => {
-                if let Some(ref mut v) = self.viewer {
-                    v.search_next(visible);
+            // Goto byte offset (hex view only).
+            KeyCode::Char(':') if is_binary => {
+                if let Some(v) = self.viewer.as_mut() {
+                    v.goto.clear();
+                }
+                self.mode = Mode::ViewerGoto;
+            }
+            _ => {
+                if let Some(v) = self.viewer.as_mut() {
+                    match key.code {
+                        KeyCode::Char('j') | KeyCode::Down => v.move_down(1, visible),
+                        KeyCode::Char('k') | KeyCode::Up => v.move_up(1, visible),
+                        KeyCode::Char('d') if ctrl => v.move_down(visible / 2, visible),
+                        KeyCode::Char('u') if ctrl => v.move_up(visible / 2, visible),
+                        KeyCode::Char('f') if ctrl => v.move_down(visible, visible),
+                        KeyCode::PageDown => v.move_down(visible, visible),
+                        KeyCode::Char('b') if ctrl => v.move_up(visible, visible),
+                        KeyCode::PageUp => v.move_up(visible, visible),
+                        KeyCode::Char('G') => v.move_bottom(visible),
+                        KeyCode::Char('g') => v.move_top(),
+                        KeyCode::Char('w') => v.toggle_wrap(),
+                        KeyCode::Char('#') => v.toggle_line_numbers(),
+                        KeyCode::Char('l') | KeyCode::Right => v.move_right(visible),
+                        KeyCode::Char('h') | KeyCode::Left => v.move_left(visible),
+                        KeyCode::Char('0') => v.scroll_line_start(),
+                        KeyCode::Char('n') => v.search_advance(visible),
+                        KeyCode::Char('N') => v.search_retreat(visible),
+                        _ => {}
+                    }
                 }
             }
-            KeyCode::Char('N') => {
-                if let Some(ref mut v) = self.viewer {
-                    v.search_prev(visible);
-                }
-            }
-            _ => {}
         }
         // Page in more of a large file if we scrolled near the end.
         self.viewer_maybe_load_more();
@@ -258,14 +248,12 @@ impl App {
         match key.code {
             KeyCode::Char(c) => {
                 if let Some(ref mut v) = self.viewer {
-                    v.search.query.push(c);
-                    v.update_search(visible);
+                    v.search_push(c, visible);
                 }
             }
             KeyCode::Backspace => {
                 if let Some(ref mut v) = self.viewer {
-                    v.search.query.pop();
-                    v.update_search(visible);
+                    v.search_pop(visible);
                 }
             }
             KeyCode::Enter => {
@@ -273,7 +261,40 @@ impl App {
             }
             KeyCode::Esc => {
                 if let Some(ref mut v) = self.viewer {
-                    v.search.clear();
+                    v.search_clear();
+                }
+                self.mode = Mode::Viewer;
+            }
+            _ => {}
+        }
+    }
+
+    /// Handle input while entering a goto-offset in the hex viewer.
+    pub(super) fn handle_viewer_goto(&mut self, key: KeyEvent) {
+        let visible = self.viewer_visible();
+        match key.code {
+            KeyCode::Char(c) => {
+                if let Some(ref mut v) = self.viewer {
+                    v.goto.push(c);
+                }
+            }
+            KeyCode::Backspace => {
+                if let Some(ref mut v) = self.viewer {
+                    v.goto.pop();
+                }
+            }
+            KeyCode::Enter => {
+                if let Some(ref mut v) = self.viewer {
+                    if let Some(off) = crate::viewer::parse_offset(&v.goto) {
+                        v.goto_offset(off, visible);
+                    }
+                    v.goto.clear();
+                }
+                self.mode = Mode::Viewer;
+            }
+            KeyCode::Esc => {
+                if let Some(ref mut v) = self.viewer {
+                    v.goto.clear();
                 }
                 self.mode = Mode::Viewer;
             }

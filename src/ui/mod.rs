@@ -14,6 +14,7 @@ use crate::fs::ops::Register;
 use crate::theme::Theme;
 
 mod find_overlay;
+pub(crate) mod hex;
 mod overlays;
 mod panel;
 mod preview;
@@ -180,7 +181,10 @@ pub fn render(f: &mut Frame, app: &mut App) {
         overlays::render_help(f, app, full_area);
     }
 
-    if matches!(app.mode, Mode::Viewer | Mode::ViewerSearch) {
+    if matches!(
+        app.mode,
+        Mode::Viewer | Mode::ViewerSearch | Mode::ViewerGoto
+    ) {
         overlays::render_viewer(f, app, full_area);
     }
 
@@ -192,7 +196,15 @@ pub fn render(f: &mut Frame, app: &mut App) {
         overlays::render_bookmarks(f, app, full_area);
     }
 
-    if matches!(app.mode, Mode::Rename | Mode::Create | Mode::BookmarkAdd | Mode::BookmarkRename | Mode::SelectPattern | Mode::UnselectPattern) {
+    if matches!(
+        app.mode,
+        Mode::Rename
+            | Mode::Create
+            | Mode::BookmarkAdd
+            | Mode::BookmarkRename
+            | Mode::SelectPattern
+            | Mode::UnselectPattern
+    ) {
         overlays::render_input_popup(f, app, full_area);
     }
 
@@ -392,7 +404,11 @@ fn render_tab_bar(f: &mut Frame, app: &App, area: Rect) {
     let info_segment: Option<(String, ratatui::style::Color)> = if active_tasks > 0 {
         // Show latest running task status
         app.task_manager.tasks().iter().rev().find_map(|task| {
-            if let TaskState::Running { status_text, progress_pct } = &task.state {
+            if let TaskState::Running {
+                status_text,
+                progress_pct,
+            } = &task.state
+            {
                 let fg = match &task.kind {
                     TaskKind::Copy { .. } => t.cyan,
                     TaskKind::Move { .. } => t.yellow,
@@ -409,31 +425,29 @@ fn render_tab_bar(f: &mut Frame, app: &App, area: Rect) {
         let spinner = SPINNER[(app.tick_count % 4) as usize];
         Some((format!("{spinner} {progress}"), t.cyan))
     } else {
-        app.task_notification.as_ref().map(|notif| (notif.clone(), t.fg))
+        app.task_notification
+            .as_ref()
+            .map(|notif| (notif.clone(), t.fg))
     };
 
     // Compute info segment width
     let tabs_used: usize = spans.iter().map(|s| util::display_width(&s.content)).sum();
     let total_w = area.width as usize;
 
-    let (info_spans, info_w): (Option<Span>, usize) =
-        if let Some((text, fg)) = &info_segment {
-            let content = format!(" {text} ");
-            let needed = util::display_width(&content) + 1; // +1 for SEP_LEFT
-            let available = total_w.saturating_sub(tabs_used + tasks_w + 1);
+    let (info_spans, info_w): (Option<Span>, usize) = if let Some((text, fg)) = &info_segment {
+        let content = format!(" {text} ");
+        let needed = util::display_width(&content) + 1; // +1 for SEP_LEFT
+        let available = total_w.saturating_sub(tabs_used + tasks_w + 1);
 
-            if needed <= available {
-                let span = Span::styled(
-                    content.clone(),
-                    Style::default().fg(*fg).bg(t.bg_light),
-                );
-                (Some(span), needed)
-            } else {
-                (None, 0)
-            }
+        if needed <= available {
+            let span = Span::styled(content.clone(), Style::default().fg(*fg).bg(t.bg_light));
+            (Some(span), needed)
         } else {
             (None, 0)
-        };
+        }
+    } else {
+        (None, 0)
+    };
 
     // Fill gap between tabs and info/TASKS
     let gap = total_w.saturating_sub(tabs_used + info_w + tasks_w);
@@ -484,7 +498,12 @@ mod tests {
 
     #[test]
     fn not_too_small_at_minimums() {
-        assert!(!is_too_small(Rect::new(0, 0, MIN_TERM_WIDTH, MIN_TERM_HEIGHT)));
+        assert!(!is_too_small(Rect::new(
+            0,
+            0,
+            MIN_TERM_WIDTH,
+            MIN_TERM_HEIGHT
+        )));
         assert!(!is_too_small(Rect::new(0, 0, 80, 40)));
     }
 }

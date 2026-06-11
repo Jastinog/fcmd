@@ -4,12 +4,12 @@ pub(crate) use std::time::Instant;
 
 pub(crate) use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
-pub(crate) use crate::search::{FindScope, FindState};
 pub(crate) use crate::fs::du::{self, DuMsg};
 pub(crate) use crate::fs::ops::{self, Register, RegisterOp, UndoStack};
 pub(crate) use crate::fs::perms;
 pub(crate) use crate::model::panel::{self, DirCache, FileEntry, Panel, SortMode};
 pub(crate) use crate::preview::Preview;
+pub(crate) use crate::search::{FindScope, FindState};
 pub(crate) use crate::theme::Theme;
 pub(crate) use crate::viewer::Viewer;
 
@@ -29,9 +29,9 @@ pub mod messages;
 mod navigation;
 mod polling;
 mod rename;
-pub(crate) mod task_manager;
 mod search;
 mod select_pattern;
+pub(crate) mod task_manager;
 mod tasks;
 mod tree;
 mod viewer;
@@ -54,6 +54,7 @@ pub enum Mode {
     Create,
     Viewer,
     ViewerSearch,
+    ViewerGoto,
     ThemePicker,
     Bookmarks,
     BookmarkAdd,
@@ -291,25 +292,32 @@ impl App {
     pub fn new() -> std::io::Result<Self> {
         let cwd = std::env::current_dir()?;
 
-        let (db, visual_marks, dir_sorts, bookmarks, git_statuses) = match crate::storage::Db::init() {
-            Ok(db) => {
-                let marks = db.load_visual_marks().unwrap_or_default();
-                let raw_sorts = db.load_dir_sorts().unwrap_or_default();
-                let dir_sorts: HashMap<PathBuf, (SortMode, bool)> = raw_sorts
-                    .into_iter()
-                    .filter_map(|(p, (label, rev))| {
-                        SortMode::from_label(&label).map(|m| (p, (m, rev)))
-                    })
-                    .collect();
-                let bookmarks = db.load_bookmarks().unwrap_or_default();
-                let git_statuses = db.load_git_statuses().unwrap_or_default();
-                (Some(db), marks, dir_sorts, bookmarks, git_statuses)
-            }
-            Err(e) => {
-                eprintln!("Warning: DB init failed: {e}");
-                (None, HashMap::new(), HashMap::new(), Vec::new(), HashMap::new())
-            }
-        };
+        let (db, visual_marks, dir_sorts, bookmarks, git_statuses) =
+            match crate::storage::Db::init() {
+                Ok(db) => {
+                    let marks = db.load_visual_marks().unwrap_or_default();
+                    let raw_sorts = db.load_dir_sorts().unwrap_or_default();
+                    let dir_sorts: HashMap<PathBuf, (SortMode, bool)> = raw_sorts
+                        .into_iter()
+                        .filter_map(|(p, (label, rev))| {
+                            SortMode::from_label(&label).map(|m| (p, (m, rev)))
+                        })
+                        .collect();
+                    let bookmarks = db.load_bookmarks().unwrap_or_default();
+                    let git_statuses = db.load_git_statuses().unwrap_or_default();
+                    (Some(db), marks, dir_sorts, bookmarks, git_statuses)
+                }
+                Err(e) => {
+                    eprintln!("Warning: DB init failed: {e}");
+                    (
+                        None,
+                        HashMap::new(),
+                        HashMap::new(),
+                        Vec::new(),
+                        HashMap::new(),
+                    )
+                }
+            };
 
         // Restore session from DB
         let (tabs, active_tab, saved_layout) = if let Some(ref db) = db {
@@ -318,9 +326,11 @@ impl App {
                 Ok((saved, at)) if !saved.is_empty() => {
                     let mut tabs = Vec::new();
                     for st in &saved {
-                        let paths: Vec<PathBuf> = st.panel_paths.iter().map(|p| {
-                            if p.is_dir() { p.clone() } else { cwd.clone() }
-                        }).collect();
+                        let paths: Vec<PathBuf> = st
+                            .panel_paths
+                            .iter()
+                            .map(|p| if p.is_dir() { p.clone() } else { cwd.clone() })
+                            .collect();
                         let tab = Tab {
                             panels: vec![
                                 Panel::new(paths.first().cloned().unwrap_or_else(|| cwd.clone())),
@@ -711,20 +721,29 @@ impl App {
                 self.refresh_panels();
             }
             FileOpResult::ChmodPrefill { prefill, paths } => {
-                if self.mode == Mode::Normal || self.mode == Mode::Visual || self.mode == Mode::Select {
+                if self.mode == Mode::Normal
+                    || self.mode == Mode::Visual
+                    || self.mode == Mode::Select
+                {
                     self.rename_input = prefill;
                     self.chmod_paths = paths;
                     self.mode = Mode::Chmod;
                 }
             }
-            FileOpResult::ThemeLoad { name, theme, groups } => match theme {
+            FileOpResult::ThemeLoad {
+                name,
+                theme,
+                groups,
+            } => match theme {
                 Some(t) => {
                     self.theme = t;
                     self.apply_transparency();
                     self.theme_groups = groups;
                     self.theme_active_name = Some(name.clone());
                     let n = name.clone();
-                    self.db_spawn(move |db| { let _ = db.save_theme(&n); });
+                    self.db_spawn(move |db| {
+                        let _ = db.save_theme(&n);
+                    });
                     self.status_message = format!("Theme: {name}");
                 }
                 None => self.status_message = format!("Theme not found: {name}"),
@@ -752,7 +771,7 @@ impl App {
                         self.status_message = all.join(", ");
                     }
                 }
-            },
+            }
             FileOpResult::Clipboard { label, ok } => {
                 self.status_message = if ok {
                     label
@@ -785,10 +804,11 @@ impl App {
     pub fn apply_theme_preview(&mut self, mut theme: Option<Theme>) {
         if self.mode == Mode::ThemePicker {
             if self.transparent
-                && let Some(ref mut t) = theme {
-                    t.bg = ratatui::style::Color::Reset;
-                    t.status_bg = ratatui::style::Color::Reset;
-                }
+                && let Some(ref mut t) = theme
+            {
+                t.bg = ratatui::style::Color::Reset;
+                t.status_bg = ratatui::style::Color::Reset;
+            }
             self.theme_preview = theme;
         }
     }
@@ -837,6 +857,7 @@ impl App {
             Mode::Create => self.handle_create(key),
             Mode::Viewer => self.handle_viewer(key),
             Mode::ViewerSearch => self.handle_viewer_search(key),
+            Mode::ViewerGoto => self.handle_viewer_goto(key),
             Mode::ThemePicker => self.handle_theme_picker(key),
             Mode::Bookmarks => self.handle_bookmarks(key),
             Mode::BookmarkAdd => self.handle_bookmark_add(key),
@@ -1509,7 +1530,11 @@ mod tests {
         app.active_panel_mut().selected = 1; // "a.txt"
         app.enter_select_and_mark();
         assert_eq!(app.mode, Mode::Select);
-        assert!(app.active_panel().marked.contains(&PathBuf::from("/test/a.txt")));
+        assert!(
+            app.active_panel()
+                .marked
+                .contains(&PathBuf::from("/test/a.txt"))
+        );
     }
 
     #[tokio::test]
@@ -1541,7 +1566,10 @@ mod tests {
         let entries = make_test_entries(&["a.txt"]);
         let mut app = App::new_for_test(entries);
         app.mode = Mode::Info;
-        let lines = vec![("Name".into(), "test.txt".into()), ("Size".into(), "100 B".into())];
+        let lines = vec![
+            ("Name".into(), "test.txt".into()),
+            ("Size".into(), "100 B".into()),
+        ];
         app.apply_info_load(lines.clone());
         assert_eq!(app.info_lines.len(), 2);
         assert_eq!(app.info_lines[0].1, "test.txt");
@@ -1767,7 +1795,11 @@ mod tests {
         app.mode = Mode::Select;
         app.handle_select(KeyEvent::new(KeyCode::Down, KeyModifiers::SHIFT));
         // toggle_mark marks current and moves down
-        assert!(app.active_panel().marked.contains(&PathBuf::from("/test/a.txt")));
+        assert!(
+            app.active_panel()
+                .marked
+                .contains(&PathBuf::from("/test/a.txt"))
+        );
         assert_eq!(app.active_panel().selected, 2);
     }
 
@@ -2038,7 +2070,11 @@ mod tests {
         app.mode = Mode::Chown;
         app.visible_height = 20;
         app.chown_picker = Some(crate::app::chmod::ChownPicker {
-            users: vec![("root".into(), 0), ("user".into(), 1000), ("daemon".into(), 1)],
+            users: vec![
+                ("root".into(), 0),
+                ("user".into(), 1000),
+                ("daemon".into(), 1),
+            ],
             groups: vec![("wheel".into(), 0), ("staff".into(), 20)],
             user_cursor: 0,
             group_cursor: 0,

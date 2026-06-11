@@ -7,10 +7,9 @@ use ratatui::{
     text::{Line, Span},
     widgets::{Block, Borders, Clear, List, ListItem, Paragraph},
 };
-use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
+use unicode_width::UnicodeWidthChar;
 
 use crate::app::{App, Mode};
-use crate::ui::preview::{build_hex_spans, truncate_to_width};
 use crate::viewer::HlSpan;
 
 /// Gutter width (line-number column) for text content, in cells: 4 digits + space.
@@ -26,6 +25,7 @@ pub(in crate::ui) fn render_viewer(f: &mut Frame, app: &mut App, area: Rect) {
     }
 
     let is_searching = app.mode == Mode::ViewerSearch;
+    let is_goto = app.mode == Mode::ViewerGoto;
 
     let t = &app.theme;
     let block = Block::default()
@@ -34,14 +34,17 @@ pub(in crate::ui) fn render_viewer(f: &mut Frame, app: &mut App, area: Rect) {
         .style(Style::default().bg(t.bg));
     let inner = block.inner(area);
 
-    // Reserve rows: separator(1) + hint(1) + optional search bar(1).
-    let reserved: u16 = 2 + if is_searching { 1 } else { 0 };
+    // Reserve rows: separator(1) + hint(1) + optional search/goto bar(1).
+    let reserved: u16 = 2 + if is_searching || is_goto { 1 } else { 0 };
     let list_height = inner.height.saturating_sub(reserved) as usize;
     let iw = inner.width as usize;
 
     let (is_binary, show_gutter) = {
         let vw = app.viewer.as_ref().unwrap();
-        (vw.content.is_binary, !vw.content.is_binary && vw.line_numbers)
+        (
+            vw.content.is_binary,
+            !vw.content.is_binary && vw.line_numbers,
+        )
     };
     let gutter_cells = if show_gutter { GUTTER } else { 0 };
     let content_width = iw.saturating_sub(gutter_cells).max(1);
@@ -59,23 +62,36 @@ pub(in crate::ui) fn render_viewer(f: &mut Frame, app: &mut App, area: Rect) {
     let p = &v.content;
     let layout = &v.layout;
     let search = &v.search;
-    let has_matches = search.is_active();
-    let query = &search.query;
+    // Active match counter (n/total): hex search drives it for binary content.
+    let match_count: Option<(usize, usize)> = if is_binary {
+        v.hex_search
+            .is_active()
+            .then(|| (v.hex_search.current + 1, v.hex_search.matches.len()))
+    } else {
+        search
+            .is_active()
+            .then(|| (search.current + 1, search.matches.len()))
+    };
+    let query = if is_binary {
+        &v.hex_search.query
+    } else {
+        &search.query
+    };
     let scroll = p.scroll;
-    let total_rows = layout.total_rows();
+    let total_rows = v.total_rows();
 
     f.render_widget(Clear, area);
 
     // Title: name + info, plus match counter when searching.
-    let wrap_tag = if v.wrap && !is_binary { " \u{f1290}" } else { "" }; // 󱊐 wrap icon
-    let title = if has_matches {
+    let wrap_tag = if v.wrap && !is_binary {
+        " \u{f1290}"
+    } else {
+        ""
+    }; // 󱊐 wrap icon
+    let title = if let Some((cur, total)) = match_count {
         format!(
-            " \u{f0208} {} [{}]{} ({}/{}) ",
-            p.title,
-            p.info,
-            wrap_tag,
-            search.current + 1,
-            search.matches.len()
+            " \u{f0208} {} [{}]{} ({cur}/{total}) ",
+            p.title, p.info, wrap_tag
         )
     } else {
         format!(" \u{f0208} {} [{}]{} ", p.title, p.info, wrap_tag)
@@ -83,11 +99,24 @@ pub(in crate::ui) fn render_viewer(f: &mut Frame, app: &mut App, area: Rect) {
     let block = block.title(title).title_style(Style::default().fg(t.cyan));
     f.render_widget(block, area);
 
-    // Right-aligned position indicator on the top border.
+    // Right-aligned position indicator on the top border. With a byte cursor we
+    // show its offset and value; otherwise the last visible byte offset.
     let pos_text = if p.is_binary {
-        let (_, last_byte, total, pct) = p.hex_position(list_height);
+        let cols = v.hex_cols;
+        let total = p.binary_size;
+        let last_byte = ((scroll + list_height) * cols).min(p.hex_bytes.len());
+        let pct = if total > 0 {
+            (last_byte as u64 * 100 / total as u64) as u8
+        } else {
+            100
+        };
         let size_text = super::format_binary_size(total);
-        Some(format!(" 0x{last_byte:04X} {size_text} {pct}% "))
+        if let Some(c) = v.cursor.filter(|&c| c < p.hex_bytes.len()) {
+            let b = p.hex_bytes[c];
+            Some(format!(" \u{2316} 0x{c:X}={b:02X}/{b} {size_text} {pct}% "))
+        } else {
+            Some(format!(" 0x{last_byte:04X} {size_text} {pct}% "))
+        }
     } else if total_rows > 0 {
         let first_line = layout.rows.get(scroll).map(|r| r.logical + 1).unwrap_or(0);
         let total_lines = p.lines.len();
@@ -124,20 +153,13 @@ pub(in crate::ui) fn render_viewer(f: &mut Frame, app: &mut App, area: Rect) {
     let hl = v.highlight.as_ref();
 
     let items: Vec<ListItem> = if p.is_binary {
-        p.lines
-            .iter()
-            .skip(scroll)
-            .take(list_height)
-            .map(|line| {
-                let content = if line.width() > iw {
-                    truncate_to_width(line, iw)
-                } else {
-                    line.clone()
-                };
-                let spans = build_hex_spans(&content, t.fg_dim, t.fg, t.cyan);
-                ListItem::new(Line::from(spans))
-            })
-            .collect()
+        let cols = v.hex_cols;
+        // Search hits intersecting the visible byte window (computed once, then
+        // clipped per row inside the renderer).
+        let win_from = scroll * cols;
+        let win_to = (scroll + list_height) * cols;
+        let hits = v.hex_search.hits_in(win_from, win_to);
+        crate::ui::hex::render_rows(p, scroll, list_height, cols, t, v.cursor, &hits)
     } else {
         (0..list_height)
             .filter_map(|screen| {
@@ -159,7 +181,11 @@ pub(in crate::ui) fn render_viewer(f: &mut Frame, app: &mut App, area: Rect) {
                 }
 
                 // Visible char window for this row.
-                let begin = if layout.wrap { row.start } else { v.hcol.min(chars.len()) };
+                let begin = if layout.wrap {
+                    row.start
+                } else {
+                    v.hcol.min(chars.len())
+                };
                 let hard_end = if layout.wrap { row.end } else { chars.len() };
                 let mut w = 0usize;
                 let mut end = begin;
@@ -173,7 +199,15 @@ pub(in crate::ui) fn render_viewer(f: &mut Frame, app: &mut App, area: Rect) {
                 }
 
                 let line_hl = hl.and_then(|h| h.lines.get(logical)).map(Vec::as_slice);
-                push_row_spans(&mut spans, &style, line, &chars, begin..end, logical, line_hl);
+                push_row_spans(
+                    &mut spans,
+                    &style,
+                    line,
+                    &chars,
+                    begin..end,
+                    logical,
+                    line_hl,
+                );
                 Some(ListItem::new(Line::from(spans)))
             })
             .collect()
@@ -184,9 +218,25 @@ pub(in crate::ui) fn render_viewer(f: &mut Frame, app: &mut App, area: Rect) {
 
     let mut row_y = inner.y + list_height as u16;
 
-    // Search input bar.
+    // Search input bar. In hex mode the prompt reflects how the query is being
+    // interpreted (hex byte pattern vs literal ASCII).
     if is_searching {
-        let input_line = super::input_field_line(query, " / ", iw, t.blue, t);
+        let label = if is_binary {
+            if crate::viewer::is_hex_query(query) {
+                " hex / "
+            } else {
+                " ascii / "
+            }
+        } else {
+            " / "
+        };
+        let input_line = super::input_field_line(query, label, iw, t.blue, t);
+        let input_area = Rect::new(inner.x, row_y, inner.width, 1);
+        f.render_widget(Paragraph::new(input_line), input_area);
+        row_y += 1;
+    } else if is_goto {
+        let input_line =
+            super::input_field_line(&v.goto, " goto offset (0x… / dec) ", iw, t.blue, t);
         let input_area = Rect::new(inner.x, row_y, inner.width, 1);
         f.render_widget(Paragraph::new(input_line), input_area);
         row_y += 1;
@@ -204,7 +254,7 @@ pub(in crate::ui) fn render_viewer(f: &mut Frame, app: &mut App, area: Rect) {
     row_y += 1;
 
     // Hint line.
-    let hint_line = if is_searching {
+    let hint_line = if is_searching || is_goto {
         Line::from(vec![
             Span::styled(" \u{23ce}", Style::default().fg(t.blue)),
             Span::styled(" confirm  ", Style::default().fg(t.fg_dim)),
@@ -230,7 +280,11 @@ pub(in crate::ui) fn render_viewer(f: &mut Frame, app: &mut App, area: Rect) {
         hints.push(Span::styled(hex_label, Style::default().fg(t.fg_dim)));
         hints.push(Span::styled("/", Style::default().fg(t.cyan)));
         hints.push(Span::styled(" search  ", Style::default().fg(t.fg_dim)));
-        if has_matches {
+        if is_binary {
+            hints.push(Span::styled(":", Style::default().fg(t.cyan)));
+            hints.push(Span::styled(" goto  ", Style::default().fg(t.fg_dim)));
+        }
+        if match_count.is_some() {
             hints.push(Span::styled("n/N", Style::default().fg(t.cyan)));
             hints.push(Span::styled(" next/prev  ", Style::default().fg(t.fg_dim)));
         }
@@ -335,7 +389,10 @@ fn push_syntax_or_plain(
                 let start = s.start.max(vis.start);
                 let end = s.end.min(vis.end);
                 if start < end {
-                    spans.push(Span::styled(slice(start..end), Style::default().fg(s.color)));
+                    spans.push(Span::styled(
+                        slice(start..end),
+                        Style::default().fg(s.color),
+                    ));
                 }
             }
         }

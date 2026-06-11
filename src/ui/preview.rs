@@ -1,7 +1,7 @@
 use ratatui::{
     Frame,
     layout::Rect,
-    style::{Color, Style},
+    style::Style,
     text::{Line, Span},
     widgets::{Block, Borders, List, ListItem, Paragraph},
 };
@@ -23,27 +23,6 @@ pub(super) fn truncate_to_width(s: &str, max_width: usize) -> String {
         w += cw;
     }
     out
-}
-
-/// Build styled spans for a hex dump line: offset(dim), hex(fg), ascii(accent).
-pub(super) fn build_hex_spans(line: &str, dim: Color, fg: Color, accent: Color) -> Vec<Span<'static>> {
-    // Format: "OFFSET  HH HH ...  |ASCII...|"
-    if let Some(pipe_start) = line.find('|') {
-        let offset_end = line.find("  ").unwrap_or(8).min(10);
-        let offset_part: String = line.chars().take(offset_end).collect();
-        // saturating_sub: a malformed line whose pipe precedes offset_end must not
-        // underflow (usize) and panic.
-        let hex_part: String = line.chars().skip(offset_end).take(pipe_start.saturating_sub(offset_end)).collect();
-        let ascii_part: String = line.chars().skip(pipe_start).collect();
-        vec![
-            Span::styled(offset_part, Style::default().fg(dim)),
-            Span::styled(hex_part, Style::default().fg(fg)),
-            Span::styled(ascii_part, Style::default().fg(accent)),
-        ]
-    } else {
-        // Truncation line or other
-        vec![Span::styled(line.to_string(), Style::default().fg(dim))]
-    }
 }
 
 pub(super) fn render_preview(f: &mut Frame, preview: &Option<Preview>, area: Rect, t: &Theme) {
@@ -104,20 +83,7 @@ pub(super) fn render_preview(f: &mut Frame, preview: &Option<Preview>, area: Rec
     let width = inner.width as usize;
 
     let items: Vec<ListItem> = if p.is_binary {
-        p.lines
-            .iter()
-            .skip(p.scroll)
-            .take(visible)
-            .map(|line| {
-                let content = if line.width() > width {
-                    truncate_to_width(line, width)
-                } else {
-                    line.clone()
-                };
-                let spans = build_hex_spans(&content, t.fg_dim, t.fg, t.cyan);
-                ListItem::new(Line::from(spans))
-            })
-            .collect()
+        super::hex::render_rows(p, p.scroll, visible, crate::preview::HEX_COLS, t, None, &[])
     } else {
         (0..visible)
             .map(|i| {

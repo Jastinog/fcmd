@@ -29,8 +29,14 @@ pub const MAX_LINES: usize = 50_000;
 const MAX_FILE_SIZE: u64 = 50 * 1_048_576; // 50 MB
 pub const HEX_DUMP_MAX: usize = 262_144; // 256 KB
 
+/// Bytes per hex row (offset granularity for binary scroll positions).
+pub const HEX_COLS: usize = 16;
+
 /// Lines loaded per incremental chunk after the first block (viewer paging).
 pub const CHUNK_LINES: usize = 20_000;
+
+/// Raw bytes paged in per hex chunk after the first block.
+pub const HEX_CHUNK: usize = HEX_DUMP_MAX;
 
 /// Result of an incremental viewer load: a slice of lines plus, when the file
 /// continues past them, the byte offset to resume reading from.
@@ -46,6 +52,9 @@ pub struct Preview {
     pub info: String,
     pub is_binary: bool,
     pub binary_size: usize,
+    /// Raw bytes backing the hex dump (binary mode only); empty otherwise. Rows
+    /// are colored per-byte from this window rather than from `lines`.
+    pub hex_bytes: Vec<u8>,
 }
 
 impl Preview {
@@ -61,6 +70,7 @@ impl Preview {
             info: "loading".into(),
             is_binary: false,
             binary_size: 0,
+            hex_bytes: Vec::new(),
         }
     }
 
@@ -84,6 +94,7 @@ impl Preview {
                     info: "error".into(),
                     is_binary: false,
                     binary_size: 0,
+                    hex_bytes: Vec::new(),
                 };
             }
         };
@@ -96,6 +107,7 @@ impl Preview {
                 info: format!("{} bytes", meta.len()),
                 is_binary: false,
                 binary_size: 0,
+                hex_bytes: Vec::new(),
             };
         }
 
@@ -132,6 +144,7 @@ impl Preview {
                     info: "error".into(),
                     is_binary: false,
                     binary_size: 0,
+                    hex_bytes: Vec::new(),
                 };
             }
         };
@@ -147,6 +160,7 @@ impl Preview {
                     info: "error".into(),
                     is_binary: false,
                     binary_size: 0,
+                    hex_bytes: Vec::new(),
                 };
             }
         };
@@ -165,10 +179,7 @@ impl Preview {
                 if nul_count > 0 {
                     return Preview::load_binary(&bytes, title, file_size);
                 }
-                let non_text = sample
-                    .iter()
-                    .filter(|&&b| b < 0x08 || b == 0x7f)
-                    .count();
+                let non_text = sample.iter().filter(|&&b| b < 0x08 || b == 0x7f).count();
                 if !sample.is_empty() && non_text * 100 / sample.len() > 10 {
                     return Preview::load_binary(&bytes, title, file_size);
                 }
@@ -182,6 +193,7 @@ impl Preview {
                 info: "error".into(),
                 is_binary: false,
                 binary_size: 0,
+                hex_bytes: Vec::new(),
             },
         }
     }
@@ -198,6 +210,7 @@ impl Preview {
             info,
             is_binary: false,
             binary_size: 0,
+            hex_bytes: Vec::new(),
         }
     }
 
@@ -212,12 +225,20 @@ impl Preview {
             .unwrap_or_else(|| path.to_string_lossy().into_owned());
 
         if path.is_dir() {
-            return ChunkLoad { preview: Self::load_dir(path, title), next_byte: None };
+            return ChunkLoad {
+                preview: Self::load_dir(path, title),
+                next_byte: None,
+            };
         }
 
         let file = match fs::File::open(path) {
             Ok(f) => f,
-            Err(_) => return ChunkLoad { preview: Self::read_error(title), next_byte: None },
+            Err(_) => {
+                return ChunkLoad {
+                    preview: Self::read_error(title),
+                    next_byte: None,
+                };
+            }
         };
 
         match Self::read_lines_from(file, 0, max_lines) {
@@ -230,10 +251,14 @@ impl Preview {
                     info,
                     is_binary: false,
                     binary_size: 0,
+                    hex_bytes: Vec::new(),
                 };
                 ChunkLoad { preview, next_byte }
             }
-            Err(_) => ChunkLoad { preview: Self::read_error(title), next_byte: None },
+            Err(_) => ChunkLoad {
+                preview: Self::read_error(title),
+                next_byte: None,
+            },
         }
     }
 
@@ -247,6 +272,24 @@ impl Preview {
     ) -> std::io::Result<(Vec<String>, Option<u64>)> {
         let file = fs::File::open(path)?;
         Self::read_lines_from(file, start, max_lines)
+    }
+
+    /// Read up to `max_bytes` more raw bytes starting at byte `start`, used to
+    /// extend the hex window past the initial block. Returns the bytes and the
+    /// next resume offset (`None` at EOF).
+    pub fn read_more_hex(
+        path: &Path,
+        start: u64,
+        max_bytes: usize,
+    ) -> std::io::Result<(Vec<u8>, Option<u64>)> {
+        let mut file = fs::File::open(path)?;
+        let total = file.metadata().map(|m| m.len()).unwrap_or(0);
+        file.seek(SeekFrom::Start(start))?;
+        let mut buf = Vec::with_capacity(max_bytes.min(1 << 20));
+        file.take(max_bytes as u64).read_to_end(&mut buf)?;
+        let next = start + buf.len() as u64;
+        let next_byte = (next < total).then_some(next);
+        Ok((buf, next_byte))
     }
 
     /// Read at most `max_lines` newline-terminated lines from `file` starting at
@@ -271,7 +314,9 @@ impl Preview {
         let mut buf: Vec<u8> = Vec::new();
         for _ in 0..max_lines {
             buf.clear();
-            let n = (&mut reader).take(MAX_LINE_BYTES).read_until(b'\n', &mut buf)?;
+            let n = (&mut reader)
+                .take(MAX_LINE_BYTES)
+                .read_until(b'\n', &mut buf)?;
             if n == 0 {
                 return Ok((lines, None)); // EOF
             }
@@ -282,7 +327,11 @@ impl Preview {
             let text = String::from_utf8_lossy(&buf);
             lines.push(sanitize_line(&text));
         }
-        let next_byte = if consumed < total { Some(consumed) } else { None };
+        let next_byte = if consumed < total {
+            Some(consumed)
+        } else {
+            None
+        };
         Ok((lines, next_byte))
     }
 
@@ -294,6 +343,7 @@ impl Preview {
             info: "error".into(),
             is_binary: false,
             binary_size: 0,
+            hex_bytes: Vec::new(),
         }
     }
 
@@ -317,6 +367,7 @@ impl Preview {
                     info: "error".into(),
                     is_binary: false,
                     binary_size: 0,
+                    hex_bytes: Vec::new(),
                 };
             }
         };
@@ -366,6 +417,7 @@ impl Preview {
             info,
             is_binary: false,
             binary_size: 0,
+            hex_bytes: Vec::new(),
         }
     }
 
@@ -392,6 +444,7 @@ impl Preview {
                     info,
                     is_binary: false,
                     binary_size: 0,
+                    hex_bytes: Vec::new(),
                 }
             }
             Err(_) => Preview {
@@ -401,58 +454,35 @@ impl Preview {
                 info: "error".into(),
                 is_binary: false,
                 binary_size: 0,
+                hex_bytes: Vec::new(),
             },
         }
     }
 
     fn load_binary(bytes: &[u8], title: String, total_size: usize) -> Self {
         let dump_bytes = &bytes[..bytes.len().min(HEX_DUMP_MAX)];
-        let mut lines = Vec::new();
-        for chunk_offset in (0..dump_bytes.len()).step_by(16) {
-            let chunk = &dump_bytes[chunk_offset..dump_bytes.len().min(chunk_offset + 16)];
-            let mut hex_left = String::new();
-            let mut hex_right = String::new();
-            let mut ascii = String::new();
-            for (i, &b) in chunk.iter().enumerate() {
-                let hex = format!("{b:02x} ");
-                if i < 8 {
-                    hex_left.push_str(&hex);
-                } else {
-                    hex_right.push_str(&hex);
-                }
-                ascii.push(if b.is_ascii_graphic() || b == b' ' {
-                    b as char
-                } else {
-                    '.'
-                });
-            }
-            // Pad incomplete lines
-            for _ in chunk.len()..8 {
-                hex_left.push_str("   ");
-            }
-            for i in chunk.len()..16 {
-                if i >= 8 {
-                    hex_right.push_str("   ");
-                }
-            }
-            for _ in chunk.len()..16 {
-                ascii.push(' ');
-            }
-            lines.push(format!(
-                "{chunk_offset:08x}  {hex_left} {hex_right} |{ascii}|"
-            ));
-        }
-        if total_size > HEX_DUMP_MAX {
-            lines.push(format!("... truncated ({total_size} total bytes)"));
-        }
+        // Hex rows render directly from `hex_bytes`; `lines` is unused in binary
+        // mode (row counts come from the byte window). More of the file can be
+        // paged into `hex_bytes` on demand (see `read_more_hex`).
         let info = format!("binary, {total_size} bytes");
         Preview {
-            lines,
+            lines: Vec::new(),
             scroll: 0,
             title,
             info,
             is_binary: true,
             binary_size: total_size,
+            hex_bytes: dump_bytes.to_vec(),
+        }
+    }
+
+    /// Number of display rows: hex rows (16 bytes each) for binary content,
+    /// logical line count otherwise.
+    pub fn row_count(&self) -> usize {
+        if self.is_binary {
+            self.hex_bytes.len().div_ceil(HEX_COLS)
+        } else {
+            self.lines.len()
         }
     }
 
@@ -468,22 +498,16 @@ impl Preview {
         (first, total, pct)
     }
 
-    /// For binary previews: returns (first_byte_offset, last_byte_offset, total_bytes, percentage)
+    /// For binary previews: returns (first_byte_offset, last_byte_offset,
+    /// total_bytes, percentage). The percentage is relative to the whole file,
+    /// so it grows as more of a large file is paged in.
     pub fn hex_position(&self, visible: usize) -> (usize, usize, usize, u8) {
         if !self.is_binary || self.binary_size == 0 {
             return (0, 0, 0, 0);
         }
-        let first_line = self.scroll;
-        let last_line = (self.scroll + visible).min(self.lines.len());
-        let first_byte = first_line * 16;
-        // Last visible byte: each line is 16 bytes, but last line may be partial
-        let dump_size = self.binary_size.min(HEX_DUMP_MAX);
-        let last_byte = (last_line * 16).min(dump_size);
-        let pct = if dump_size > 0 {
-            ((last_byte as u64 * 100) / dump_size as u64) as u8
-        } else {
-            100
-        };
+        let first_byte = self.scroll * HEX_COLS;
+        let last_byte = ((self.scroll + visible) * HEX_COLS).min(self.hex_bytes.len());
+        let pct = ((last_byte as u64 * 100) / self.binary_size as u64) as u8;
         (first_byte, last_byte, self.binary_size, pct)
     }
 
@@ -492,7 +516,7 @@ impl Preview {
     }
 
     pub fn scroll_down(&mut self, n: usize, visible: usize) {
-        let max = self.lines.len().saturating_sub(visible);
+        let max = self.row_count().saturating_sub(visible);
         self.scroll = (self.scroll + n).min(max);
     }
 }
@@ -540,6 +564,7 @@ mod tests {
             info: String::new(),
             is_binary: false,
             binary_size: 0,
+            hex_bytes: Vec::new(),
         };
         assert_eq!(p.text_position(10), (0, 0, 0));
     }
@@ -553,6 +578,7 @@ mod tests {
             info: String::new(),
             is_binary: true,
             binary_size: 100,
+            hex_bytes: Vec::new(),
         };
         assert_eq!(p.text_position(10), (0, 0, 0));
     }
@@ -567,6 +593,7 @@ mod tests {
             info: String::new(),
             is_binary: false,
             binary_size: 0,
+            hex_bytes: Vec::new(),
         };
         let (first, total, pct) = p.text_position(20);
         assert_eq!(first, 11); // scroll + 1
@@ -585,26 +612,27 @@ mod tests {
             info: String::new(),
             is_binary: false,
             binary_size: 0,
+            hex_bytes: Vec::new(),
         };
         assert_eq!(p.hex_position(10), (0, 0, 0, 0));
     }
 
     #[test]
     fn hex_position_binary() {
-        let lines: Vec<String> = (0..16).map(|_| "hex line".into()).collect();
         let p = Preview {
-            lines,
+            lines: Vec::new(),
             scroll: 2,
             title: String::new(),
             info: String::new(),
             is_binary: true,
             binary_size: 256,
+            hex_bytes: (0..=255u8).collect(), // 256 bytes loaded
         };
         let (first_byte, last_byte, total, pct) = p.hex_position(10);
-        assert_eq!(first_byte, 32);  // 2 * 16
-        assert_eq!(last_byte, 192);  // (2+10) * 16
+        assert_eq!(first_byte, 32); // 2 * 16
+        assert_eq!(last_byte, 192); // (2+10) * 16
         assert_eq!(total, 256);
-        assert_eq!(pct, 75);         // 192 * 100 / 256
+        assert_eq!(pct, 75); // 192 * 100 / 256
     }
 
     // ── scroll_up / scroll_down ────────────────────────────────────
@@ -618,6 +646,7 @@ mod tests {
             info: String::new(),
             is_binary: false,
             binary_size: 0,
+            hex_bytes: Vec::new(),
         };
         p.scroll_up(5);
         assert_eq!(p.scroll, 0);
@@ -683,10 +712,10 @@ mod tests {
         assert!(p.is_binary);
         assert_eq!(p.binary_size, 256);
         assert!(p.info.contains("binary"));
-        // Hex dump lines: 256/16 = 16 lines
-        assert_eq!(p.lines.len(), 16);
-        // First line should start with 00000000
-        assert!(p.lines[0].starts_with("00000000"));
+        // Hex dump rows: 256/16 = 16 rows, all bytes retained.
+        assert_eq!(p.row_count(), 16);
+        assert_eq!(p.hex_bytes.len(), 256);
+        assert_eq!(p.hex_bytes[0], 0x00);
         let _ = std::fs::remove_dir_all(&dir);
     }
 
@@ -766,10 +795,31 @@ mod tests {
 
         let p = Preview::load(&path, MAX_LINES);
         assert!(p.is_binary);
-        assert_eq!(p.lines.len(), 1);
-        // Should have hex and ASCII representation
-        assert!(p.lines[0].contains("41 42 00 43 44"));
-        assert!(p.lines[0].contains("|AB.CD")); // NUL shown as '.'
+        // Binary content keeps no `lines`; one row of 5 bytes drives the render.
+        assert!(p.lines.is_empty());
+        assert_eq!(p.row_count(), 1);
+        assert_eq!(p.hex_bytes, vec![0x41, 0x42, 0x00, 0x43, 0x44]);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn read_more_hex_pages_past_first_block() {
+        let dir = std::env::temp_dir().join("fcmd_preview_test_hexpage");
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("big.bin");
+        let total = HEX_DUMP_MAX + 1000;
+        std::fs::write(&path, vec![0xABu8; total]).unwrap();
+
+        // First load caps at HEX_DUMP_MAX but reports the true size.
+        let p = Preview::load_hex(&path);
+        assert_eq!(p.hex_bytes.len(), HEX_DUMP_MAX);
+        assert_eq!(p.binary_size, total);
+
+        // Paging in from the cap reads the remaining 1000 bytes, then EOF.
+        let (bytes, next) = Preview::read_more_hex(&path, HEX_DUMP_MAX as u64, HEX_CHUNK).unwrap();
+        assert_eq!(bytes.len(), 1000);
+        assert_eq!(next, None);
         let _ = std::fs::remove_dir_all(&dir);
     }
 
@@ -784,6 +834,7 @@ mod tests {
             info: String::new(),
             is_binary: false,
             binary_size: 0,
+            hex_bytes: Vec::new(),
         };
         p.scroll_down(10, 5);
         assert_eq!(p.scroll, 0);
@@ -798,6 +849,7 @@ mod tests {
             info: String::new(),
             is_binary: false,
             binary_size: 0,
+            hex_bytes: Vec::new(),
         };
         p.scroll_up(10);
         assert_eq!(p.scroll, 0);
@@ -813,6 +865,7 @@ mod tests {
             info: String::new(),
             is_binary: false,
             binary_size: 0,
+            hex_bytes: Vec::new(),
         };
         // visible=10, max scroll = 20 - 10 = 10
         p.scroll_down(100, 10);
@@ -925,6 +978,7 @@ mod tests {
             info: String::new(),
             is_binary: false,
             binary_size: 0,
+            hex_bytes: Vec::new(),
         };
         p.scroll_down(5, 10); // scroll 5 down
         assert_eq!(p.scroll, 5);
