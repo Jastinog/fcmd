@@ -18,13 +18,23 @@ pub fn create_archive(paths: &[PathBuf], base_dir: &Path, output: &Path) -> io::
     Ok(())
 }
 
+/// What kind of filesystem object a [`CreateEntry`] represents.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum EntryKind {
+    Dir,
+    File,
+    Symlink,
+}
+
 /// One flattened item to add to an archive, in pre-order (a directory appears
 /// before its contents) so the writer always sees parents first.
 struct CreateEntry {
     abs: PathBuf,
     /// Path inside the archive, relative to `base_dir`, with `/` separators.
     rel: String,
-    is_dir: bool,
+    kind: EntryKind,
+    /// Source unix mode bits (permissions), preserved into the archive.
+    mode: u32,
 }
 
 /// Walk `paths` (relative to `base_dir`) into a flat, pre-ordered entry list so
@@ -48,11 +58,32 @@ fn collect_create_entries(
 }
 
 fn push_create_entry(abs: &Path, rel: String, out: &mut Vec<CreateEntry>) -> io::Result<()> {
-    if abs.is_dir() {
+    // `symlink_metadata` does not follow links, so symlinks are stored as links
+    // rather than being followed and packed as their target's content.
+    let meta = std::fs::symlink_metadata(abs)?;
+    let file_type = meta.file_type();
+
+    #[cfg(unix)]
+    let mode = {
+        use std::os::unix::fs::PermissionsExt;
+        meta.permissions().mode()
+    };
+    #[cfg(not(unix))]
+    let mode = if file_type.is_dir() { 0o755 } else { 0o644 };
+
+    if file_type.is_symlink() {
+        out.push(CreateEntry {
+            abs: abs.to_path_buf(),
+            rel,
+            kind: EntryKind::Symlink,
+            mode,
+        });
+    } else if file_type.is_dir() {
         out.push(CreateEntry {
             abs: abs.to_path_buf(),
             rel: rel.clone(),
-            is_dir: true,
+            kind: EntryKind::Dir,
+            mode,
         });
         // Sort children for deterministic archive ordering across platforms.
         let mut children: Vec<_> = std::fs::read_dir(abs)?.collect::<Result<_, _>>()?;
@@ -65,7 +96,8 @@ fn push_create_entry(abs: &Path, rel: String, out: &mut Vec<CreateEntry>) -> io:
         out.push(CreateEntry {
             abs: abs.to_path_buf(),
             rel,
-            is_dir: false,
+            kind: EntryKind::File,
+            mode,
         });
     }
     Ok(())
@@ -129,26 +161,50 @@ enum ArchiveSink {
 }
 
 impl ArchiveSink {
-    fn add_dir(&mut self, rel: &str, abs: &Path) -> io::Result<()> {
+    fn add_dir(&mut self, rel: &str, abs: &Path, mode: u32) -> io::Result<()> {
         match self {
             ArchiveSink::Zip { writer, options } => writer
-                .add_directory(format!("{rel}/"), *options)
+                .add_directory(format!("{rel}/"), options.unix_permissions(mode))
                 .map_err(io::Error::other),
             ArchiveSink::Tar(b) => b.append_dir(rel, abs),
         }
     }
 
-    fn add_file(&mut self, rel: &str, abs: &Path) -> io::Result<()> {
+    fn add_file(&mut self, rel: &str, abs: &Path, mode: u32) -> io::Result<()> {
         match self {
             ArchiveSink::Zip { writer, options } => {
-                writer.start_file(rel, *options).map_err(io::Error::other)?;
+                writer
+                    .start_file(rel, options.unix_permissions(mode))
+                    .map_err(io::Error::other)?;
                 let mut f = File::open(abs)?;
                 io::copy(&mut f, writer)?;
                 Ok(())
             }
             ArchiveSink::Tar(b) => {
+                // `append_file` derives the header (including mode) from the open file.
                 let mut f = File::open(abs)?;
                 b.append_file(rel, &mut f)
+            }
+        }
+    }
+
+    /// Store `abs` (a symlink) as a link entry rather than following it.
+    fn add_symlink(&mut self, rel: &str, abs: &Path, mode: u32) -> io::Result<()> {
+        let target = std::fs::read_link(abs)?;
+        match self {
+            ArchiveSink::Zip { writer, options } => writer
+                .add_symlink(
+                    rel,
+                    target.to_string_lossy().as_ref(),
+                    options.unix_permissions(mode),
+                )
+                .map_err(io::Error::other),
+            ArchiveSink::Tar(b) => {
+                let mut header = tar::Header::new_gnu();
+                header.set_entry_type(tar::EntryType::Symlink);
+                header.set_size(0);
+                header.set_mode(mode & 0o7777);
+                b.append_link(&mut header, rel, &target)
             }
         }
     }
@@ -234,10 +290,10 @@ fn create_stream_inner(
             break;
         }
         on_progress(done, total, &entry.rel);
-        if entry.is_dir {
-            sink.add_dir(&entry.rel, &entry.abs)?;
-        } else {
-            sink.add_file(&entry.rel, &entry.abs)?;
+        match entry.kind {
+            EntryKind::Dir => sink.add_dir(&entry.rel, &entry.abs, entry.mode)?,
+            EntryKind::File => sink.add_file(&entry.rel, &entry.abs, entry.mode)?,
+            EntryKind::Symlink => sink.add_symlink(&entry.rel, &entry.abs, entry.mode)?,
         }
         written += 1;
     }

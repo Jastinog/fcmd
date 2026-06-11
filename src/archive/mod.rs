@@ -463,6 +463,107 @@ mod tests {
         assert!(entries.iter().any(|e| e.path == "sub/b.txt"));
     }
 
+    #[cfg(unix)]
+    #[test]
+    fn roundtrip_preserves_exec_bit_and_symlink_tar() {
+        use std::os::unix::fs::PermissionsExt;
+        let dir = tempfile::tempdir().unwrap();
+        let src = dir.path().join("src");
+        std::fs::create_dir(&src).unwrap();
+        std::fs::write(src.join("run.sh"), b"#!/bin/sh\necho hi\n").unwrap();
+        std::fs::set_permissions(src.join("run.sh"), std::fs::Permissions::from_mode(0o755)).unwrap();
+        std::os::unix::fs::symlink("run.sh", src.join("link")).unwrap();
+
+        let tar = dir.path().join("a.tar");
+        create_archive(&[src.join("run.sh"), src.join("link")], &src, &tar).unwrap();
+
+        let out = dir.path().join("out");
+        std::fs::create_dir(&out).unwrap();
+        extract_all(&tar, &out).unwrap();
+
+        let mode = std::fs::metadata(out.join("run.sh")).unwrap().permissions().mode();
+        assert_eq!(mode & 0o777, 0o755, "executable bit lost on tar round-trip");
+
+        let link_meta = std::fs::symlink_metadata(out.join("link")).unwrap();
+        assert!(link_meta.file_type().is_symlink(), "tar symlink did not survive");
+        assert_eq!(std::fs::read_link(out.join("link")).unwrap(), Path::new("run.sh"));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn roundtrip_preserves_exec_bit_and_symlink_zip() {
+        use std::os::unix::fs::PermissionsExt;
+        let dir = tempfile::tempdir().unwrap();
+        let src = dir.path().join("src");
+        std::fs::create_dir(&src).unwrap();
+        std::fs::write(src.join("run.sh"), b"#!/bin/sh\necho hi\n").unwrap();
+        std::fs::set_permissions(src.join("run.sh"), std::fs::Permissions::from_mode(0o755)).unwrap();
+        std::os::unix::fs::symlink("run.sh", src.join("link")).unwrap();
+
+        let zip = dir.path().join("a.zip");
+        create_archive(&[src.join("run.sh"), src.join("link")], &src, &zip).unwrap();
+
+        let out = dir.path().join("out");
+        std::fs::create_dir(&out).unwrap();
+        extract_all(&zip, &out).unwrap();
+
+        let mode = std::fs::metadata(out.join("run.sh")).unwrap().permissions().mode();
+        assert_eq!(mode & 0o777, 0o755, "executable bit lost on zip round-trip");
+
+        let link_meta = std::fs::symlink_metadata(out.join("link")).unwrap();
+        assert!(link_meta.file_type().is_symlink(), "zip symlink did not survive");
+        assert_eq!(std::fs::read_link(out.join("link")).unwrap(), Path::new("run.sh"));
+    }
+
+    /// Build a raw 512-byte USTAR symlink header. The safe `tar::Builder` rejects
+    /// `..` in entry names, so a malicious archive must be hand-assembled.
+    #[cfg(unix)]
+    fn raw_tar_symlink_block(name: &str, target: &str) -> Vec<u8> {
+        let mut h = [0u8; 512];
+        h[..name.len()].copy_from_slice(name.as_bytes());
+        h[100..108].copy_from_slice(b"0000777\0"); // mode
+        h[124..136].copy_from_slice(b"00000000000\0"); // size = 0
+        h[156] = b'2'; // typeflag: symlink
+        h[157..157 + target.len()].copy_from_slice(target.as_bytes());
+        h[257..263].copy_from_slice(b"ustar\0");
+        h[263..265].copy_from_slice(b"00");
+        // Checksum: sum of all bytes treating the checksum field as spaces.
+        for b in &mut h[148..156] {
+            *b = b' ';
+        }
+        let sum: u32 = h.iter().map(|&b| b as u32).sum();
+        let chk = format!("{sum:06o}\0 ");
+        h[148..156].copy_from_slice(chk.as_bytes());
+        h.to_vec()
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn tar_symlink_entry_name_cannot_escape_dest() {
+        let dir = tempfile::tempdir().unwrap();
+        let tar = dir.path().join("evil.tar");
+        {
+            let mut bytes = raw_tar_symlink_block("../escape_link", "/etc/passwd");
+            bytes.extend(std::iter::repeat_n(0u8, 1024)); // end-of-archive marker
+            std::fs::write(&tar, &bytes).unwrap();
+        }
+
+        let dest = dir.path().join("out");
+        std::fs::create_dir(&dest).unwrap();
+        extract_all(&tar, &dest).unwrap();
+
+        // The `..` is stripped: nothing lands above dest.
+        assert!(!dir.path().join("escape_link").exists());
+        let landed = dest.join("escape_link");
+        assert!(
+            std::fs::symlink_metadata(&landed)
+                .unwrap()
+                .file_type()
+                .is_symlink(),
+            "symlink should be recreated inside dest"
+        );
+    }
+
     #[test]
     fn create_stream_honours_cancel_flag() {
         let dir = tempfile::tempdir().unwrap();

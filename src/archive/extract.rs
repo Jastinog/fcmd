@@ -147,6 +147,33 @@ fn entry_matches(filter: Option<&str>, name: &str) -> bool {
     }
 }
 
+// ── Unix permission / symlink helpers ────────────────────────────────
+//
+// Gated behind `#[cfg(unix)]`; on other platforms mode bits and symlinks are
+// simply not reproduced (the previous behaviour).
+
+/// Whether a unix mode word describes a symlink (`S_IFLNK`).
+#[cfg(unix)]
+fn is_symlink_mode(mode: u32) -> bool {
+    mode & 0o170000 == 0o120000
+}
+
+/// Apply unix permission bits to an already-written path.
+#[cfg(unix)]
+fn apply_mode(path: &Path, mode: u32) -> io::Result<()> {
+    use std::os::unix::fs::PermissionsExt;
+    // Mask to the permission bits; the type bits (S_IFREG etc.) are not settable.
+    std::fs::set_permissions(path, std::fs::Permissions::from_mode(mode & 0o7777))
+}
+
+/// (Re)create a symlink at `link` pointing at `target`, replacing whatever is
+/// already there so the underlying `symlink(2)` does not fail with `EEXIST`.
+#[cfg(unix)]
+fn create_symlink(target: &Path, link: &Path) -> io::Result<()> {
+    let _ = std::fs::remove_file(link);
+    std::os::unix::fs::symlink(target, link)
+}
+
 // ── Zip ──────────────────────────────────────────────────────────────
 
 fn list_zip(path: &Path) -> io::Result<Vec<ArchiveEntry>> {
@@ -269,8 +296,28 @@ fn extract_zip_stream(
                     }
                 }
             }
-            let mut out_file = File::create(&out_path)?;
-            io::copy(&mut entry, &mut out_file)?;
+
+            #[cfg(unix)]
+            {
+                let mode = entry.unix_mode();
+                if mode.map(is_symlink_mode).unwrap_or(false) {
+                    // zip stores the link target as the entry's file content.
+                    let mut target = String::new();
+                    entry.read_to_string(&mut target)?;
+                    create_symlink(Path::new(&target), &out_path)?;
+                } else {
+                    let mut out_file = File::create(&out_path)?;
+                    io::copy(&mut entry, &mut out_file)?;
+                    if let Some(m) = mode {
+                        apply_mode(&out_path, m)?;
+                    }
+                }
+            }
+            #[cfg(not(unix))]
+            {
+                let mut out_file = File::create(&out_path)?;
+                io::copy(&mut entry, &mut out_file)?;
+            }
         }
         outcome.extracted.push(out_path);
         done += 1;
@@ -393,7 +440,8 @@ fn extract_tar_stream(
 
         on_progress(done, total, &name);
 
-        if entry.header().entry_type().is_dir() {
+        let entry_type = entry.header().entry_type();
+        if entry_type.is_dir() {
             std::fs::create_dir_all(&out_path)?;
         } else {
             if let Some(parent) = out_path.parent() {
@@ -419,8 +467,32 @@ fn extract_tar_stream(
                     }
                 }
             }
-            let mut out_file = File::create(&out_path)?;
-            io::copy(&mut entry, &mut out_file)?;
+
+            if entry_type.is_symlink() {
+                // A symlink/hardlink in a tar has no payload; the target lives in
+                // the header. Without this branch it would land as an empty file.
+                #[cfg(unix)]
+                if let Some(target) = entry.link_name()? {
+                    create_symlink(&target, &out_path)?;
+                }
+            } else if entry_type.is_hard_link() {
+                #[cfg(unix)]
+                if let Some(target) = entry.link_name()? {
+                    // Hardlink targets are paths inside the archive; resolve them
+                    // against `dest`, sanitized the same way as entry names.
+                    let safe = sanitize_archive_path(&target.to_string_lossy());
+                    let link_target = dest.join(safe);
+                    let _ = std::fs::remove_file(&out_path);
+                    std::fs::hard_link(&link_target, &out_path)?;
+                }
+            } else {
+                let mut out_file = File::create(&out_path)?;
+                io::copy(&mut entry, &mut out_file)?;
+                #[cfg(unix)]
+                if let Ok(mode) = entry.header().mode() {
+                    apply_mode(&out_path, mode)?;
+                }
+            }
         }
         outcome.extracted.push(out_path);
         done += 1;
