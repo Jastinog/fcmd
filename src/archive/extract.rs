@@ -224,6 +224,28 @@ fn remove_if_symlink(path: &Path) {
     }
 }
 
+/// Write a regular-file entry to `out_path`, honouring `cancel` mid-file.
+///
+/// Drops any pre-existing symlink first (symlink-slip defence), then streams
+/// `reader` into a fresh file. Returns `Ok(false)` if cancelled mid-copy, having
+/// removed the partial file; the caller should then stop the extraction. The
+/// `break`/`outcome` bookkeeping stays at the call site so control flow is local.
+fn write_file_entry<R: Read + ?Sized>(
+    reader: &mut R,
+    out_path: &Path,
+    cancel: &AtomicBool,
+) -> io::Result<bool> {
+    remove_if_symlink(out_path);
+    let mut out_file = File::create(out_path)?;
+    if copy_with_cancel(reader, &mut out_file, cancel)? {
+        Ok(true)
+    } else {
+        drop(out_file);
+        let _ = std::fs::remove_file(out_path);
+        Ok(false)
+    }
+}
+
 // ── Zip ──────────────────────────────────────────────────────────────
 
 fn list_zip(path: &Path) -> io::Result<Vec<ArchiveEntry>> {
@@ -343,39 +365,25 @@ fn extract_zip_stream(
                 }
             }
 
+            // On unix a zip entry may be a symlink, with the target stored as the
+            // entry's content; restore it as a link and skip the regular-file path.
             #[cfg(unix)]
-            {
-                let mode = entry.unix_mode();
-                if mode.map(is_symlink_mode).unwrap_or(false) {
-                    // zip stores the link target as the entry's file content.
-                    let mut target = String::new();
-                    entry.read_to_string(&mut target)?;
-                    create_symlink(Path::new(&target), &out_path)?;
-                } else {
-                    // Never write through an existing symlink at this path.
-                    remove_if_symlink(&out_path);
-                    let mut out_file = File::create(&out_path)?;
-                    if !copy_with_cancel(&mut entry, &mut out_file, cancel)? {
-                        drop(out_file);
-                        let _ = std::fs::remove_file(&out_path);
-                        outcome.cancelled = true;
-                        break;
-                    }
-                    if let Some(m) = mode {
-                        apply_mode(&out_path, m)?;
-                    }
-                }
+            if entry.unix_mode().map(is_symlink_mode).unwrap_or(false) {
+                let mut target = String::new();
+                entry.read_to_string(&mut target)?;
+                create_symlink(Path::new(&target), &out_path)?;
+                outcome.extracted.push(out_path);
+                done += 1;
+                continue;
             }
-            #[cfg(not(unix))]
-            {
-                remove_if_symlink(&out_path);
-                let mut out_file = File::create(&out_path)?;
-                if !copy_with_cancel(&mut entry, &mut out_file, cancel)? {
-                    drop(out_file);
-                    let _ = std::fs::remove_file(&out_path);
-                    outcome.cancelled = true;
-                    break;
-                }
+
+            if !write_file_entry(&mut entry, &out_path, cancel)? {
+                outcome.cancelled = true;
+                break;
+            }
+            #[cfg(unix)]
+            if let Some(m) = entry.unix_mode() {
+                apply_mode(&out_path, m)?;
             }
         }
         outcome.extracted.push(out_path);
@@ -557,12 +565,7 @@ fn extract_tar_stream(
                     std::fs::hard_link(&link_target, &out_path)?;
                 }
             } else {
-                // Never write through an existing symlink at this path.
-                remove_if_symlink(&out_path);
-                let mut out_file = File::create(&out_path)?;
-                if !copy_with_cancel(&mut entry, &mut out_file, cancel)? {
-                    drop(out_file);
-                    let _ = std::fs::remove_file(&out_path);
+                if !write_file_entry(&mut entry, &out_path, cancel)? {
                     outcome.cancelled = true;
                     break;
                 }
