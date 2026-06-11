@@ -526,7 +526,7 @@ impl App {
         let output = self.active_panel().path.join(name);
         if archive::ArchiveFormat::from_path(&output).is_none() {
             self.status_message =
-                "Unknown format. Use .zip, .tar, .tar.gz, .tar.bz2, .tar.xz".into();
+                "Unknown format. Use .zip, .tar, .tar.gz, .tar.bz2, .tar.xz, .tar.zst".into();
             return;
         }
         if !force && output.exists() {

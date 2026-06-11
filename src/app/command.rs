@@ -263,7 +263,7 @@ impl App {
                     Some(n) => n,
                     None => {
                         self.status_message =
-                            "Usage: :archive <name.zip|.tar.gz|.tar.bz2|.tar.xz>".into();
+                            "Usage: :archive <name.zip|.tar.gz|.tar.bz2|.tar.xz|.tar.zst>".into();
                         return;
                     }
                 };

@@ -52,6 +52,7 @@ pub enum ArchiveFormat {
     TarGz,
     TarBz2,
     TarXz,
+    TarZst,
 }
 
 impl ArchiveFormat {
@@ -63,6 +64,8 @@ impl ArchiveFormat {
             Some(ArchiveFormat::TarBz2)
         } else if name.ends_with(".tar.xz") || name.ends_with(".txz") {
             Some(ArchiveFormat::TarXz)
+        } else if name.ends_with(".tar.zst") || name.ends_with(".tzst") {
+            Some(ArchiveFormat::TarZst)
         } else if name.ends_with(".tar") {
             Some(ArchiveFormat::Tar)
         } else if name.ends_with(".zip") {
@@ -70,6 +73,39 @@ impl ArchiveFormat {
         } else {
             None
         }
+    }
+
+    /// Detect format from the file's leading magic bytes. Fallback for archives
+    /// with a missing or misleading extension. Compressed streams are reported as
+    /// their `Tar*` form, matching this module's convention that `.gz`/`.bz2`/
+    /// `.xz`/`.zst` wrap a tar.
+    pub fn sniff(path: &Path) -> Option<Self> {
+        use std::io::Read;
+        let mut file = std::fs::File::open(path).ok()?;
+        // 264 bytes covers the tar `ustar` magic at offset 257.
+        let mut buf = [0u8; 264];
+        let n = file.read(&mut buf).ok()?;
+        let head = &buf[..n];
+        if head.starts_with(&[0x50, 0x4B, 0x03, 0x04]) {
+            Some(ArchiveFormat::Zip)
+        } else if head.starts_with(&[0x1F, 0x8B]) {
+            Some(ArchiveFormat::TarGz)
+        } else if head.starts_with(&[0x42, 0x5A, 0x68]) {
+            Some(ArchiveFormat::TarBz2)
+        } else if head.starts_with(&[0xFD, 0x37, 0x7A, 0x58, 0x5A, 0x00]) {
+            Some(ArchiveFormat::TarXz)
+        } else if head.starts_with(&[0x28, 0xB5, 0x2F, 0xFD]) {
+            Some(ArchiveFormat::TarZst)
+        } else if n >= 262 && &buf[257..262] == b"ustar" {
+            Some(ArchiveFormat::Tar)
+        } else {
+            None
+        }
+    }
+
+    /// Detect by extension first, falling back to magic-byte sniffing.
+    pub fn detect(path: &Path) -> Option<Self> {
+        Self::from_path(path).or_else(|| Self::sniff(path))
     }
 
     #[allow(dead_code)]
@@ -80,12 +116,13 @@ impl ArchiveFormat {
             ArchiveFormat::TarGz => "tar.gz",
             ArchiveFormat::TarBz2 => "tar.bz2",
             ArchiveFormat::TarXz => "tar.xz",
+            ArchiveFormat::TarZst => "tar.zst",
         }
     }
 }
 
 pub fn is_archive(path: &Path) -> bool {
-    ArchiveFormat::from_path(path).is_some()
+    ArchiveFormat::detect(path).is_some()
 }
 
 // ── Streaming hooks (progress / conflict / cancel) ───────────────────
@@ -237,6 +274,52 @@ mod tests {
         assert!(extracted.len() >= 2);
         assert!(extract_all_dir.join("hello.txt").exists());
         assert!(extract_all_dir.join("sub/nested.txt").exists());
+    }
+
+    #[test]
+    fn sniff_detects_misnamed_zip() {
+        let dir = tempfile::tempdir().unwrap();
+        let zip = dir.path().join("real.zip");
+        make_hello_zip(&zip, b"hi");
+        let renamed = dir.path().join("mystery.bin");
+        std::fs::rename(&zip, &renamed).unwrap();
+
+        // Extension yields nothing; magic-byte sniff recovers the format.
+        assert_eq!(ArchiveFormat::from_path(&renamed), None);
+        assert_eq!(ArchiveFormat::detect(&renamed), Some(ArchiveFormat::Zip));
+        assert!(is_archive(&renamed));
+
+        let (fmt, entries) = list_archive(&renamed).unwrap();
+        assert_eq!(fmt, ArchiveFormat::Zip);
+        assert!(entries.iter().any(|e| e.path == "hello.txt"));
+
+        let out = dir.path().join("out");
+        std::fs::create_dir(&out).unwrap();
+        extract_all(&renamed, &out).unwrap();
+        assert!(out.join("hello.txt").exists());
+    }
+
+    #[test]
+    fn roundtrip_tar_zst() {
+        let dir = tempfile::tempdir().unwrap();
+        let src = dir.path().join("src");
+        std::fs::create_dir(&src).unwrap();
+        std::fs::write(src.join("a.txt"), "zstd content").unwrap();
+
+        let arc = dir.path().join("out.tar.zst");
+        create_archive(&[src.join("a.txt")], &src, &arc).unwrap();
+
+        let (fmt, entries) = list_archive(&arc).unwrap();
+        assert_eq!(fmt, ArchiveFormat::TarZst);
+        assert!(entries.iter().any(|e| e.path == "a.txt"));
+
+        let out = dir.path().join("out");
+        std::fs::create_dir(&out).unwrap();
+        extract_all(&arc, &out).unwrap();
+        assert_eq!(
+            std::fs::read_to_string(out.join("a.txt")).unwrap(),
+            "zstd content"
+        );
     }
 
     #[test]

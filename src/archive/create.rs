@@ -110,6 +110,7 @@ enum CompWriter {
     Gz(flate2::write::GzEncoder<File>),
     Bz2(bzip2::write::BzEncoder<File>),
     Xz(xz2::write::XzEncoder<File>),
+    Zst(zstd::stream::write::Encoder<'static, File>),
 }
 
 impl io::Write for CompWriter {
@@ -119,6 +120,7 @@ impl io::Write for CompWriter {
             Self::Gz(w) => w.write(buf),
             Self::Bz2(w) => w.write(buf),
             Self::Xz(w) => w.write(buf),
+            Self::Zst(w) => w.write(buf),
         }
     }
     fn flush(&mut self) -> io::Result<()> {
@@ -127,6 +129,7 @@ impl io::Write for CompWriter {
             Self::Gz(w) => w.flush(),
             Self::Bz2(w) => w.flush(),
             Self::Xz(w) => w.flush(),
+            Self::Zst(w) => w.flush(),
         }
     }
 }
@@ -144,6 +147,10 @@ impl CompWriter {
                 Ok(())
             }
             Self::Xz(w) => {
+                w.finish()?;
+                Ok(())
+            }
+            Self::Zst(w) => {
                 w.finish()?;
                 Ok(())
             }
@@ -281,6 +288,9 @@ fn create_stream_inner(
                     bzip2::Compression::default(),
                 )),
                 ArchiveFormat::TarXz => CompWriter::Xz(xz2::write::XzEncoder::new(file, 6)),
+                ArchiveFormat::TarZst => {
+                    CompWriter::Zst(zstd::stream::write::Encoder::new(file, 0)?)
+                }
                 _ => CompWriter::Plain(file),
             };
             ArchiveSink::Tar(tar::Builder::new(writer))

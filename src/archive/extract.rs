@@ -14,7 +14,7 @@ use super::{
 
 /// List all entries in an archive. Returns a flat list sorted by path.
 pub fn list_archive(path: &Path) -> io::Result<(ArchiveFormat, Vec<ArchiveEntry>)> {
-    let format = ArchiveFormat::from_path(path)
+    let format = ArchiveFormat::detect(path)
         .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidInput, "Unknown archive format"))?;
 
     let mut entries = match format {
@@ -23,6 +23,7 @@ pub fn list_archive(path: &Path) -> io::Result<(ArchiveFormat, Vec<ArchiveEntry>
         ArchiveFormat::TarGz => list_tar(path, TarCompression::Gz)?,
         ArchiveFormat::TarBz2 => list_tar(path, TarCompression::Bz2)?,
         ArchiveFormat::TarXz => list_tar(path, TarCompression::Xz)?,
+        ArchiveFormat::TarZst => list_tar(path, TarCompression::Zst)?,
     };
 
     // Synthesize missing directory entries
@@ -128,7 +129,7 @@ pub fn extract_stream(
     resolve: &mut ConflictFn,
     cancel: &AtomicBool,
 ) -> io::Result<ExtractOutcome> {
-    let format = ArchiveFormat::from_path(archive_path)
+    let format = ArchiveFormat::detect(archive_path)
         .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidInput, "Unknown archive format"))?;
 
     let req = ExtractRequest {
@@ -390,6 +391,7 @@ enum TarCompression {
     Gz,
     Bz2,
     Xz,
+    Zst,
 }
 
 fn tar_compression(format: ArchiveFormat) -> TarCompression {
@@ -397,6 +399,7 @@ fn tar_compression(format: ArchiveFormat) -> TarCompression {
         ArchiveFormat::TarGz => TarCompression::Gz,
         ArchiveFormat::TarBz2 => TarCompression::Bz2,
         ArchiveFormat::TarXz => TarCompression::Xz,
+        ArchiveFormat::TarZst => TarCompression::Zst,
         _ => TarCompression::None,
     }
 }
@@ -433,6 +436,10 @@ fn open_tar_reader(path: &Path, compression: TarCompression) -> io::Result<Box<d
         }
         TarCompression::Xz => {
             let decoder = xz2::read::XzDecoder::new(buf);
+            Ok(Box::new(decoder))
+        }
+        TarCompression::Zst => {
+            let decoder = zstd::stream::read::Decoder::new(buf)?;
             Ok(Box::new(decoder))
         }
     }
