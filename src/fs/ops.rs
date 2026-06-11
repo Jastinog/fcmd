@@ -99,10 +99,54 @@ pub enum ConflictChoice {
     Abort,
 }
 
+/// Sticky overwrite/skip state shared by the paste path and the archive-extract
+/// path so both resolve conflicts through one state machine.
 #[derive(Default)]
-struct ConflictPolicy {
+pub(crate) struct ConflictPolicy {
     overwrite_all: bool,
     skip_all: bool,
+}
+
+impl ConflictPolicy {
+    /// If a sticky choice is already in effect, return it (`true` = overwrite,
+    /// `false` = skip) without prompting. `None` means the caller must ask.
+    pub(crate) fn preempt(&self) -> Option<bool> {
+        if self.overwrite_all {
+            Some(true)
+        } else if self.skip_all {
+            Some(false)
+        } else {
+            None
+        }
+    }
+
+    /// Apply a user's `choice`, updating sticky state, and return whether to
+    /// overwrite. `src_mod`/`dst_mod` are consulted only for `OverwriteNewer`.
+    /// `Abort` is surfaced as the abort sentinel error.
+    pub(crate) fn decide(
+        &mut self,
+        choice: ConflictChoice,
+        src_mod: Option<SystemTime>,
+        dst_mod: Option<SystemTime>,
+    ) -> Result<bool, std::io::Error> {
+        match choice {
+            ConflictChoice::Overwrite => Ok(true),
+            ConflictChoice::Skip => Ok(false),
+            ConflictChoice::OverwriteAll => {
+                self.overwrite_all = true;
+                Ok(true)
+            }
+            ConflictChoice::SkipAll => {
+                self.skip_all = true;
+                Ok(false)
+            }
+            ConflictChoice::OverwriteNewer => Ok(match (src_mod, dst_mod) {
+                (Some(s), Some(d)) => s > d,
+                _ => true, // if we can't determine, overwrite
+            }),
+            ConflictChoice::Abort => Err(abort_error()),
+        }
+    }
 }
 
 /// Total size of a path (recursive for directories).
@@ -229,34 +273,13 @@ fn resolve_file_conflict(
     conflict_tx: &tokio::sync::mpsc::Sender<ConflictInfo>,
     policy: &mut ConflictPolicy,
 ) -> Result<bool, std::io::Error> {
-    if policy.overwrite_all {
-        return Ok(true);
-    }
-    if policy.skip_all {
-        return Ok(false);
+    if let Some(proceed) = policy.preempt() {
+        return Ok(proceed);
     }
     let choice = ask_conflict(conflict_tx, src, dst, is_dir);
-    match choice {
-        ConflictChoice::Overwrite => Ok(true),
-        ConflictChoice::Skip => Ok(false),
-        ConflictChoice::OverwriteAll => {
-            policy.overwrite_all = true;
-            Ok(true)
-        }
-        ConflictChoice::SkipAll => {
-            policy.skip_all = true;
-            Ok(false)
-        }
-        ConflictChoice::OverwriteNewer => {
-            let src_mod = fs::symlink_metadata(src).ok().and_then(|m| m.modified().ok());
-            let dst_mod = fs::symlink_metadata(dst).ok().and_then(|m| m.modified().ok());
-            Ok(match (src_mod, dst_mod) {
-                (Some(s), Some(d)) => s > d,
-                _ => true, // if we can't determine, overwrite
-            })
-        }
-        ConflictChoice::Abort => Err(abort_error()),
-    }
+    let src_mod = fs::symlink_metadata(src).ok().and_then(|m| m.modified().ok());
+    let dst_mod = fs::symlink_metadata(dst).ok().and_then(|m| m.modified().ok());
+    policy.decide(choice, src_mod, dst_mod)
 }
 
 fn copy_dir_progress(
@@ -770,6 +793,38 @@ mod tests {
 
     use std::sync::atomic::{AtomicU32, Ordering};
     static TEST_COUNTER: AtomicU32 = AtomicU32::new(0);
+
+    #[test]
+    fn policy_decide_overwrite_newer_both_ways() {
+        use std::time::Duration;
+        let older = SystemTime::UNIX_EPOCH + Duration::from_secs(100);
+        let newer = SystemTime::UNIX_EPOCH + Duration::from_secs(200);
+        let mut p = ConflictPolicy::default();
+        // src newer than dst → overwrite.
+        assert!(p.decide(ConflictChoice::OverwriteNewer, Some(newer), Some(older)).unwrap());
+        // src older than dst → skip.
+        assert!(!p.decide(ConflictChoice::OverwriteNewer, Some(older), Some(newer)).unwrap());
+        // mtime unknown → overwrite.
+        assert!(p.decide(ConflictChoice::OverwriteNewer, None, Some(newer)).unwrap());
+    }
+
+    #[test]
+    fn policy_sticky_choices_preempt() {
+        let mut overwrite = ConflictPolicy::default();
+        assert_eq!(overwrite.preempt(), None);
+        assert!(overwrite.decide(ConflictChoice::OverwriteAll, None, None).unwrap());
+        assert_eq!(overwrite.preempt(), Some(true));
+
+        let mut skip = ConflictPolicy::default();
+        assert!(!skip.decide(ConflictChoice::SkipAll, None, None).unwrap());
+        assert_eq!(skip.preempt(), Some(false));
+    }
+
+    #[test]
+    fn policy_abort_is_error() {
+        let mut p = ConflictPolicy::default();
+        assert!(p.decide(ConflictChoice::Abort, None, None).is_err());
+    }
 
     fn tmp_dir() -> PathBuf {
         let n = TEST_COUNTER.fetch_add(1, Ordering::Relaxed);

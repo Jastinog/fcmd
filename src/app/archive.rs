@@ -3,7 +3,16 @@ use std::sync::atomic::AtomicBool;
 
 use super::*;
 use crate::archive::{self, ArchiveEntry, ArchiveFormat, ConflictDecision};
-use crate::fs::ops::{ConflictChoice, ConflictInfo};
+use crate::fs::ops::{ConflictChoice, ConflictInfo, ConflictPolicy};
+
+/// Map the shared policy's overwrite/skip boolean to the archive-facing decision.
+fn decision_from_bool(overwrite: bool) -> ConflictDecision {
+    if overwrite {
+        ConflictDecision::Overwrite
+    } else {
+        ConflictDecision::Skip
+    }
+}
 
 #[derive(Clone)]
 pub struct ArchiveTreeNode {
@@ -434,18 +443,16 @@ impl App {
                 }
             };
 
-            let mut overwrite_all = false;
-            let mut skip_all = false;
+            // Share the conflict state machine with the paste path; only the
+            // prompting transport (ConflictInfo over this task's channel) is local.
+            let mut policy = ConflictPolicy::default();
             let mut resolve = |name: &str,
                                dst: &std::path::Path,
                                src_size: u64,
                                src_mod: Option<std::time::SystemTime>|
              -> ConflictDecision {
-                if overwrite_all {
-                    return ConflictDecision::Overwrite;
-                }
-                if skip_all {
-                    return ConflictDecision::Skip;
+                if let Some(proceed) = policy.preempt() {
+                    return decision_from_bool(proceed);
                 }
                 let dst_meta = std::fs::symlink_metadata(dst).ok();
                 let (resp_tx, resp_rx) = tokio::sync::oneshot::channel();
@@ -462,25 +469,11 @@ impl App {
                 if conflict_tx.blocking_send(info).is_err() {
                     return ConflictDecision::Abort;
                 }
-                match resp_rx.blocking_recv().unwrap_or(ConflictChoice::Abort) {
-                    ConflictChoice::Overwrite => ConflictDecision::Overwrite,
-                    ConflictChoice::Skip => ConflictDecision::Skip,
-                    ConflictChoice::OverwriteAll => {
-                        overwrite_all = true;
-                        ConflictDecision::Overwrite
-                    }
-                    ConflictChoice::SkipAll => {
-                        skip_all = true;
-                        ConflictDecision::Skip
-                    }
-                    ConflictChoice::OverwriteNewer => {
-                        let dst_mod = dst_meta.as_ref().and_then(|m| m.modified().ok());
-                        match (src_mod, dst_mod) {
-                            (Some(s), Some(d)) if s <= d => ConflictDecision::Skip,
-                            _ => ConflictDecision::Overwrite,
-                        }
-                    }
-                    ConflictChoice::Abort => ConflictDecision::Abort,
+                let choice = resp_rx.blocking_recv().unwrap_or(ConflictChoice::Abort);
+                let dst_mod = dst_meta.as_ref().and_then(|m| m.modified().ok());
+                match policy.decide(choice, src_mod, dst_mod) {
+                    Ok(proceed) => decision_from_bool(proceed),
+                    Err(_) => ConflictDecision::Abort,
                 }
             };
 
