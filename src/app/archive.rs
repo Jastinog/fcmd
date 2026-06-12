@@ -42,11 +42,7 @@ pub struct ArchiveState {
 }
 
 impl ArchiveState {
-    pub fn new(
-        archive_path: PathBuf,
-        format: ArchiveFormat,
-        entries: Vec<ArchiveEntry>,
-    ) -> Self {
+    pub fn new(archive_path: PathBuf, format: ArchiveFormat, entries: Vec<ArchiveEntry>) -> Self {
         let total_size: u64 = entries.iter().filter(|e| !e.is_dir).map(|e| e.size).sum();
         let file_count = entries.iter().filter(|e| !e.is_dir).count();
 
@@ -174,19 +170,20 @@ impl ArchiveState {
 
     pub fn toggle_expand(&mut self) {
         if let Some(node) = self.tree.get(self.cursor)
-            && node.is_dir {
-                let path = node.full_path.clone();
-                if self.expanded.contains(&path) {
-                    self.expanded.remove(&path);
-                } else {
-                    self.expanded.insert(path);
-                }
-                self.rebuild_tree();
-                // Clamp cursor
-                if self.cursor >= self.tree.len() {
-                    self.cursor = self.tree.len().saturating_sub(1);
-                }
+            && node.is_dir
+        {
+            let path = node.full_path.clone();
+            if self.expanded.contains(&path) {
+                self.expanded.remove(&path);
+            } else {
+                self.expanded.insert(path);
             }
+            self.rebuild_tree();
+            // Clamp cursor
+            if self.cursor >= self.tree.len() {
+                self.cursor = self.tree.len().saturating_sub(1);
+            }
+        }
     }
 
     pub fn collapse(&mut self) {
@@ -441,7 +438,9 @@ impl App {
             let mut last_report: Option<std::time::Instant> = None;
             let mut on_progress = |done: usize, total: usize, current: &str| {
                 let now = std::time::Instant::now();
-                if last_report.is_none_or(|t| now.duration_since(t) >= crate::fs::ops::PROGRESS_INTERVAL) {
+                if last_report
+                    .is_none_or(|t| now.duration_since(t) >= crate::fs::ops::PROGRESS_INTERVAL)
+                {
                     last_report = Some(now);
                     let _ = tx.try_send(ArchiveMsg::Progress {
                         done,
@@ -556,7 +555,9 @@ impl App {
             let mut last_report: Option<std::time::Instant> = None;
             let mut on_progress = |done: usize, total: usize, current: &str| {
                 let now = std::time::Instant::now();
-                if last_report.is_none_or(|t| now.duration_since(t) >= crate::fs::ops::PROGRESS_INTERVAL) {
+                if last_report
+                    .is_none_or(|t| now.duration_since(t) >= crate::fs::ops::PROGRESS_INTERVAL)
+                {
                     last_report = Some(now);
                     let _ = tx.try_send(ArchiveMsg::Progress {
                         done,
@@ -565,8 +566,13 @@ impl App {
                     });
                 }
             };
-            let result =
-                archive::create_stream(&paths, &base_dir, &output, &mut on_progress, &cancel_worker);
+            let result = archive::create_stream(
+                &paths,
+                &base_dir,
+                &output,
+                &mut on_progress,
+                &cancel_worker,
+            );
             let msg = match result {
                 Ok((written, cancelled)) => ArchiveMsg::Finished {
                     is_create: true,
@@ -630,11 +636,7 @@ mod tests {
             },
         ];
 
-        let state = ArchiveState::new(
-            PathBuf::from("test.zip"),
-            ArchiveFormat::Zip,
-            entries,
-        );
+        let state = ArchiveState::new(PathBuf::from("test.zip"), ArchiveFormat::Zip, entries);
 
         // src/ is top-level dir → expanded by default
         assert!(state.expanded.contains("src/"));
@@ -660,11 +662,7 @@ mod tests {
             },
         ];
 
-        let mut state = ArchiveState::new(
-            PathBuf::from("test.zip"),
-            ArchiveFormat::Zip,
-            entries,
-        );
+        let mut state = ArchiveState::new(PathBuf::from("test.zip"), ArchiveFormat::Zip, entries);
 
         // Initially expanded → 2 items visible
         assert_eq!(state.tree.len(), 2);
@@ -727,7 +725,10 @@ mod tests {
         app.handle_archive(KeyEvent::new(KeyCode::Char('x'), KeyModifiers::NONE));
 
         assert_eq!(app.task_manager.tasks().len(), 1);
-        assert_eq!(TaskManager::kind_label(&app.task_manager.tasks()[0]), "Extract");
+        assert_eq!(
+            TaskManager::kind_label(&app.task_manager.tasks()[0]),
+            "Extract"
+        );
         // A conflict channel was queued so overwrite prompts can route through it.
         assert_eq!(app.conflict_rxs.len(), 1);
         assert!(app.archive_state.is_none());
@@ -742,7 +743,10 @@ mod tests {
         app.create_archive("out.zip", false);
 
         assert_eq!(app.task_manager.tasks().len(), 1);
-        assert_eq!(TaskManager::kind_label(&app.task_manager.tasks()[0]), "Archive");
+        assert_eq!(
+            TaskManager::kind_label(&app.task_manager.tasks()[0]),
+            "Archive"
+        );
         assert!(app.status_message.contains("Creating out.zip"));
     }
 
@@ -758,9 +762,24 @@ mod tests {
     #[test]
     fn matching_entry_count_filters() {
         let entries = vec![
-            ArchiveEntry { path: "a.txt".into(), size: 1, is_dir: false, modified: None },
-            ArchiveEntry { path: "dir/".into(), size: 0, is_dir: true, modified: None },
-            ArchiveEntry { path: "dir/b.txt".into(), size: 2, is_dir: false, modified: None },
+            ArchiveEntry {
+                path: "a.txt".into(),
+                size: 1,
+                is_dir: false,
+                modified: None,
+            },
+            ArchiveEntry {
+                path: "dir/".into(),
+                size: 0,
+                is_dir: true,
+                modified: None,
+            },
+            ArchiveEntry {
+                path: "dir/b.txt".into(),
+                size: 2,
+                is_dir: false,
+                modified: None,
+            },
         ];
         assert_eq!(matching_entry_count(&entries, None), 3);
         assert_eq!(matching_entry_count(&entries, Some("a.txt")), 1);
@@ -785,11 +804,7 @@ mod tests {
             },
         ];
 
-        let mut state = ArchiveState::new(
-            PathBuf::from("test.zip"),
-            ArchiveFormat::Zip,
-            entries,
-        );
+        let mut state = ArchiveState::new(PathBuf::from("test.zip"), ArchiveFormat::Zip, entries);
 
         assert_eq!(state.tree.len(), 2);
 

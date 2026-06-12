@@ -179,7 +179,13 @@ impl ArchiveSink {
 
     /// Add a regular file. Returns `Ok(false)` if cancelled mid-file (zip only;
     /// see below) so the caller can stop. The archive stays valid either way.
-    fn add_file(&mut self, rel: &str, abs: &Path, mode: u32, cancel: &AtomicBool) -> io::Result<bool> {
+    fn add_file(
+        &mut self,
+        rel: &str,
+        abs: &Path,
+        mode: u32,
+        cancel: &AtomicBool,
+    ) -> io::Result<bool> {
         match self {
             ArchiveSink::Zip { writer, options } => {
                 writer
@@ -322,4 +328,3 @@ fn create_stream_inner(
     sink.finish()?;
     Ok((written, cancelled))
 }
-

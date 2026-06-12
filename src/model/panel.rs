@@ -55,7 +55,6 @@ impl SortMode {
         }
     }
 
-
     pub fn from_label(s: &str) -> Option<SortMode> {
         match s {
             "name" => Some(SortMode::Name),
@@ -141,7 +140,13 @@ impl Panel {
             }
         }
 
-        sort_file_entries(&mut dirs, &mut files, self.sort_mode, self.sort_reverse, dir_sizes);
+        sort_file_entries(
+            &mut dirs,
+            &mut files,
+            self.sort_mode,
+            self.sort_reverse,
+            dir_sizes,
+        );
 
         self.entries.extend(dirs);
         self.entries.extend(files);
@@ -344,7 +349,10 @@ const BATCH_SIZE: usize = 1000;
 /// Uses symlink_metadata first so dangling symlinks are not silently skipped.
 fn read_file_entry(entry: &fs::DirEntry) -> FileEntry {
     let symlink_meta = entry.path().symlink_metadata().ok();
-    let is_symlink = symlink_meta.as_ref().map(|m| m.is_symlink()).unwrap_or(false);
+    let is_symlink = symlink_meta
+        .as_ref()
+        .map(|m| m.is_symlink())
+        .unwrap_or(false);
 
     // For symlinks, try to follow; if broken, use symlink metadata
     let (is_dir, size, modified, created) = if is_symlink {
@@ -353,7 +361,12 @@ fn read_file_entry(entry: &fs::DirEntry) -> FileEntry {
             Err(_) => {
                 // Broken symlink — use symlink's own metadata
                 let sm = symlink_meta.as_ref();
-                (false, sm.map(|m| m.len()).unwrap_or(0), sm.and_then(|m| m.modified().ok()), sm.and_then(|m| m.created().ok()))
+                (
+                    false,
+                    sm.map(|m| m.len()).unwrap_or(0),
+                    sm.and_then(|m| m.modified().ok()),
+                    sm.and_then(|m| m.created().ok()),
+                )
             }
         }
     } else {
@@ -402,8 +415,8 @@ pub fn stream_dir_entries(
         select_name,
     } = req;
 
-    let entries = load_dir_entries(path, show_hidden, sort_mode, sort_reverse, dir_sizes)
-        .unwrap_or_default();
+    let entries =
+        load_dir_entries(path, show_hidden, sort_mode, sort_reverse, dir_sizes).unwrap_or_default();
 
     // For large directories, send intermediate batches from the already-loaded
     // entries so the user sees content appearing progressively. These are purely
@@ -634,9 +647,10 @@ impl DirCache {
 
     pub fn remove(&mut self, path: &Path) {
         if self.map.remove(path).is_some()
-            && let Some(pos) = self.order.iter().position(|p| p == path) {
-                self.order.remove(pos);
-            }
+            && let Some(pos) = self.order.iter().position(|p| p == path)
+        {
+            self.order.remove(pos);
+        }
     }
 
     pub fn clear(&mut self) {
@@ -916,7 +930,13 @@ mod tests {
             make_file_entry("omega.txt", false, 10),
             make_file_entry("beta.txt", false, 20),
         ];
-        sort_file_entries(&mut dirs, &mut files, SortMode::Name, false, &HashMap::new());
+        sort_file_entries(
+            &mut dirs,
+            &mut files,
+            SortMode::Name,
+            false,
+            &HashMap::new(),
+        );
         assert_eq!(dirs[0].name, "alpha");
         assert_eq!(dirs[1].name, "zebra");
         assert_eq!(files[0].name, "beta.txt");
@@ -931,7 +951,13 @@ mod tests {
             make_file_entry("small.txt", false, 1),
             make_file_entry("mid.txt", false, 100),
         ];
-        sort_file_entries(&mut dirs, &mut files, SortMode::Size, false, &HashMap::new());
+        sort_file_entries(
+            &mut dirs,
+            &mut files,
+            SortMode::Size,
+            false,
+            &HashMap::new(),
+        );
         assert_eq!(files[0].name, "small.txt");
         assert_eq!(files[1].name, "mid.txt");
         assert_eq!(files[2].name, "big.txt");
@@ -945,7 +971,13 @@ mod tests {
             make_file_entry("a.py", false, 0),
             make_file_entry("c.go", false, 0),
         ];
-        sort_file_entries(&mut dirs, &mut files, SortMode::Extension, false, &HashMap::new());
+        sort_file_entries(
+            &mut dirs,
+            &mut files,
+            SortMode::Extension,
+            false,
+            &HashMap::new(),
+        );
         assert_eq!(files[0].name, "c.go");
         assert_eq!(files[1].name, "a.py");
         assert_eq!(files[2].name, "b.rs");
@@ -967,7 +999,7 @@ mod tests {
 
     #[test]
     fn sort_by_modified() {
-        use std::time::{SystemTime, Duration};
+        use std::time::{Duration, SystemTime};
         let t1 = SystemTime::UNIX_EPOCH;
         let t2 = SystemTime::UNIX_EPOCH + Duration::from_secs(100);
         let mut dirs = vec![];
@@ -991,7 +1023,13 @@ mod tests {
                 is_symlink: false,
             },
         ];
-        sort_file_entries(&mut dirs, &mut files, SortMode::Modified, false, &HashMap::new());
+        sort_file_entries(
+            &mut dirs,
+            &mut files,
+            SortMode::Modified,
+            false,
+            &HashMap::new(),
+        );
         assert_eq!(files[0].name, "older.txt");
         assert_eq!(files[1].name, "newer.txt");
     }
@@ -1139,7 +1177,7 @@ mod tests {
 
     #[test]
     fn sort_by_created() {
-        use std::time::{SystemTime, Duration};
+        use std::time::{Duration, SystemTime};
         let t1 = SystemTime::UNIX_EPOCH;
         let t2 = SystemTime::UNIX_EPOCH + Duration::from_secs(100);
         let mut dirs = vec![];
@@ -1163,7 +1201,13 @@ mod tests {
                 is_symlink: false,
             },
         ];
-        sort_file_entries(&mut dirs, &mut files, SortMode::Created, false, &HashMap::new());
+        sort_file_entries(
+            &mut dirs,
+            &mut files,
+            SortMode::Created,
+            false,
+            &HashMap::new(),
+        );
         assert_eq!(files[0].name, "older.txt");
         assert_eq!(files[1].name, "newer.txt");
     }
@@ -1200,7 +1244,13 @@ mod tests {
                 is_symlink: false,
             },
         ];
-        sort_file_entries(&mut dirs, &mut files, SortMode::Extension, false, &HashMap::new());
+        sort_file_entries(
+            &mut dirs,
+            &mut files,
+            SortMode::Extension,
+            false,
+            &HashMap::new(),
+        );
         // go < py < rs
         assert_eq!(files[0].name, "c.go");
         assert_eq!(files[1].name, "b.py");
@@ -1231,7 +1281,13 @@ mod tests {
             },
         ];
         // Should not panic with mixed None/Some timestamps
-        sort_file_entries(&mut dirs, &mut files, SortMode::Modified, false, &HashMap::new());
+        sort_file_entries(
+            &mut dirs,
+            &mut files,
+            SortMode::Modified,
+            false,
+            &HashMap::new(),
+        );
         assert_eq!(files.len(), 2);
     }
 
@@ -1241,8 +1297,24 @@ mod tests {
     fn move_down_clamps_at_end() {
         let mut panel = Panel::new(PathBuf::from("/tmp"));
         panel.entries = vec![
-            FileEntry { name: "..".into(), path: PathBuf::from("/"), is_dir: true, size: 0, modified: None, created: None, is_symlink: false },
-            FileEntry { name: "a".into(), path: PathBuf::from("/a"), is_dir: false, size: 0, modified: None, created: None, is_symlink: false },
+            FileEntry {
+                name: "..".into(),
+                path: PathBuf::from("/"),
+                is_dir: true,
+                size: 0,
+                modified: None,
+                created: None,
+                is_symlink: false,
+            },
+            FileEntry {
+                name: "a".into(),
+                path: PathBuf::from("/a"),
+                is_dir: false,
+                size: 0,
+                modified: None,
+                created: None,
+                is_symlink: false,
+            },
         ];
         panel.selected = 1;
         panel.move_down();
@@ -1252,9 +1324,15 @@ mod tests {
     #[test]
     fn move_up_clamps_at_zero() {
         let mut panel = Panel::new(PathBuf::from("/tmp"));
-        panel.entries = vec![
-            FileEntry { name: "..".into(), path: PathBuf::from("/"), is_dir: true, size: 0, modified: None, created: None, is_symlink: false },
-        ];
+        panel.entries = vec![FileEntry {
+            name: "..".into(),
+            path: PathBuf::from("/"),
+            is_dir: true,
+            size: 0,
+            modified: None,
+            created: None,
+            is_symlink: false,
+        }];
         panel.selected = 0;
         panel.move_up();
         assert_eq!(panel.selected, 0);
@@ -1276,8 +1354,24 @@ mod tests {
     fn toggle_mark_skips_dotdot() {
         let mut panel = Panel::new(PathBuf::from("/tmp"));
         panel.entries = vec![
-            FileEntry { name: "..".into(), path: PathBuf::from("/"), is_dir: true, size: 0, modified: None, created: None, is_symlink: false },
-            FileEntry { name: "a.txt".into(), path: PathBuf::from("/a.txt"), is_dir: false, size: 0, modified: None, created: None, is_symlink: false },
+            FileEntry {
+                name: "..".into(),
+                path: PathBuf::from("/"),
+                is_dir: true,
+                size: 0,
+                modified: None,
+                created: None,
+                is_symlink: false,
+            },
+            FileEntry {
+                name: "a.txt".into(),
+                path: PathBuf::from("/a.txt"),
+                is_dir: false,
+                size: 0,
+                modified: None,
+                created: None,
+                is_symlink: false,
+            },
         ];
         panel.selected = 0; // ".."
         panel.toggle_mark();
@@ -1289,9 +1383,33 @@ mod tests {
     fn targeted_count_with_marks() {
         let mut panel = Panel::new(PathBuf::from("/tmp"));
         panel.entries = vec![
-            FileEntry { name: "..".into(), path: PathBuf::from("/"), is_dir: true, size: 0, modified: None, created: None, is_symlink: false },
-            FileEntry { name: "a".into(), path: PathBuf::from("/a"), is_dir: false, size: 0, modified: None, created: None, is_symlink: false },
-            FileEntry { name: "b".into(), path: PathBuf::from("/b"), is_dir: false, size: 0, modified: None, created: None, is_symlink: false },
+            FileEntry {
+                name: "..".into(),
+                path: PathBuf::from("/"),
+                is_dir: true,
+                size: 0,
+                modified: None,
+                created: None,
+                is_symlink: false,
+            },
+            FileEntry {
+                name: "a".into(),
+                path: PathBuf::from("/a"),
+                is_dir: false,
+                size: 0,
+                modified: None,
+                created: None,
+                is_symlink: false,
+            },
+            FileEntry {
+                name: "b".into(),
+                path: PathBuf::from("/b"),
+                is_dir: false,
+                size: 0,
+                modified: None,
+                created: None,
+                is_symlink: false,
+            },
         ];
         panel.marked.insert(PathBuf::from("/a"));
         panel.marked.insert(PathBuf::from("/b"));
@@ -1304,19 +1422,25 @@ mod tests {
     fn dir_cache_update_existing() {
         let mut cache = DirCache::new(4);
         let path = PathBuf::from("/test");
-        cache.insert(path.clone(), DirCacheEntry {
-            entries: vec![],
-            sort_mode: SortMode::Name,
-            sort_reverse: false,
-            show_hidden: false,
-        });
+        cache.insert(
+            path.clone(),
+            DirCacheEntry {
+                entries: vec![],
+                sort_mode: SortMode::Name,
+                sort_reverse: false,
+                show_hidden: false,
+            },
+        );
         // Insert again with different data
-        cache.insert(path.clone(), DirCacheEntry {
-            entries: vec![],
-            sort_mode: SortMode::Size,
-            sort_reverse: true,
-            show_hidden: false,
-        });
+        cache.insert(
+            path.clone(),
+            DirCacheEntry {
+                entries: vec![],
+                sort_mode: SortMode::Size,
+                sort_reverse: true,
+                show_hidden: false,
+            },
+        );
         let entry = cache.get(&path).unwrap();
         assert_eq!(entry.sort_mode, SortMode::Size);
         assert!(entry.sort_reverse);
@@ -1327,9 +1451,15 @@ mod tests {
     #[test]
     fn selected_entry_in_bounds() {
         let mut panel = Panel::new(PathBuf::from("/tmp"));
-        panel.entries = vec![
-            FileEntry { name: "a".into(), path: PathBuf::from("/a"), is_dir: false, size: 0, modified: None, created: None, is_symlink: false },
-        ];
+        panel.entries = vec![FileEntry {
+            name: "a".into(),
+            path: PathBuf::from("/a"),
+            is_dir: false,
+            size: 0,
+            modified: None,
+            created: None,
+            is_symlink: false,
+        }];
         panel.selected = 0;
         assert_eq!(panel.selected_entry().unwrap().name, "a");
     }

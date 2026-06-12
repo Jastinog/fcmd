@@ -92,7 +92,10 @@ impl App {
 
             KeyCode::Tab => {
                 self.exit_visual();
-                { let l = self.layout; self.tab_mut().cycle_panel(l); }
+                {
+                    let l = self.layout;
+                    self.tab_mut().cycle_panel(l);
+                }
             }
 
             _ => {}
@@ -217,7 +220,10 @@ impl App {
 
             KeyCode::Tab => {
                 self.exit_select();
-                { let l = self.layout; self.tab_mut().cycle_panel(l); }
+                {
+                    let l = self.layout;
+                    self.tab_mut().cycle_panel(l);
+                }
             }
 
             _ => {}

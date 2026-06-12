@@ -5,7 +5,11 @@ use std::os::unix::fs::{MetadataExt, PermissionsExt};
 
 impl App {
     pub(super) fn enter_info(&mut self) {
-        let entry = match self.active_panel().selected_entry().filter(|e| e.name != "..") {
+        let entry = match self
+            .active_panel()
+            .selected_entry()
+            .filter(|e| e.name != "..")
+        {
             Some(e) => e,
             None => return,
         };
@@ -17,7 +21,10 @@ impl App {
         let git_status = self.git_statuses.get(&path).copied();
 
         // Show loading placeholder immediately
-        self.info_lines = vec![("Name".into(), name.clone()), ("Loading...".into(), String::new())];
+        self.info_lines = vec![
+            ("Name".into(), name.clone()),
+            ("Loading...".into(), String::new()),
+        ];
         self.info_scroll = 0;
         self.mode = Mode::Info;
 
@@ -71,9 +78,7 @@ impl App {
             }
 
             // Extension (files only)
-            if !is_dir
-                && let Some(ext) = path.extension()
-            {
+            if !is_dir && let Some(ext) = path.extension() {
                 lines.push(("Extension".into(), ext.to_string_lossy().into_owned()));
             }
 
@@ -334,7 +339,9 @@ mod tests {
         let entries = crate::app::make_test_entries(&["a.txt"]);
         let mut app = App::new_for_test(entries);
         app.mode = Mode::Info;
-        app.info_lines = (0..20).map(|i| (format!("Key{i}"), format!("Val{i}"))).collect();
+        app.info_lines = (0..20)
+            .map(|i| (format!("Key{i}"), format!("Val{i}")))
+            .collect();
         app.info_scroll = 0;
 
         // Scroll down 5 times

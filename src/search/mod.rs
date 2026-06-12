@@ -435,7 +435,10 @@ fn abbreviate_home(path: &str) -> String {
     path.to_string()
 }
 
-async fn global_search_read(stdout: tokio::process::ChildStdout, tx: &tokio::sync::mpsc::UnboundedSender<Entry>) -> usize {
+async fn global_search_read(
+    stdout: tokio::process::ChildStdout,
+    tx: &tokio::sync::mpsc::UnboundedSender<Entry>,
+) -> usize {
     use tokio::io::{AsyncBufReadExt, BufReader};
     let reader = BufReader::new(stdout);
     let mut lines = reader.lines();
@@ -464,7 +467,13 @@ async fn global_search_read(stdout: tokio::process::ChildStdout, tx: &tokio::syn
     count
 }
 
-fn walk_send(dir: &Path, base: &Path, tx: &tokio::sync::mpsc::UnboundedSender<Entry>, depth: usize, count: &mut usize) {
+fn walk_send(
+    dir: &Path,
+    base: &Path,
+    tx: &tokio::sync::mpsc::UnboundedSender<Entry>,
+    depth: usize,
+    count: &mut usize,
+) {
     if depth > MAX_DEPTH || *count >= MAX_ENTRIES {
         return;
     }
@@ -633,10 +642,7 @@ mod tests {
 
     #[test]
     fn move_up_decrements_selected() {
-        let mut fs = FindState::new_test(
-            Path::new("/tmp"),
-            &[("a.txt", false), ("b.txt", false)],
-        );
+        let mut fs = FindState::new_test(Path::new("/tmp"), &[("a.txt", false), ("b.txt", false)]);
         fs.selected = 1;
         fs.move_up();
         assert_eq!(fs.selected, 0);
@@ -649,7 +655,13 @@ mod tests {
     fn adjust_scroll_follows_selected_down() {
         let mut fs = FindState::new_test(
             Path::new("/tmp"),
-            &[("a", false), ("b", false), ("c", false), ("d", false), ("e", false)],
+            &[
+                ("a", false),
+                ("b", false),
+                ("c", false),
+                ("d", false),
+                ("e", false),
+            ],
         );
         fs.selected = 4;
         fs.scroll = 0;
@@ -696,10 +708,7 @@ mod tests {
 
     #[test]
     fn update_filter_no_match() {
-        let mut fs = FindState::new_test(
-            Path::new("/tmp"),
-            &[("a.txt", false), ("b.txt", false)],
-        );
+        let mut fs = FindState::new_test(Path::new("/tmp"), &[("a.txt", false), ("b.txt", false)]);
         fs.query = "xyz".into();
         fs.update_filter();
         assert_eq!(fs.filtered.len(), 0);
@@ -724,19 +733,13 @@ mod tests {
 
     #[test]
     fn selected_is_dir_true() {
-        let fs = FindState::new_test(
-            Path::new("/tmp"),
-            &[("src/", true), ("main.rs", false)],
-        );
+        let fs = FindState::new_test(Path::new("/tmp"), &[("src/", true), ("main.rs", false)]);
         assert!(fs.selected_is_dir());
     }
 
     #[test]
     fn selected_is_dir_false() {
-        let fs = FindState::new_test(
-            Path::new("/tmp"),
-            &[("main.rs", false), ("src/", true)],
-        );
+        let fs = FindState::new_test(Path::new("/tmp"), &[("main.rs", false), ("src/", true)]);
         assert!(!fs.selected_is_dir());
     }
 
@@ -774,10 +777,7 @@ mod tests {
 
     #[test]
     fn move_up_at_zero_noop() {
-        let mut fs = FindState::new_test(
-            Path::new("/tmp"),
-            &[("a.txt", false)],
-        );
+        let mut fs = FindState::new_test(Path::new("/tmp"), &[("a.txt", false)]);
         fs.move_up();
         assert_eq!(fs.selected, 0);
     }
@@ -786,10 +786,7 @@ mod tests {
 
     #[test]
     fn adjust_scroll_zero_height_noop() {
-        let mut fs = FindState::new_test(
-            Path::new("/tmp"),
-            &[("a.txt", false)],
-        );
+        let mut fs = FindState::new_test(Path::new("/tmp"), &[("a.txt", false)]);
         fs.selected = 0;
         fs.scroll = 5;
         fs.adjust_scroll(0);
@@ -800,10 +797,7 @@ mod tests {
 
     #[test]
     fn get_item_out_of_bounds() {
-        let fs = FindState::new_test(
-            Path::new("/tmp"),
-            &[("a.txt", false)],
-        );
+        let fs = FindState::new_test(Path::new("/tmp"), &[("a.txt", false)]);
         assert!(fs.get_item(999).is_none());
     }
 
@@ -877,10 +871,7 @@ mod tests {
 
     #[test]
     fn switch_scope_preserves_query_content() {
-        let mut fs = FindState::new_test(
-            Path::new("/tmp"),
-            &[("a.rs", false), ("b.rs", false)],
-        );
+        let mut fs = FindState::new_test(Path::new("/tmp"), &[("a.rs", false), ("b.rs", false)]);
         fs.query = "test".into();
         fs.scope = FindScope::Local;
         // switch_scope is tested elsewhere but let's verify query is accessible
@@ -889,10 +880,7 @@ mod tests {
 
     #[test]
     fn move_down_wraps_at_end() {
-        let mut fs = FindState::new_test(
-            Path::new("/tmp"),
-            &[("a.rs", false), ("b.rs", false)],
-        );
+        let mut fs = FindState::new_test(Path::new("/tmp"), &[("a.rs", false), ("b.rs", false)]);
         fs.update_filter();
         assert_eq!(fs.selected, 0);
         fs.move_down();
@@ -925,7 +913,11 @@ mod tests {
     fn update_filter_with_fuzzy_query() {
         let mut fs = FindState::new_test(
             Path::new("/tmp"),
-            &[("main.rs", false), ("lib.rs", false), ("test_main.rs", false)],
+            &[
+                ("main.rs", false),
+                ("lib.rs", false),
+                ("test_main.rs", false),
+            ],
         );
         fs.query = "main".into();
         fs.update_filter();

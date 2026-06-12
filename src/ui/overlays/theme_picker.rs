@@ -21,19 +21,13 @@ pub(in crate::ui) fn render_theme_picker(f: &mut Frame, app: &App, area: Rect) {
     // Split vertically: selection (top) | preview (bottom)
     let rows = Layout::default()
         .direction(Direction::Vertical)
-        .constraints([
-            Constraint::Percentage(40),
-            Constraint::Percentage(60),
-        ])
+        .constraints([Constraint::Percentage(40), Constraint::Percentage(60)])
         .split(popup);
 
     // Top: groups | themes side by side
     let cols = Layout::default()
         .direction(Direction::Horizontal)
-        .constraints([
-            Constraint::Percentage(35),
-            Constraint::Percentage(65),
-        ])
+        .constraints([Constraint::Percentage(35), Constraint::Percentage(65)])
         .split(rows[0]);
 
     render_groups_column(f, t, cols[0], app);
@@ -46,7 +40,11 @@ pub(in crate::ui) fn render_theme_picker(f: &mut Frame, app: &App, area: Rect) {
 
 fn render_groups_column(f: &mut Frame, t: &Theme, area: Rect, app: &App) {
     let is_focused = app.theme_active_col == 0;
-    let border_color = if is_focused { t.cyan } else { t.border_inactive };
+    let border_color = if is_focused {
+        t.cyan
+    } else {
+        t.border_inactive
+    };
     let title_color = if is_focused { t.cyan } else { t.fg_dim };
 
     let block = Block::default()
@@ -81,7 +79,8 @@ fn render_groups_column(f: &mut Frame, t: &Theme, area: Rect, app: &App) {
         let count_str = format!(" ({total})");
         let name_max = liw.saturating_sub(2 + count_str.len());
         let name_display: String = if group.name.chars().count() > name_max {
-            group.name
+            group
+                .name
                 .chars()
                 .take(name_max.saturating_sub(1))
                 .chain(std::iter::once('\u{2026}'))
@@ -127,7 +126,11 @@ fn render_groups_column(f: &mut Frame, t: &Theme, area: Rect, app: &App) {
 
 fn render_themes_column(f: &mut Frame, t: &Theme, area: Rect, app: &App) {
     let is_focused = app.theme_active_col == 1;
-    let border_color = if is_focused { t.cyan } else { t.border_inactive };
+    let border_color = if is_focused {
+        t.cyan
+    } else {
+        t.border_inactive
+    };
     let title_color = if is_focused { t.cyan } else { t.fg_dim };
 
     let group = app.theme_groups.get(app.theme_group_cursor);
@@ -152,34 +155,54 @@ fn render_themes_column(f: &mut Frame, t: &Theme, area: Rect, app: &App) {
     let toggle_y = inner.y;
     let liw = inner.width as usize;
     if inner.height >= 3 {
-        let dark_label = "\u{f0594} Dark";   // moon icon
+        let dark_label = "\u{f0594} Dark"; // moon icon
         let light_label = "\u{f0595} Light"; // sun icon
         if app.theme_show_light {
             let spans = vec![
                 Span::styled(format!(" {dark_label}  "), Style::default().fg(t.fg_dim)),
-                Span::styled(format!("{light_label} "), Style::default().fg(t.yellow).bg(t.cursor_line)),
                 Span::styled(
-                    " ".repeat(liw.saturating_sub(dark_label.chars().count() + light_label.chars().count() + 5)),
+                    format!("{light_label} "),
+                    Style::default().fg(t.yellow).bg(t.cursor_line),
+                ),
+                Span::styled(
+                    " ".repeat(liw.saturating_sub(
+                        dark_label.chars().count() + light_label.chars().count() + 5,
+                    )),
                     Style::default(),
                 ),
             ];
-            f.render_widget(Paragraph::new(Line::from(spans)), Rect::new(inner.x, toggle_y, inner.width, 1));
+            f.render_widget(
+                Paragraph::new(Line::from(spans)),
+                Rect::new(inner.x, toggle_y, inner.width, 1),
+            );
         } else {
             let spans = vec![
-                Span::styled(format!(" {dark_label} "), Style::default().fg(t.blue).bg(t.cursor_line)),
+                Span::styled(
+                    format!(" {dark_label} "),
+                    Style::default().fg(t.blue).bg(t.cursor_line),
+                ),
                 Span::styled(format!("  {light_label} "), Style::default().fg(t.fg_dim)),
                 Span::styled(
-                    " ".repeat(liw.saturating_sub(dark_label.chars().count() + light_label.chars().count() + 5)),
+                    " ".repeat(liw.saturating_sub(
+                        dark_label.chars().count() + light_label.chars().count() + 5,
+                    )),
                     Style::default(),
                 ),
             ];
-            f.render_widget(Paragraph::new(Line::from(spans)), Rect::new(inner.x, toggle_y, inner.width, 1));
+            f.render_widget(
+                Paragraph::new(Line::from(spans)),
+                Rect::new(inner.x, toggle_y, inner.width, 1),
+            );
         }
     }
 
     let themes: &[String] = match group {
         Some(g) => {
-            if app.theme_show_light { &g.light_themes } else { &g.dark_themes }
+            if app.theme_show_light {
+                &g.light_themes
+            } else {
+                &g.dark_themes
+            }
         }
         None => return,
     };
@@ -255,7 +278,10 @@ fn render_themes_column(f: &mut Frame, t: &Theme, area: Rect, app: &App) {
             Span::styled("\u{23ce}", Style::default().fg(t.cyan)),
             Span::styled(" apply", Style::default().fg(t.fg_dim)),
         ];
-        f.render_widget(Paragraph::new(Line::from(spans)), Rect::new(inner.x, hint_y, inner.width, 1));
+        f.render_widget(
+            Paragraph::new(Line::from(spans)),
+            Rect::new(inner.x, hint_y, inner.width, 1),
+        );
     }
 }
 
@@ -320,7 +346,12 @@ fn render_preview_panel(f: &mut Frame, pt: &Theme, area: Rect) {
     let tab_area = Rect::new(area.x, area.y, area.width, 1);
     let modes_area = Rect::new(area.x, area.y + area.height - 2, area.width, 1);
     let status_area = Rect::new(area.x, area.y + area.height - 1, area.width, 1);
-    let panels_area = Rect::new(area.x, area.y + 1, area.width, area.height.saturating_sub(3));
+    let panels_area = Rect::new(
+        area.x,
+        area.y + 1,
+        area.width,
+        area.height.saturating_sub(3),
+    );
 
     // ── Tab bar with TASKS badge ─────────────────────────────────
     {
@@ -331,7 +362,7 @@ fn render_preview_panel(f: &mut Frame, pt: &Theme, area: Rect) {
         let task_info = " \u{f0c5} Copying 3 items 67% ";
         let task_badge = " \u{f0ae} TASKS 1 ";
 
-        let task_info_w = task_info.chars().count() + 1;  // +sep
+        let task_info_w = task_info.chars().count() + 1; // +sep
         let task_badge_w = task_badge.chars().count() + 1; // +sep
         let tabs_used = tab1.chars().count() + 1 + tab2.chars().count();
         let fill = tw.saturating_sub(tabs_used + task_info_w + task_badge_w);
@@ -358,9 +389,24 @@ fn render_preview_panel(f: &mut Frame, pt: &Theme, area: Rect) {
         let code_w = ((panels_area.width as u32 * 35 / 100) as u16).max(14);
         let panel_w = panels_area.width.saturating_sub(tree_w + code_w);
         (
-            Some(Rect::new(panels_area.x, panels_area.y, tree_w, panels_area.height)),
-            Rect::new(panels_area.x + tree_w, panels_area.y, panel_w, panels_area.height),
-            Some(Rect::new(panels_area.x + tree_w + panel_w, panels_area.y, code_w, panels_area.height)),
+            Some(Rect::new(
+                panels_area.x,
+                panels_area.y,
+                tree_w,
+                panels_area.height,
+            )),
+            Rect::new(
+                panels_area.x + tree_w,
+                panels_area.y,
+                panel_w,
+                panels_area.height,
+            ),
+            Some(Rect::new(
+                panels_area.x + tree_w + panel_w,
+                panels_area.y,
+                code_w,
+                panels_area.height,
+            )),
         )
     } else if show_code {
         let code_w = ((panels_area.width as u32 * 35 / 100) as u16).max(14);
@@ -368,7 +414,12 @@ fn render_preview_panel(f: &mut Frame, pt: &Theme, area: Rect) {
         (
             None,
             Rect::new(panels_area.x, panels_area.y, panel_w, panels_area.height),
-            Some(Rect::new(panels_area.x + panel_w, panels_area.y, code_w, panels_area.height)),
+            Some(Rect::new(
+                panels_area.x + panel_w,
+                panels_area.y,
+                code_w,
+                panels_area.height,
+            )),
         )
     } else {
         (None, panels_area, None)
@@ -387,29 +438,48 @@ fn render_preview_panel(f: &mut Frame, pt: &Theme, area: Rect) {
 
         let tree_entries: &[(&str, bool, u8, bool)] = &[
             // (name, is_dir, depth, expanded)
-            ("Projects",    true,  0, true),
-            ("\u{251c}\u{2500}\u{f07b} src/",      true,  1, true),
-            ("\u{2502} \u{251c}\u{2500}\u{f0214} main.rs",  false, 2, false),
-            ("\u{2502} \u{2514}\u{2500}\u{f0214} lib.rs",   false, 2, false),
-            ("\u{251c}\u{2500}\u{f07b} docs/",     true,  1, false),
-            ("\u{251c}\u{2500}\u{f07b} tests/",    true,  1, false),
+            ("Projects", true, 0, true),
+            ("\u{251c}\u{2500}\u{f07b} src/", true, 1, true),
+            (
+                "\u{2502} \u{251c}\u{2500}\u{f0214} main.rs",
+                false,
+                2,
+                false,
+            ),
+            ("\u{2502} \u{2514}\u{2500}\u{f0214} lib.rs", false, 2, false),
+            ("\u{251c}\u{2500}\u{f07b} docs/", true, 1, false),
+            ("\u{251c}\u{2500}\u{f07b} tests/", true, 1, false),
             ("\u{2514}\u{2500}\u{f0219} Cargo.toml", false, 1, false),
         ];
 
         let tiw = inner.width as usize;
         for (i, &(name, is_dir, _depth, _expanded)) in tree_entries.iter().enumerate() {
-            if i as u16 >= inner.height { break; }
+            if i as u16 >= inner.height {
+                break;
+            }
             let is_cur = i == 0;
-            let fg = if is_cur { pt.bg_text } else if is_dir { pt.dir_color } else { pt.fg_dim };
+            let fg = if is_cur {
+                pt.bg_text
+            } else if is_dir {
+                pt.dir_color
+            } else {
+                pt.fg_dim
+            };
             let bg = if is_cur { pt.blue } else { pt.bg };
             let display: String = if name.chars().count() > tiw {
-                name.chars().take(tiw.saturating_sub(1)).chain(std::iter::once('\u{2026}')).collect()
+                name.chars()
+                    .take(tiw.saturating_sub(1))
+                    .chain(std::iter::once('\u{2026}'))
+                    .collect()
             } else {
                 let pad = tiw.saturating_sub(name.chars().count());
                 format!("{name}{}", " ".repeat(pad))
             };
             f.render_widget(
-                Paragraph::new(Line::from(Span::styled(display, Style::default().fg(fg).bg(bg)))),
+                Paragraph::new(Line::from(Span::styled(
+                    display,
+                    Style::default().fg(fg).bg(bg),
+                ))),
                 Rect::new(inner.x, inner.y + i as u16, inner.width, 1),
             );
         }
@@ -437,25 +507,101 @@ fn render_preview_panel(f: &mut Frame, pt: &Theme, area: Rect) {
             }
 
             let entries: &[MockEntry] = &[
-                MockEntry { name: "..",         is_dir: true,  meta: "",      git: ' ', mark: 0, selected: false },
-                MockEntry { name: "src",        is_dir: true,  meta: "<DIR>", git: 'M', mark: 0, selected: false },
-                MockEntry { name: "docs",       is_dir: true,  meta: "<DIR>", git: ' ', mark: 1, selected: false },
-                MockEntry { name: "tests",      is_dir: true,  meta: "<DIR>", git: ' ', mark: 0, selected: true },
-                MockEntry { name: "Cargo.toml", is_dir: false, meta: "1.2K",  git: 'M', mark: 0, selected: true },
-                MockEntry { name: "README.md",  is_dir: false, meta: "3.4K",  git: ' ', mark: 0, selected: false },
-                MockEntry { name: "main.rs",    is_dir: false, meta: "840",   git: 'A', mark: 2, selected: false },
-                MockEntry { name: ".gitignore", is_dir: false, meta: "120",   git: ' ', mark: 0, selected: false },
-                MockEntry { name: "config.rs",  is_dir: false, meta: "2.1K",  git: '?', mark: 0, selected: false },
-                MockEntry { name: "build.rs",   is_dir: false, meta: "560",   git: ' ', mark: 3, selected: false },
+                MockEntry {
+                    name: "..",
+                    is_dir: true,
+                    meta: "",
+                    git: ' ',
+                    mark: 0,
+                    selected: false,
+                },
+                MockEntry {
+                    name: "src",
+                    is_dir: true,
+                    meta: "<DIR>",
+                    git: 'M',
+                    mark: 0,
+                    selected: false,
+                },
+                MockEntry {
+                    name: "docs",
+                    is_dir: true,
+                    meta: "<DIR>",
+                    git: ' ',
+                    mark: 1,
+                    selected: false,
+                },
+                MockEntry {
+                    name: "tests",
+                    is_dir: true,
+                    meta: "<DIR>",
+                    git: ' ',
+                    mark: 0,
+                    selected: true,
+                },
+                MockEntry {
+                    name: "Cargo.toml",
+                    is_dir: false,
+                    meta: "1.2K",
+                    git: 'M',
+                    mark: 0,
+                    selected: true,
+                },
+                MockEntry {
+                    name: "README.md",
+                    is_dir: false,
+                    meta: "3.4K",
+                    git: ' ',
+                    mark: 0,
+                    selected: false,
+                },
+                MockEntry {
+                    name: "main.rs",
+                    is_dir: false,
+                    meta: "840",
+                    git: 'A',
+                    mark: 2,
+                    selected: false,
+                },
+                MockEntry {
+                    name: ".gitignore",
+                    is_dir: false,
+                    meta: "120",
+                    git: ' ',
+                    mark: 0,
+                    selected: false,
+                },
+                MockEntry {
+                    name: "config.rs",
+                    is_dir: false,
+                    meta: "2.1K",
+                    git: '?',
+                    mark: 0,
+                    selected: false,
+                },
+                MockEntry {
+                    name: "build.rs",
+                    is_dir: false,
+                    meta: "560",
+                    git: ' ',
+                    mark: 3,
+                    selected: false,
+                },
             ];
 
             let cursor_row = 1usize;
             let iw = inner.width as usize;
 
             for (i, entry) in entries.iter().enumerate() {
-                if i as u16 >= inner.height { break; }
+                if i as u16 >= inner.height {
+                    break;
+                }
                 let is_cursor = i == cursor_row;
-                let icon = if entry.name == ".." { " \u{f07c} " } else { file_icon(entry.name, entry.is_dir) };
+                let icon = if entry.name == ".." {
+                    " \u{f07c} "
+                } else {
+                    file_icon(entry.name, entry.is_dir)
+                };
                 let display_name = if entry.is_dir && entry.name != ".." {
                     format!("{}/", entry.name)
                 } else {
@@ -476,8 +622,16 @@ fn render_preview_panel(f: &mut Frame, pt: &Theme, area: Rect) {
                 };
 
                 let icon_w = crate::ui::util::display_width(icon);
-                let meta_str = if entry.name == ".." { String::new() } else { format!("{:>5}", entry.meta) };
-                let meta_w = if entry.name == ".." { 0 } else { crate::ui::util::display_width(&meta_str) + 1 };
+                let meta_str = if entry.name == ".." {
+                    String::new()
+                } else {
+                    format!("{:>5}", entry.meta)
+                };
+                let meta_w = if entry.name == ".." {
+                    0
+                } else {
+                    crate::ui::util::display_width(&meta_str) + 1
+                };
                 let name_w = iw.saturating_sub(2 + icon_w + meta_w + 1);
 
                 let name_display = crate::ui::util::pad_to_width(
@@ -489,18 +643,29 @@ fn render_preview_panel(f: &mut Frame, pt: &Theme, area: Rect) {
 
                 if is_cursor {
                     let cs = Style::default().fg(pt.bg_text).bg(pt.blue);
-                    let gs = git_color.map(|c| Style::default().fg(pt.bg_text).bg(c)).unwrap_or(cs);
-                    let vs = vm_color.map(|c| Style::default().fg(pt.bg_text).bg(c)).unwrap_or(cs);
-                    f.render_widget(Paragraph::new(Line::from(vec![
-                        Span::styled(git_icon, gs),
-                        Span::styled(" ", cs),
-                        Span::styled(icon, cs),
-                        Span::styled(name_display, cs),
-                        Span::styled(format!("{meta_str} "), cs),
-                        Span::styled(vm_text, vs),
-                    ])), row_area);
+                    let gs = git_color
+                        .map(|c| Style::default().fg(pt.bg_text).bg(c))
+                        .unwrap_or(cs);
+                    let vs = vm_color
+                        .map(|c| Style::default().fg(pt.bg_text).bg(c))
+                        .unwrap_or(cs);
+                    f.render_widget(
+                        Paragraph::new(Line::from(vec![
+                            Span::styled(git_icon, gs),
+                            Span::styled(" ", cs),
+                            Span::styled(icon, cs),
+                            Span::styled(name_display, cs),
+                            Span::styled(format!("{meta_str} "), cs),
+                            Span::styled(vm_text, vs),
+                        ])),
+                        row_area,
+                    );
                 } else {
-                    let bg = if entry.selected { pt.cursor_line } else { pt.bg };
+                    let bg = if entry.selected {
+                        pt.cursor_line
+                    } else {
+                        pt.bg
+                    };
                     let name_fg = if entry.selected {
                         pt.orange
                     } else if entry.is_dir {
@@ -508,17 +673,31 @@ fn render_preview_panel(f: &mut Frame, pt: &Theme, area: Rect) {
                     } else {
                         pt.file_color
                     };
-                    let icon_fg = if entry.is_dir { pt.dir_color } else { pt.fg_dim };
-                    let gs = git_color.map(|c| Style::default().fg(c).bg(bg)).unwrap_or(Style::default().fg(pt.fg_dim).bg(bg));
-                    let vs = vm_color.map(|c| Style::default().fg(c).bg(bg)).unwrap_or(Style::default().bg(bg));
-                    f.render_widget(Paragraph::new(Line::from(vec![
-                        Span::styled(git_icon, gs),
-                        Span::styled(" ", Style::default().bg(bg)),
-                        Span::styled(icon, Style::default().fg(icon_fg).bg(bg)),
-                        Span::styled(name_display, Style::default().fg(name_fg).bg(bg)),
-                        Span::styled(format!("{meta_str} "), Style::default().fg(pt.fg_dim).bg(bg)),
-                        Span::styled(vm_text, vs),
-                    ])), row_area);
+                    let icon_fg = if entry.is_dir {
+                        pt.dir_color
+                    } else {
+                        pt.fg_dim
+                    };
+                    let gs = git_color
+                        .map(|c| Style::default().fg(c).bg(bg))
+                        .unwrap_or(Style::default().fg(pt.fg_dim).bg(bg));
+                    let vs = vm_color
+                        .map(|c| Style::default().fg(c).bg(bg))
+                        .unwrap_or(Style::default().bg(bg));
+                    f.render_widget(
+                        Paragraph::new(Line::from(vec![
+                            Span::styled(git_icon, gs),
+                            Span::styled(" ", Style::default().bg(bg)),
+                            Span::styled(icon, Style::default().fg(icon_fg).bg(bg)),
+                            Span::styled(name_display, Style::default().fg(name_fg).bg(bg)),
+                            Span::styled(
+                                format!("{meta_str} "),
+                                Style::default().fg(pt.fg_dim).bg(bg),
+                            ),
+                            Span::styled(vm_text, vs),
+                        ])),
+                        row_area,
+                    );
                 }
             }
         }
@@ -541,31 +720,75 @@ fn render_preview_panel(f: &mut Frame, pt: &Theme, area: Rect) {
                 vec![("use ", pt.magenta), ("std::io", pt.cyan), (";", pt.fg_dim)],
                 vec![("", pt.fg)],
                 vec![("fn ", pt.magenta), ("main", pt.blue), ("() {", pt.fg)],
-                vec![("  let ", pt.magenta), ("name", pt.fg), (" = ", pt.fg_dim), ("\"fcmd\"", pt.green), (";", pt.fg_dim)],
-                vec![("  let ", pt.magenta), ("count", pt.fg), (": ", pt.fg_dim), ("u32", pt.cyan), (" = ", pt.fg_dim), ("42", pt.orange), (";", pt.fg_dim)],
-                vec![("  if ", pt.magenta), ("count", pt.fg), (" > ", pt.fg_dim), ("0", pt.orange), (" {", pt.fg)],
-                vec![("    println!", pt.yellow), ("(", pt.fg), ("\"{}\"", pt.green), (", ", pt.fg_dim), ("name", pt.fg), (")", pt.fg), (";", pt.fg_dim)],
+                vec![
+                    ("  let ", pt.magenta),
+                    ("name", pt.fg),
+                    (" = ", pt.fg_dim),
+                    ("\"fcmd\"", pt.green),
+                    (";", pt.fg_dim),
+                ],
+                vec![
+                    ("  let ", pt.magenta),
+                    ("count", pt.fg),
+                    (": ", pt.fg_dim),
+                    ("u32", pt.cyan),
+                    (" = ", pt.fg_dim),
+                    ("42", pt.orange),
+                    (";", pt.fg_dim),
+                ],
+                vec![
+                    ("  if ", pt.magenta),
+                    ("count", pt.fg),
+                    (" > ", pt.fg_dim),
+                    ("0", pt.orange),
+                    (" {", pt.fg),
+                ],
+                vec![
+                    ("    println!", pt.yellow),
+                    ("(", pt.fg),
+                    ("\"{}\"", pt.green),
+                    (", ", pt.fg_dim),
+                    ("name", pt.fg),
+                    (")", pt.fg),
+                    (";", pt.fg_dim),
+                ],
                 vec![("  }", pt.fg)],
                 vec![("  // TODO: ", pt.fg_dim), ("refactor", pt.fg_dim)],
-                vec![("  ", pt.fg), ("Err", pt.red), ("(", pt.fg), ("\"fail\"", pt.green), (")", pt.fg)],
+                vec![
+                    ("  ", pt.fg),
+                    ("Err", pt.red),
+                    ("(", pt.fg),
+                    ("\"fail\"", pt.green),
+                    (")", pt.fg),
+                ],
                 vec![("}", pt.fg)],
             ];
 
             let ciw = inner.width as usize;
             for (i, spans_data) in code_lines.iter().enumerate() {
-                if i as u16 >= inner.height { break; }
+                if i as u16 >= inner.height {
+                    break;
+                }
                 let line_num = format!("{:>2} ", i + 1);
-                let mut spans = vec![Span::styled(line_num, Style::default().fg(pt.fg_dim).bg(pt.bg))];
+                let mut spans = vec![Span::styled(
+                    line_num,
+                    Style::default().fg(pt.fg_dim).bg(pt.bg),
+                )];
                 let mut used = 3usize;
                 for &(text, color) in spans_data {
-                    if used >= ciw { break; }
+                    if used >= ciw {
+                        break;
+                    }
                     let remaining = ciw - used;
                     let display: String = text.chars().take(remaining).collect();
                     used += display.chars().count();
                     spans.push(Span::styled(display, Style::default().fg(color).bg(pt.bg)));
                 }
                 if used < ciw {
-                    spans.push(Span::styled(" ".repeat(ciw - used), Style::default().bg(pt.bg)));
+                    spans.push(Span::styled(
+                        " ".repeat(ciw - used),
+                        Style::default().bg(pt.bg),
+                    ));
                 }
                 f.render_widget(
                     Paragraph::new(Line::from(spans)),
@@ -577,7 +800,10 @@ fn render_preview_panel(f: &mut Frame, pt: &Theme, area: Rect) {
             for i in code_lines.len()..inner.height as usize {
                 let tilde = format!(" \u{7e}{}", " ".repeat(ciw.saturating_sub(2)));
                 f.render_widget(
-                    Paragraph::new(Line::from(Span::styled(tilde, Style::default().fg(pt.fg_dim).bg(pt.bg)))),
+                    Paragraph::new(Line::from(Span::styled(
+                        tilde,
+                        Style::default().fg(pt.fg_dim).bg(pt.bg),
+                    ))),
                     Rect::new(inner.x, inner.y + i as u16, inner.width, 1),
                 );
             }
@@ -665,14 +891,26 @@ fn render_preview_panel(f: &mut Frame, pt: &Theme, area: Rect) {
         let mut used = 0usize;
         for (i, &(label, color)) in modes.iter().enumerate() {
             let lw = label.chars().count() + 1; // +1 for sep
-            if used + lw > mw { break; }
-            spans.push(Span::styled(label, Style::default().fg(pt.bg_text).bg(color)));
-            let next_bg = if i + 1 < modes.len() { modes[i + 1].1 } else { pt.bg };
+            if used + lw > mw {
+                break;
+            }
+            spans.push(Span::styled(
+                label,
+                Style::default().fg(pt.bg_text).bg(color),
+            ));
+            let next_bg = if i + 1 < modes.len() {
+                modes[i + 1].1
+            } else {
+                pt.bg
+            };
             spans.push(Span::styled(sep_r, Style::default().fg(color).bg(next_bg)));
             used += lw;
         }
         if used < mw {
-            spans.push(Span::styled(" ".repeat(mw - used), Style::default().bg(pt.bg)));
+            spans.push(Span::styled(
+                " ".repeat(mw - used),
+                Style::default().bg(pt.bg),
+            ));
         }
         f.render_widget(Paragraph::new(Line::from(spans)), modes_area);
     }
@@ -700,11 +938,20 @@ fn render_preview_panel(f: &mut Frame, pt: &Theme, area: Rect) {
         let reg_sep = Span::styled(sep_l, Style::default().fg(pt.bg_light).bg(pt.status_bg));
 
         let mode_w = mode_text.chars().count() + 1;
-        let right_w = pos_text.chars().count() + 1 + sort_text.chars().count() + 1 + reg_text.chars().count() + 1;
+        let right_w = pos_text.chars().count()
+            + 1
+            + sort_text.chars().count()
+            + 1
+            + reg_text.chars().count()
+            + 1;
 
         let info_max = sw.saturating_sub(mode_w + 1 + right_w);
         let info_display: String = if info_text.chars().count() > info_max {
-            info_text.chars().take(info_max.saturating_sub(1)).chain(std::iter::once('\u{2026}')).collect()
+            info_text
+                .chars()
+                .take(info_max.saturating_sub(1))
+                .chain(std::iter::once('\u{2026}'))
+                .collect()
         } else {
             info_text.to_string()
         };
@@ -715,7 +962,10 @@ fn render_preview_panel(f: &mut Frame, pt: &Theme, area: Rect) {
         let fill = sw.saturating_sub(left_used + right_w);
 
         let mut spans = vec![mode_span, mode_sep, info_span, info_sep];
-        spans.push(Span::styled(" ".repeat(fill), Style::default().bg(pt.status_bg)));
+        spans.push(Span::styled(
+            " ".repeat(fill),
+            Style::default().bg(pt.status_bg),
+        ));
         spans.extend([reg_sep, reg_span, sort_sep, sort_span, pos_sep, pos_span]);
 
         f.render_widget(Paragraph::new(Line::from(spans)), status_area);

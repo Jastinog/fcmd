@@ -9,8 +9,8 @@ use ratatui::{
 use crate::app::{App, Mode};
 use crate::model::panel::SortMode;
 
-use super::{SEP_LEFT, SEP_RIGHT};
 use super::util::display_width;
+use super::{SEP_LEFT, SEP_RIGHT};
 
 pub(super) fn render_status(f: &mut Frame, app: &App, area: Rect) {
     let t = &app.theme;
@@ -21,11 +21,13 @@ pub(super) fn render_status(f: &mut Frame, app: &App, area: Rect) {
         area,
     );
 
-
     // Confirm mode — overlay handles the popup, status bar shows mode
     if app.mode == Mode::Confirm {
         let mut spans = vec![
-            Span::styled(" \u{f05e8} CONFIRM ".to_string(), Style::default().fg(t.bg_text).bg(t.red)),
+            Span::styled(
+                " \u{f05e8} CONFIRM ".to_string(),
+                Style::default().fg(t.bg_text).bg(t.red),
+            ),
             Span::styled(SEP_RIGHT, Style::default().fg(t.red).bg(t.status_bg)),
         ];
 
@@ -48,24 +50,24 @@ pub(super) fn render_status(f: &mut Frame, app: &App, area: Rect) {
     // ── Mode segment ────────────────
     let mode_str: String;
     let (mode_ref, mode_bg) = if app.tree_focused && app.mode == Mode::Normal {
-        mode_str = "\u{f0645} TREE".to_string();    // 󰙅
+        mode_str = "\u{f0645} TREE".to_string(); // 󰙅
         (mode_str.as_str(), t.cyan)
     } else {
         match app.mode {
             Mode::Normal => {
-                mode_str = "\u{f018d} NORMAL".to_string();  // 󰆍
+                mode_str = "\u{f018d} NORMAL".to_string(); // 󰆍
                 (mode_str.as_str(), t.green)
             }
             Mode::Visual => {
-                mode_str = "\u{f0489} VISUAL".to_string();  // 󰒉
+                mode_str = "\u{f0489} VISUAL".to_string(); // 󰒉
                 (mode_str.as_str(), t.magenta)
             }
             Mode::Select => {
-                mode_str = "\u{f0135} SELECT".to_string();  // 󰄵
+                mode_str = "\u{f0135} SELECT".to_string(); // 󰄵
                 (mode_str.as_str(), t.orange)
             }
             Mode::Find => {
-                mode_str = "\u{f002} FIND".to_string();     //
+                mode_str = "\u{f002} FIND".to_string(); //
                 (mode_str.as_str(), t.cyan)
             }
             Mode::Viewer => {
@@ -73,11 +75,11 @@ pub(super) fn render_status(f: &mut Frame, app: &App, area: Rect) {
                 (mode_str.as_str(), t.cyan)
             }
             Mode::Help => {
-                mode_str = "\u{f02d6} HELP".to_string();    // 󰋖
+                mode_str = "\u{f02d6} HELP".to_string(); // 󰋖
                 (mode_str.as_str(), t.cyan)
             }
             Mode::ThemePicker => {
-                mode_str = "\u{f03d8} THEME".to_string();   // 󰏘
+                mode_str = "\u{f03d8} THEME".to_string(); // 󰏘
                 (mode_str.as_str(), t.cyan)
             }
             Mode::Bookmarks => {
@@ -85,31 +87,31 @@ pub(super) fn render_status(f: &mut Frame, app: &App, area: Rect) {
                 (mode_str.as_str(), t.cyan)
             }
             Mode::Rename => {
-                mode_str = "\u{f03eb} RENAME".to_string();  // 󰏫
+                mode_str = "\u{f03eb} RENAME".to_string(); // 󰏫
                 (mode_str.as_str(), t.yellow)
             }
             Mode::Create => {
-                mode_str = "\u{f0415} CREATE".to_string();  // 󰐕
+                mode_str = "\u{f0415} CREATE".to_string(); // 󰐕
                 (mode_str.as_str(), t.green)
             }
             Mode::Chmod => {
-                mode_str = "\u{f033e} CHMOD".to_string();   // 󰌾
+                mode_str = "\u{f033e} CHMOD".to_string(); // 󰌾
                 (mode_str.as_str(), t.orange)
             }
             Mode::Chown => {
-                mode_str = "\u{f0004} CHOWN".to_string();   // 󰀄
+                mode_str = "\u{f0004} CHOWN".to_string(); // 󰀄
                 (mode_str.as_str(), t.orange)
             }
             Mode::Info => {
-                mode_str = "\u{f02fd} INFO".to_string();    // 󰋽
+                mode_str = "\u{f02fd} INFO".to_string(); // 󰋽
                 (mode_str.as_str(), t.cyan)
             }
             Mode::Search => {
-                mode_str = "\u{f0349} SEARCH".to_string();  // 󰍉
+                mode_str = "\u{f0349} SEARCH".to_string(); // 󰍉
                 (mode_str.as_str(), t.cyan)
             }
             Mode::Command => {
-                mode_str = "\u{f018d} CMD".to_string();     // 󰆍
+                mode_str = "\u{f018d} CMD".to_string(); // 󰆍
                 (mode_str.as_str(), t.cyan)
             }
             _ => {
@@ -130,7 +132,11 @@ pub(super) fn render_status(f: &mut Frame, app: &App, area: Rect) {
     let mut right_parts: Vec<(String, Color, Color)> = Vec::new();
 
     // Position segment (rightmost)
-    let pos_display = if panel.entries.is_empty() { 0 } else { panel.selected + 1 };
+    let pos_display = if panel.entries.is_empty() {
+        0
+    } else {
+        panel.selected + 1
+    };
     let pos_text = format!(" {}/{} ", pos_display, panel.entries.len());
     right_parts.push((pos_text, t.bg, t.blue));
 

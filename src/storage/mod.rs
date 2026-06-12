@@ -4,9 +4,9 @@ use std::path::{Path, PathBuf};
 use rusqlite::{Connection, params};
 
 pub struct SavedTab {
-    pub panel_paths: Vec<PathBuf>,   // up to 3 paths
-    pub panel_cursors: Vec<usize>,   // up to 3 cursors
-    pub active_panel: usize,         // 0, 1, or 2
+    pub panel_paths: Vec<PathBuf>, // up to 3 paths
+    pub panel_cursors: Vec<usize>, // up to 3 cursors
+    pub active_panel: usize,       // 0, 1, or 2
 }
 
 pub struct Db {
@@ -15,8 +15,7 @@ pub struct Db {
 
 impl Db {
     pub fn init() -> rusqlite::Result<Self> {
-        let db_path = crate::util::config_dir()
-            .unwrap_or_else(|| PathBuf::from("."));
+        let db_path = crate::util::config_dir().unwrap_or_else(|| PathBuf::from("."));
         std::fs::create_dir_all(&db_path).ok();
         let conn = Connection::open(db_path.join("fcmd.db"))?;
         conn.execute_batch(
@@ -120,12 +119,27 @@ impl Db {
         let tx = self.conn.unchecked_transaction()?;
 
         tx.execute("DELETE FROM session_tabs", [])?;
-        tx.execute("DELETE FROM session_meta WHERE key NOT IN ('theme', 'layout', 'transparent')", [])?;
+        tx.execute(
+            "DELETE FROM session_meta WHERE key NOT IN ('theme', 'layout', 'transparent')",
+            [],
+        )?;
 
         for (i, tab) in tabs.iter().enumerate() {
-            let left_path = tab.panel_paths.first().map(|p| p.to_string_lossy().into_owned()).unwrap_or_default();
-            let right_path = tab.panel_paths.get(1).map(|p| p.to_string_lossy().into_owned()).unwrap_or_default();
-            let center_path = tab.panel_paths.get(2).map(|p| p.to_string_lossy().into_owned()).unwrap_or_default();
+            let left_path = tab
+                .panel_paths
+                .first()
+                .map(|p| p.to_string_lossy().into_owned())
+                .unwrap_or_default();
+            let right_path = tab
+                .panel_paths
+                .get(1)
+                .map(|p| p.to_string_lossy().into_owned())
+                .unwrap_or_default();
+            let center_path = tab
+                .panel_paths
+                .get(2)
+                .map(|p| p.to_string_lossy().into_owned())
+                .unwrap_or_default();
             let active_panel = tab.active_panel.to_string();
             let left_cursor = tab.panel_cursors.first().copied().unwrap_or(0) as i64;
             let right_cursor = tab.panel_cursors.get(1).copied().unwrap_or(0) as i64;
@@ -202,9 +216,9 @@ impl Db {
             .replace('%', "\\%")
             .replace('_', "\\_");
         let pattern = format!("{escaped}/%");
-        let mut stmt = self.conn.prepare(
-            "SELECT path, size_bytes FROM dir_sizes WHERE path LIKE ?1 ESCAPE '\\'",
-        )?;
+        let mut stmt = self
+            .conn
+            .prepare("SELECT path, size_bytes FROM dir_sizes WHERE path LIKE ?1 ESCAPE '\\'")?;
         let rows = stmt.query_map(params![pattern], |row| {
             let p: String = row.get(0)?;
             let s: i64 = row.get(1)?;
@@ -303,7 +317,9 @@ impl Db {
     // --- Bookmarks ---
 
     pub fn load_bookmarks(&self) -> rusqlite::Result<Vec<(String, PathBuf)>> {
-        let mut stmt = self.conn.prepare("SELECT name, path FROM bookmarks ORDER BY name")?;
+        let mut stmt = self
+            .conn
+            .prepare("SELECT name, path FROM bookmarks ORDER BY name")?;
         let rows = stmt.query_map([], |row| {
             let name: String = row.get(0)?;
             let path: String = row.get(1)?;
@@ -321,10 +337,8 @@ impl Db {
     }
 
     pub fn remove_bookmark(&self, name: &str) -> rusqlite::Result<()> {
-        self.conn.execute(
-            "DELETE FROM bookmarks WHERE name = ?1",
-            params![name],
-        )?;
+        self.conn
+            .execute("DELETE FROM bookmarks WHERE name = ?1", params![name])?;
         Ok(())
     }
 
@@ -421,11 +435,7 @@ impl Db {
                 };
 
                 Ok(SavedTab {
-                    panel_paths: vec![
-                        PathBuf::from(left_path),
-                        PathBuf::from(right_path),
-                        center,
-                    ],
+                    panel_paths: vec![PathBuf::from(left_path), PathBuf::from(right_path), center],
                     panel_cursors: vec![left_cursor, right_cursor, center_cursor],
                     active_panel,
                 })
@@ -600,15 +610,18 @@ mod tests {
         assert!(bm.is_empty());
 
         // Add bookmarks
-        db.save_bookmark("projects", Path::new("/home/user/projects")).unwrap();
-        db.save_bookmark("downloads", Path::new("/home/user/downloads")).unwrap();
+        db.save_bookmark("projects", Path::new("/home/user/projects"))
+            .unwrap();
+        db.save_bookmark("downloads", Path::new("/home/user/downloads"))
+            .unwrap();
         let bm = db.load_bookmarks().unwrap();
         assert_eq!(bm.len(), 2);
         assert_eq!(bm[0].0, "downloads");
         assert_eq!(bm[1].0, "projects");
 
         // Update bookmark path
-        db.save_bookmark("projects", Path::new("/opt/projects")).unwrap();
+        db.save_bookmark("projects", Path::new("/opt/projects"))
+            .unwrap();
         let bm = db.load_bookmarks().unwrap();
         assert_eq!(bm.len(), 2);
         assert_eq!(bm[1].1, PathBuf::from("/opt/projects"));
@@ -624,14 +637,18 @@ mod tests {
     fn bookmarks_rename() {
         let db = Db::init_in_memory().unwrap();
 
-        db.save_bookmark("old", Path::new("/home/user/old")).unwrap();
+        db.save_bookmark("old", Path::new("/home/user/old"))
+            .unwrap();
         db.save_bookmark("other", Path::new("/tmp/other")).unwrap();
 
         // Rename old -> new
         db.rename_bookmark("old", "new").unwrap();
         let bm = db.load_bookmarks().unwrap();
         assert_eq!(bm.len(), 2);
-        assert!(bm.iter().any(|(n, p)| n == "new" && p == Path::new("/home/user/old")));
+        assert!(
+            bm.iter()
+                .any(|(n, p)| n == "new" && p == Path::new("/home/user/old"))
+        );
         assert!(!bm.iter().any(|(n, _)| n == "old"));
 
         // Rename non-existent fails

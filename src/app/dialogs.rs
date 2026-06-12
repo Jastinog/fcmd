@@ -176,8 +176,7 @@ impl App {
                 } else {
                     let group_len = self.current_group_len();
                     if group_len > 0 {
-                        self.theme_item_cursor =
-                            (self.theme_item_cursor + 1).min(group_len - 1);
+                        self.theme_item_cursor = (self.theme_item_cursor + 1).min(group_len - 1);
                         self.adjust_theme_scroll();
                         self.spawn_theme_load();
                     }
@@ -278,7 +277,9 @@ impl App {
                 self.apply_transparency();
                 self.theme_active_name = Some(name.clone());
                 let n = name.clone();
-                self.db_spawn(move |db| { let _ = db.save_theme(&n); });
+                self.db_spawn(move |db| {
+                    let _ = db.save_theme(&n);
+                });
                 self.status_message = format!("Theme: {name}");
                 self.mode = Mode::Normal;
             }
@@ -394,7 +395,9 @@ mod tests {
         let entries = crate::app::make_test_entries(&["a.txt"]);
         let mut app = App::new_for_test(entries);
         app.mode = Mode::Confirm;
-        app.confirm_paths = (0..10).map(|i| (PathBuf::from(format!("/f{i}")), false)).collect();
+        app.confirm_paths = (0..10)
+            .map(|i| (PathBuf::from(format!("/f{i}")), false))
+            .collect();
         app.confirm_scroll = 0;
 
         app.handle_confirm(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));

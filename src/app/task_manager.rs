@@ -467,10 +467,18 @@ impl TaskManager {
         match task.kind {
             TaskKind::Copy { .. } => "Copy",
             TaskKind::Move { .. } => "Move",
-            TaskKind::Delete { permanent: true, .. } => "Delete",
-            TaskKind::Delete { permanent: false, .. } => "Trash",
-            TaskKind::Archive { is_create: true, .. } => "Archive",
-            TaskKind::Archive { is_create: false, .. } => "Extract",
+            TaskKind::Delete {
+                permanent: true, ..
+            } => "Delete",
+            TaskKind::Delete {
+                permanent: false, ..
+            } => "Trash",
+            TaskKind::Archive {
+                is_create: true, ..
+            } => "Archive",
+            TaskKind::Archive {
+                is_create: false, ..
+            } => "Extract",
         }
     }
 
@@ -479,10 +487,12 @@ impl TaskManager {
         let mut result = Vec::new();
         for task in &self.tasks {
             match &task.kind {
-                TaskKind::Copy { dst_dir, phantoms, .. }
-                | TaskKind::Move { dst_dir, phantoms, .. }
-                    if dst_dir == dir && matches!(task.state, TaskState::Running { .. }) =>
-                {
+                TaskKind::Copy {
+                    dst_dir, phantoms, ..
+                }
+                | TaskKind::Move {
+                    dst_dir, phantoms, ..
+                } if dst_dir == dir && matches!(task.state, TaskState::Running { .. }) => {
                     result.extend(phantoms.iter());
                 }
                 _ => {}
@@ -676,7 +686,11 @@ mod tests {
         assert!(matches!(events[0], TaskEvent::ArchiveFinished { .. }));
         assert!(matches!(
             tm.tasks()[0].state,
-            TaskState::Finished { success: true, cancelled: false, .. }
+            TaskState::Finished {
+                success: true,
+                cancelled: false,
+                ..
+            }
         ));
     }
 

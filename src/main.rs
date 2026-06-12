@@ -108,11 +108,17 @@ fn open_in_editor(
 /// Used to detect whether a tick actually modified anything worth redrawing.
 fn snapshot(
     app: &app::App,
-) -> (String, Option<String>, Option<String>, bool, usize, usize, usize, usize) {
-    let find_count = app
-        .find_state
-        .as_ref()
-        .map_or(0, |fs| fs.total_count());
+) -> (
+    String,
+    Option<String>,
+    Option<String>,
+    bool,
+    usize,
+    usize,
+    usize,
+    usize,
+) {
+    let find_count = app.find_state.as_ref().map_or(0, |fs| fs.total_count());
     (
         app.status_message.clone(),
         app.task_notification.clone(),
@@ -150,7 +156,11 @@ async fn run(
     // tick to avoid spending CPU on terminal redraws during long copies/moves.
     // Task completion, conflicts and status messages are tracked by `snapshot`
     // and still redraw immediately.
-    const TASK_REDRAW_EVERY_N_TICKS: u32 = if 1000 / TICK_MS > 0 { (1000 / TICK_MS) as u32 } else { 1 };
+    const TASK_REDRAW_EVERY_N_TICKS: u32 = if 1000 / TICK_MS > 0 {
+        (1000 / TICK_MS) as u32
+    } else {
+        1
+    };
     // Minimum wall-clock gap between two consecutive redraws driven by *background*
     // work (task progress, streaming dir/find loads, etc.). This keeps the terminal
     // from being redrawn dozens of times per second when background channels fire
@@ -164,8 +174,8 @@ async fn run(
 
     loop {
         if app.needs_redraw {
-            let due = draw_immediately
-                || last_draw.is_none_or(|t| t.elapsed() >= MIN_REDRAW_INTERVAL);
+            let due =
+                draw_immediately || last_draw.is_none_or(|t| t.elapsed() >= MIN_REDRAW_INTERVAL);
             if due {
                 terminal.draw(|f| ui::render(f, app))?;
                 app.needs_redraw = false;

@@ -33,7 +33,9 @@ impl App {
         {
             let n = name.to_string();
             let p = path.clone();
-            self.db_spawn(move |db| { let _ = db.save_bookmark(&n, &p); });
+            self.db_spawn(move |db| {
+                let _ = db.save_bookmark(&n, &p);
+            });
         }
         // Update in-memory list (keep sorted)
         if let Some(pos) = self.bookmarks.iter().position(|(n, _)| n == name) {
@@ -47,7 +49,9 @@ impl App {
 
     pub(super) fn remove_bookmark_by_name(&mut self, name: &str) {
         let n = name.to_string();
-        self.db_spawn(move |db| { let _ = db.remove_bookmark(&n); });
+        self.db_spawn(move |db| {
+            let _ = db.remove_bookmark(&n);
+        });
         self.bookmarks.retain(|(n, _)| n != name);
     }
 
@@ -210,7 +214,9 @@ impl App {
         {
             let old = old_name.to_string();
             let new = new_name.to_string();
-            self.db_spawn(move |db| { let _ = db.rename_bookmark(&old, &new); });
+            self.db_spawn(move |db| {
+                let _ = db.rename_bookmark(&old, &new);
+            });
         }
         if let Some(pos) = self.bookmarks.iter().position(|(n, _)| n == old_name) {
             self.bookmarks[pos].0 = new_name.to_string();

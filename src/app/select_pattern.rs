@@ -240,7 +240,11 @@ mod tests {
         app.handle_unselect_pattern(key(KeyCode::Enter));
         // Only b.rs should remain
         assert_eq!(app.active_panel().marked.len(), 1);
-        assert!(app.active_panel().marked.contains(&PathBuf::from("/test/b.rs")));
+        assert!(
+            app.active_panel()
+                .marked
+                .contains(&PathBuf::from("/test/b.rs"))
+        );
         assert_eq!(app.mode, Mode::Select);
         assert!(app.status_message.contains("Unselected 2"));
     }
@@ -300,12 +304,26 @@ mod tests {
     async fn invert_selection_partial() {
         let entries = make_test_entries(&["a.txt", "b.txt", "c.txt"]);
         let mut app = App::new_for_test(entries);
-        app.active_panel_mut().marked.insert(PathBuf::from("/test/a.txt"));
+        app.active_panel_mut()
+            .marked
+            .insert(PathBuf::from("/test/a.txt"));
         app.invert_selection();
         // a.txt deselected, b.txt and c.txt selected
         assert_eq!(app.active_panel().marked.len(), 2);
-        assert!(!app.active_panel().marked.contains(&PathBuf::from("/test/a.txt")));
-        assert!(app.active_panel().marked.contains(&PathBuf::from("/test/b.txt")));
-        assert!(app.active_panel().marked.contains(&PathBuf::from("/test/c.txt")));
+        assert!(
+            !app.active_panel()
+                .marked
+                .contains(&PathBuf::from("/test/a.txt"))
+        );
+        assert!(
+            app.active_panel()
+                .marked
+                .contains(&PathBuf::from("/test/b.txt"))
+        );
+        assert!(
+            app.active_panel()
+                .marked
+                .contains(&PathBuf::from("/test/c.txt"))
+        );
     }
 }

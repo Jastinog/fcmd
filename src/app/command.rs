@@ -59,7 +59,10 @@ impl App {
                 let name2 = name.clone();
                 tokio::task::spawn_blocking(move || {
                     let result = ops::mkdir(&dir, &name2).map_err(|e| e.to_string());
-                    let _ = tx.send(super::FileOpResult::Mkdir { name: name2, result });
+                    let _ = tx.send(super::FileOpResult::Mkdir {
+                        name: name2,
+                        result,
+                    });
                 });
             }
 
@@ -77,7 +80,10 @@ impl App {
                 let name2 = name.clone();
                 tokio::task::spawn_blocking(move || {
                     let result = ops::touch(&dir, &name2).map_err(|e| e.to_string());
-                    let _ = tx.send(super::FileOpResult::Touch { name: name2, result });
+                    let _ = tx.send(super::FileOpResult::Touch {
+                        name: name2,
+                        result,
+                    });
                 });
             }
 
@@ -191,7 +197,11 @@ impl App {
                     tokio::task::spawn_blocking(move || {
                         let theme = Theme::load_by_name(&name);
                         let groups = Theme::list_grouped();
-                        let _ = tx.send(super::FileOpResult::ThemeLoad { name, theme, groups });
+                        let _ = tx.send(super::FileOpResult::ThemeLoad {
+                            name,
+                            theme,
+                            groups,
+                        });
                     });
                 }
                 None => {

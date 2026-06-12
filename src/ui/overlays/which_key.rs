@@ -63,10 +63,7 @@ pub(in crate::ui) fn render_which_key(
 
     // Popup dimensions
     let popup_h = (total_rows as u16 + 4).min(area.height);
-    let popup_w = area
-        .width
-        .min((num_cols * col_width + 2) as u16)
-        .max(20);
+    let popup_w = area.width.min((num_cols * col_width + 2) as u16).max(20);
     let popup_x = (area.width.saturating_sub(popup_w)) / 2;
     let popup_y = area.y + area.height.saturating_sub(popup_h + 1);
 
@@ -105,10 +102,7 @@ pub(in crate::ui) fn render_which_key(
                         let desc_text = format!(" {desc}");
                         let entry_chars = key.chars().count() + 2 + desc_text.chars().count();
                         let pad = col_width.saturating_sub(entry_chars);
-                        spans.push(Span::styled(
-                            desc_text,
-                            Style::default().fg(t.fg),
-                        ));
+                        spans.push(Span::styled(desc_text, Style::default().fg(t.fg)));
                         spans.push(Span::raw(" ".repeat(pad)));
                     } else {
                         spans.push(Span::raw(" ".repeat(col_width)));
@@ -130,8 +124,7 @@ pub(in crate::ui) fn render_which_key(
         }
     } else {
         // Flat column-major layout (for small leaders without sections)
-        let all_items: Vec<(&str, &str)> =
-            groups.into_iter().flatten().collect();
+        let all_items: Vec<(&str, &str)> = groups.into_iter().flatten().collect();
         let num_rows = all_items.len().div_ceil(num_cols);
 
         for row in 0..num_rows {

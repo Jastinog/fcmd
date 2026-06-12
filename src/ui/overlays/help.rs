@@ -36,194 +36,259 @@ fn build_help_rows() -> (Vec<Cell>, Vec<Cell>) {
     let mut r: Vec<Cell> = Vec::new();
 
     // ── Block 1: Navigation | Visual + Select ────────
-    push_section(&mut l, " Navigation", &[
-        ("j k / \u{2191}\u{2193}", "Move down / up"),
-        ("h l / \u{2190}\u{2192}", "Parent / Enter dir"),
-        ("Enter", "Open dir or view file"),
-        ("gg G", "Top / Bottom"),
-        ("Ctrl-d/u", "Half page \u{2195}"),
-        ("Ctrl-l/h", "Focus panel \u{2192}/\u{2190}"),
-        ("Tab", "Cycle panels"),
-        ("~", "Home"),
-    ]);
-    push_section(&mut r, "\u{f0ad0} Visual  (v)", &[
-        ("j k", "Extend selection"),
-        ("G / gg", "Bottom / Top"),
-        ("Ctrl-d/u", "Half page \u{2195}"),
-        ("y d D p", "Yank/Del/Paste"),
-        ("cw", "Bulk rename"),
-        ("cp co", "Chmod / Chown"),
-        ("v Esc", "Exit \u{2192} Normal"),
-    ]);
+    push_section(
+        &mut l,
+        " Navigation",
+        &[
+            ("j k / \u{2191}\u{2193}", "Move down / up"),
+            ("h l / \u{2190}\u{2192}", "Parent / Enter dir"),
+            ("Enter", "Open dir or view file"),
+            ("gg G", "Top / Bottom"),
+            ("Ctrl-d/u", "Half page \u{2195}"),
+            ("Ctrl-l/h", "Focus panel \u{2192}/\u{2190}"),
+            ("Tab", "Cycle panels"),
+            ("~", "Home"),
+        ],
+    );
+    push_section(
+        &mut r,
+        "\u{f0ad0} Visual  (v)",
+        &[
+            ("j k", "Extend selection"),
+            ("G / gg", "Bottom / Top"),
+            ("Ctrl-d/u", "Half page \u{2195}"),
+            ("y d D p", "Yank/Del/Paste"),
+            ("cw", "Bulk rename"),
+            ("cp co", "Chmod / Chown"),
+            ("v Esc", "Exit \u{2192} Normal"),
+        ],
+    );
     r.push(Cell::Blank);
-    push_section(&mut r, "\u{f0ad0} Select  (Shift-\u{2191}\u{2193})", &[
-        ("Shift-\u{2191}/\u{2193}", "Toggle mark & move"),
-        ("j k", "Move (keep marks)"),
-        ("y d D p", "Yank/Del/Paste"),
-        ("cw", "Bulk rename"),
-        ("cp co", "Chmod / Chown"),
-        ("Esc", "Clear \u{2192} Normal"),
-    ]);
+    push_section(
+        &mut r,
+        "\u{f0ad0} Select  (Shift-\u{2191}\u{2193})",
+        &[
+            ("Shift-\u{2191}/\u{2193}", "Toggle mark & move"),
+            ("j k", "Move (keep marks)"),
+            ("y d D p", "Yank/Del/Paste"),
+            ("cw", "Bulk rename"),
+            ("cp co", "Chmod / Chown"),
+            ("Esc", "Clear \u{2192} Normal"),
+        ],
+    );
     align(&mut l, &mut r);
-    l.push(Cell::Separator); r.push(Cell::Separator);
+    l.push(Cell::Separator);
+    r.push(Cell::Separator);
 
     // ── Block 2: Files | Preview + Search ────────────
-    push_section(&mut l, "\u{f0214} Files", &[
-        ("yy", "Yank (copy to register)"),
-        ("dd", "Move to trash"),
-        ("dD", "Permanent delete"),
-        ("p / P", "Paste here / other"),
-        ("yp / yn", "Copy path / name"),
-        ("r F2", "Rename"),
-        ("a F7", "Create (/ = dir)"),
-        ("cw", "Bulk rename"),
-        ("cp / co", "Chmod / Chown"),
-        ("i", "File info"),
-        ("o F4", "Open in editor"),
-        ("u", "Undo last operation"),
-        ("F3", "View file"),
-        ("F5 / F6", "Copy / Move to other"),
-    ]);
-    push_section(&mut r, "\u{f06e} Viewer  (Enter / F3)", &[
-        ("j k", "Scroll \u{2193}/\u{2191}"),
-        ("Ctrl-d/u", "Half page \u{2195}"),
-        ("Ctrl-f/b", "Full page \u{2195}"),
-        ("G / g", "Bottom / Top"),
-        ("w #", "Wrap / line numbers"),
-        ("x Tab", "Toggle hex view"),
-        ("h l 0", "Scroll \u{2190}/\u{2192} / start"),
-        ("/ n N", "Search / Next / Prev"),
-        ("o", "Open in editor"),
-        ("q Esc", "Close viewer"),
-    ]);
+    push_section(
+        &mut l,
+        "\u{f0214} Files",
+        &[
+            ("yy", "Yank (copy to register)"),
+            ("dd", "Move to trash"),
+            ("dD", "Permanent delete"),
+            ("p / P", "Paste here / other"),
+            ("yp / yn", "Copy path / name"),
+            ("r F2", "Rename"),
+            ("a F7", "Create (/ = dir)"),
+            ("cw", "Bulk rename"),
+            ("cp / co", "Chmod / Chown"),
+            ("i", "File info"),
+            ("o F4", "Open in editor"),
+            ("u", "Undo last operation"),
+            ("F3", "View file"),
+            ("F5 / F6", "Copy / Move to other"),
+        ],
+    );
+    push_section(
+        &mut r,
+        "\u{f06e} Viewer  (Enter / F3)",
+        &[
+            ("j k", "Scroll \u{2193}/\u{2191}"),
+            ("Ctrl-d/u", "Half page \u{2195}"),
+            ("Ctrl-f/b", "Full page \u{2195}"),
+            ("G / g", "Bottom / Top"),
+            ("w #", "Wrap / line numbers"),
+            ("x Tab", "Toggle hex view"),
+            ("h l 0", "Scroll \u{2190}/\u{2192} / start"),
+            ("/ n N", "Search / Next / Prev"),
+            ("o", "Open in editor"),
+            ("q Esc", "Close viewer"),
+        ],
+    );
     r.push(Cell::Blank);
-    push_section(&mut r, "\u{f002} Search  (/)", &[
-        ("type", "Filter incrementally"),
-        ("Enter", "Accept match"),
-        ("Esc", "Cancel, restore cursor"),
-        ("n / N", "Next / Prev (Normal)"),
-    ]);
+    push_section(
+        &mut r,
+        "\u{f002} Search  (/)",
+        &[
+            ("type", "Filter incrementally"),
+            ("Enter", "Accept match"),
+            ("Esc", "Cancel, restore cursor"),
+            ("n / N", "Next / Prev (Normal)"),
+        ],
+    );
     align(&mut l, &mut r);
-    l.push(Cell::Separator); r.push(Cell::Separator);
+    l.push(Cell::Separator);
+    r.push(Cell::Separator);
 
     // ── Block 3: Space Leader | Find + Tree ──────────
-    push_section(&mut l, "\u{f1720} Space Leader", &[
-        ("Sp+p", "Toggle preview panel"),
-        ("Sp+t", "Toggle tree sidebar"),
-        ("Sp+h", "Toggle hidden files"),
-        ("Sp+d", "Calculate dir sizes"),
-        ("Sp+, / .", "Find local / global"),
-        ("Sp+a / n", "Select all / Unselect"),
-        ("Sp+b", "Bookmarks list"),
-        ("Sp+j", "Task manager"),
-        ("Sp+?", "This help"),
-        ("Sp+s..", "Sort sub-menu"),
-        ("Sp+ut", "Toggle transparent"),
-        ("Sp+w1/2/3", "Layout 1/2/3 panels"),
-    ]);
-    push_section(&mut r, "\u{f0b0} Find  (f / F)", &[
-        ("type", "Fuzzy filter files"),
-        ("\u{2191}/\u{2193}", "Navigate results"),
-        ("Tab", "Local \u{2194} Global"),
-        ("Enter", "Open selected"),
-        ("Esc", "Cancel"),
-    ]);
+    push_section(
+        &mut l,
+        "\u{f1720} Space Leader",
+        &[
+            ("Sp+p", "Toggle preview panel"),
+            ("Sp+t", "Toggle tree sidebar"),
+            ("Sp+h", "Toggle hidden files"),
+            ("Sp+d", "Calculate dir sizes"),
+            ("Sp+, / .", "Find local / global"),
+            ("Sp+a / n", "Select all / Unselect"),
+            ("Sp+b", "Bookmarks list"),
+            ("Sp+j", "Task manager"),
+            ("Sp+?", "This help"),
+            ("Sp+s..", "Sort sub-menu"),
+            ("Sp+ut", "Toggle transparent"),
+            ("Sp+w1/2/3", "Layout 1/2/3 panels"),
+        ],
+    );
+    push_section(
+        &mut r,
+        "\u{f0b0} Find  (f / F)",
+        &[
+            ("type", "Fuzzy filter files"),
+            ("\u{2191}/\u{2193}", "Navigate results"),
+            ("Tab", "Local \u{2194} Global"),
+            ("Enter", "Open selected"),
+            ("Esc", "Cancel"),
+        ],
+    );
     r.push(Cell::Blank);
-    push_section(&mut r, "\u{f1bb} Tree  (Sp+t)", &[
-        ("j k", "Move cursor"),
-        ("l / h", "Expand / Collapse"),
-        ("Enter", "Navigate to entry"),
-        ("G / gg", "Bottom / Top"),
-        ("Tab", "Return to panel"),
-        ("t", "Close tree"),
-    ]);
+    push_section(
+        &mut r,
+        "\u{f1bb} Tree  (Sp+t)",
+        &[
+            ("j k", "Move cursor"),
+            ("l / h", "Expand / Collapse"),
+            ("Enter", "Navigate to entry"),
+            ("G / gg", "Bottom / Top"),
+            ("Tab", "Return to panel"),
+            ("t", "Close tree"),
+        ],
+    );
     align(&mut l, &mut r);
-    l.push(Cell::Separator); r.push(Cell::Separator);
+    l.push(Cell::Separator);
+    r.push(Cell::Separator);
 
     // ── Block 4: Sort & Tabs | Bookmarks ─────────────
-    push_section(&mut l, "\u{f0493} Sort & Tabs", &[
-        ("sn ss", "Name / Size"),
-        ("sm sc", "Modified / Created"),
-        ("se sr", "Extension / Reverse"),
-        ("gt gT", "Next / Prev tab"),
-        ("Ctrl-t/w", "New / Close tab"),
-        ("J K", "Scroll preview \u{2193}/\u{2191}"),
-    ]);
-    push_section(&mut r, "\u{f02e} Bookmarks  (B)", &[
-        ("j k", "Move cursor"),
-        ("Enter", "Go to bookmark"),
-        ("a", "Add bookmark"),
-        ("e", "Rename bookmark"),
-        ("d", "Delete bookmark"),
-        ("q Esc", "Close"),
-    ]);
+    push_section(
+        &mut l,
+        "\u{f0493} Sort & Tabs",
+        &[
+            ("sn ss", "Name / Size"),
+            ("sm sc", "Modified / Created"),
+            ("se sr", "Extension / Reverse"),
+            ("gt gT", "Next / Prev tab"),
+            ("Ctrl-t/w", "New / Close tab"),
+            ("J K", "Scroll preview \u{2193}/\u{2191}"),
+        ],
+    );
+    push_section(
+        &mut r,
+        "\u{f02e} Bookmarks  (B)",
+        &[
+            ("j k", "Move cursor"),
+            ("Enter", "Go to bookmark"),
+            ("a", "Add bookmark"),
+            ("e", "Rename bookmark"),
+            ("d", "Delete bookmark"),
+            ("q Esc", "Close"),
+        ],
+    );
     align(&mut l, &mut r);
-    l.push(Cell::Separator); r.push(Cell::Separator);
+    l.push(Cell::Separator);
+    r.push(Cell::Separator);
 
     // ── Block 5: Marks & Selection | Command ─────────
-    push_section(&mut l, "\u{f02b} Marks & Selection", &[
-        ("m", "Toggle visual mark"),
-        ("M", "Jump to next marked"),
-        ("'{a-z}", "Go to named mark"),
-        ("v V", "Enter visual mode"),
-        ("A", "Select all \u{2192} Select"),
-        ("+ / -", "Sel / Unsel by pattern"),
-        ("*", "Invert selection"),
-        ("Shift-\u{2191}/\u{2193}", "Mark entry & move"),
-        ("b / B", "Add / List bookmarks"),
-        ("T", "Theme picker"),
-        ("Ctrl-r", "Refresh panel"),
-    ]);
-    push_section(&mut r, "\u{f120} Command  (:)", &[
-        (":q :quit", "Quit application"),
-        (":cd <path>", "Change directory"),
-        (":sort ..", "Sort name/size/mod.."),
-        (":find ..", "Open fuzzy finder"),
-        (":sel ..", "Select by glob"),
-        (":unsel ..", "Unselect by glob"),
-        (":theme ..", "Load / list themes"),
-        (":mark a-z", "Set named mark"),
-        (":marks", "List named marks"),
-        (":du", "Directory sizes"),
-        (":tasks :jobs", "Task manager"),
-        (":hidden", "Toggle hidden files"),
-        (":bulkrename", "Bulk rename selected"),
-        (":mkdir <n>", "Create directory"),
-        (":touch <n>", "Create file"),
-        (":rename <n>", "Rename selected"),
-        (":archive <n>", "Create archive (.zip..)"),
-        (":bookmark <n>", "Add bookmark"),
-        (":tabnew", "New tab"),
-        (":tabclose", "Close tab"),
-    ]);
+    push_section(
+        &mut l,
+        "\u{f02b} Marks & Selection",
+        &[
+            ("m", "Toggle visual mark"),
+            ("M", "Jump to next marked"),
+            ("'{a-z}", "Go to named mark"),
+            ("v V", "Enter visual mode"),
+            ("A", "Select all \u{2192} Select"),
+            ("+ / -", "Sel / Unsel by pattern"),
+            ("*", "Invert selection"),
+            ("Shift-\u{2191}/\u{2193}", "Mark entry & move"),
+            ("b / B", "Add / List bookmarks"),
+            ("T", "Theme picker"),
+            ("Ctrl-r", "Refresh panel"),
+        ],
+    );
+    push_section(
+        &mut r,
+        "\u{f120} Command  (:)",
+        &[
+            (":q :quit", "Quit application"),
+            (":cd <path>", "Change directory"),
+            (":sort ..", "Sort name/size/mod.."),
+            (":find ..", "Open fuzzy finder"),
+            (":sel ..", "Select by glob"),
+            (":unsel ..", "Unselect by glob"),
+            (":theme ..", "Load / list themes"),
+            (":mark a-z", "Set named mark"),
+            (":marks", "List named marks"),
+            (":du", "Directory sizes"),
+            (":tasks :jobs", "Task manager"),
+            (":hidden", "Toggle hidden files"),
+            (":bulkrename", "Bulk rename selected"),
+            (":mkdir <n>", "Create directory"),
+            (":touch <n>", "Create file"),
+            (":rename <n>", "Rename selected"),
+            (":archive <n>", "Create archive (.zip..)"),
+            (":bookmark <n>", "Add bookmark"),
+            (":tabnew", "New tab"),
+            (":tabclose", "Close tab"),
+        ],
+    );
     align(&mut l, &mut r);
-    l.push(Cell::Separator); r.push(Cell::Separator);
+    l.push(Cell::Separator);
+    r.push(Cell::Separator);
 
     // ── Block 6: Archive | Bulk Rename ────────────────
-    push_section(&mut l, "\u{f0187} Archive  (Enter on archive)", &[
-        ("j k / \u{2191}\u{2193}", "Move down / up"),
-        ("l / h", "Expand / Collapse dir"),
-        ("Enter", "Toggle expand dir"),
-        ("G / g", "Bottom / Top"),
-        ("Ctrl-d/u", "Half page \u{2195}"),
-        ("x", "Extract selected entry"),
-        ("X", "Extract all files"),
-        ("/", "Search in archive"),
-        ("q Esc", "Close archive"),
-    ]);
-    push_section(&mut r, "\u{f0453} Bulk Rename  (cw / :bulkrename)", &[
-        ("j k", "Move cursor"),
-        ("G / g", "Bottom / Top"),
-        ("Ctrl-d/u", "Half page \u{2195}"),
-        ("i a", "Edit entry name"),
-        ("Enter/Tab", "Commit & next"),
-        ("Shift-Tab", "Commit & prev"),
-        ("u", "Undo line (reset name)"),
-        ("d", "Remove from list"),
-        (":", "Find/Replace (%s/old/new)"),
-        ("Enter", "Apply all renames"),
-        ("q Esc", "Exit"),
-    ]);
+    push_section(
+        &mut l,
+        "\u{f0187} Archive  (Enter on archive)",
+        &[
+            ("j k / \u{2191}\u{2193}", "Move down / up"),
+            ("l / h", "Expand / Collapse dir"),
+            ("Enter", "Toggle expand dir"),
+            ("G / g", "Bottom / Top"),
+            ("Ctrl-d/u", "Half page \u{2195}"),
+            ("x", "Extract selected entry"),
+            ("X", "Extract all files"),
+            ("/", "Search in archive"),
+            ("q Esc", "Close archive"),
+        ],
+    );
+    push_section(
+        &mut r,
+        "\u{f0453} Bulk Rename  (cw / :bulkrename)",
+        &[
+            ("j k", "Move cursor"),
+            ("G / g", "Bottom / Top"),
+            ("Ctrl-d/u", "Half page \u{2195}"),
+            ("i a", "Edit entry name"),
+            ("Enter/Tab", "Commit & next"),
+            ("Shift-Tab", "Commit & prev"),
+            ("u", "Undo line (reset name)"),
+            ("d", "Remove from list"),
+            (":", "Find/Replace (%s/old/new)"),
+            ("Enter", "Apply all renames"),
+            ("q Esc", "Exit"),
+        ],
+    );
     align(&mut l, &mut r);
 
     (l, r)
@@ -312,11 +377,7 @@ pub(in crate::ui) fn render_help(f: &mut Frame, app: &mut App, area: Rect) {
     app.help_scroll = app.help_scroll.min(max_scroll);
     let scroll = app.help_scroll;
 
-    let visible: Vec<Line> = rows
-        .into_iter()
-        .skip(scroll)
-        .take(list_height)
-        .collect();
+    let visible: Vec<Line> = rows.into_iter().skip(scroll).take(list_height).collect();
 
     let list_area = Rect::new(inner.x, inner.y, inner.width, list_height as u16);
     f.render_widget(Paragraph::new(visible), list_area);

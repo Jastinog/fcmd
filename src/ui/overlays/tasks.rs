@@ -52,7 +52,10 @@ pub(in crate::ui) fn render_tasks_overlay(f: &mut Frame, app: &App, area: Rect) 
 
         // State glyph + body text + colour depend on Running vs Finished.
         let (glyph, glyph_color, body, body_color) = match &task.state {
-            TaskState::Running { progress_pct, status_text } => {
+            TaskState::Running {
+                progress_pct,
+                status_text,
+            } => {
                 let spinner = SPINNER[(app.tick_count % 4) as usize];
                 let bar = progress_bar(*progress_pct, 10);
                 (
@@ -62,7 +65,11 @@ pub(in crate::ui) fn render_tasks_overlay(f: &mut Frame, app: &App, area: Rect) 
                     t.fg,
                 )
             }
-            TaskState::Finished { success, cancelled, summary } => {
+            TaskState::Finished {
+                success,
+                cancelled,
+                summary,
+            } => {
                 if *cancelled {
                     ("\u{2298}".to_string(), t.yellow, summary.clone(), t.yellow)
                 } else if *success {

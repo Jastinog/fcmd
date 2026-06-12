@@ -20,11 +20,15 @@ impl App {
         if next_level == 0 {
             self.visual_marks.remove(&path);
             let p = path;
-            self.db_spawn(move |db| { let _ = db.remove_visual_mark(&p); });
+            self.db_spawn(move |db| {
+                let _ = db.remove_visual_mark(&p);
+            });
             self.status_message = format!("Unmarked: {name}");
         } else {
             self.visual_marks.insert(path.clone(), next_level);
-            self.db_spawn(move |db| { let _ = db.set_visual_mark(&path, next_level); });
+            self.db_spawn(move |db| {
+                let _ = db.set_visual_mark(&path, next_level);
+            });
             let label = match next_level {
                 1 => "●1",
                 2 => "●2",
@@ -47,7 +51,9 @@ impl App {
         let path = entry.path.clone();
         let name = entry.name.clone();
         if self.visual_marks.remove(&path).is_some() {
-            self.db_spawn(move |db| { let _ = db.remove_visual_mark(&path); });
+            self.db_spawn(move |db| {
+                let _ = db.remove_visual_mark(&path);
+            });
             self.status_message = format!("Unmarked: {name}");
         } else {
             self.status_message = "No mark here".into();

@@ -195,7 +195,10 @@ impl ProgressCtx {
     /// don't spend cycles building messages that get dropped anyway.
     fn report(&mut self) {
         let now = Instant::now();
-        if self.last_report.is_some_and(|last| now.duration_since(last) < PROGRESS_INTERVAL) {
+        if self
+            .last_report
+            .is_some_and(|last| now.duration_since(last) < PROGRESS_INTERVAL)
+        {
             return;
         }
         self.last_report = Some(now);
@@ -252,8 +255,14 @@ fn ask_conflict(
     let info = ConflictInfo {
         src_path: src.into(),
         dst_path: dst.into(),
-        src_size: src_meta.as_ref().map(|m| if m.is_dir() { path_size(src) } else { m.len() }).unwrap_or(0),
-        dst_size: dst_meta.as_ref().map(|m| if m.is_dir() { path_size(dst) } else { m.len() }).unwrap_or(0),
+        src_size: src_meta
+            .as_ref()
+            .map(|m| if m.is_dir() { path_size(src) } else { m.len() })
+            .unwrap_or(0),
+        dst_size: dst_meta
+            .as_ref()
+            .map(|m| if m.is_dir() { path_size(dst) } else { m.len() })
+            .unwrap_or(0),
         src_modified: src_meta.as_ref().and_then(|m| m.modified().ok()),
         dst_modified: dst_meta.as_ref().and_then(|m| m.modified().ok()),
         is_dir,
@@ -277,8 +286,12 @@ fn resolve_file_conflict(
         return Ok(proceed);
     }
     let choice = ask_conflict(conflict_tx, src, dst, is_dir);
-    let src_mod = fs::symlink_metadata(src).ok().and_then(|m| m.modified().ok());
-    let dst_mod = fs::symlink_metadata(dst).ok().and_then(|m| m.modified().ok());
+    let src_mod = fs::symlink_metadata(src)
+        .ok()
+        .and_then(|m| m.modified().ok());
+    let dst_mod = fs::symlink_metadata(dst)
+        .ok()
+        .and_then(|m| m.modified().ok());
     policy.decide(choice, src_mod, dst_mod)
 }
 
@@ -448,7 +461,11 @@ fn move_path_progress(
     let name = filename(src)?;
     let dst = dst_dir.join(&name);
     let meta = fs::symlink_metadata(src)?;
-    let src_size = if meta.is_symlink() { meta.len() } else { path_size(src) };
+    let src_size = if meta.is_symlink() {
+        meta.len()
+    } else {
+        path_size(src)
+    };
 
     if is_self_or_descendant(src, &dst) {
         return Err(std::io::Error::new(
@@ -555,7 +572,9 @@ pub fn paste_in_background(
             ctx.item_index = i;
 
             let result = match op {
-                RegisterOp::Yank => copy_path_progress(src, &dst_dir, &mut ctx, &conflict_tx, &mut policy),
+                RegisterOp::Yank => {
+                    copy_path_progress(src, &dst_dir, &mut ctx, &conflict_tx, &mut policy)
+                }
                 RegisterOp::Cut => {
                     if src.parent().is_some_and(|p| p == dst_dir) {
                         continue;
@@ -801,18 +820,31 @@ mod tests {
         let newer = SystemTime::UNIX_EPOCH + Duration::from_secs(200);
         let mut p = ConflictPolicy::default();
         // src newer than dst → overwrite.
-        assert!(p.decide(ConflictChoice::OverwriteNewer, Some(newer), Some(older)).unwrap());
+        assert!(
+            p.decide(ConflictChoice::OverwriteNewer, Some(newer), Some(older))
+                .unwrap()
+        );
         // src older than dst → skip.
-        assert!(!p.decide(ConflictChoice::OverwriteNewer, Some(older), Some(newer)).unwrap());
+        assert!(
+            !p.decide(ConflictChoice::OverwriteNewer, Some(older), Some(newer))
+                .unwrap()
+        );
         // mtime unknown → overwrite.
-        assert!(p.decide(ConflictChoice::OverwriteNewer, None, Some(newer)).unwrap());
+        assert!(
+            p.decide(ConflictChoice::OverwriteNewer, None, Some(newer))
+                .unwrap()
+        );
     }
 
     #[test]
     fn policy_sticky_choices_preempt() {
         let mut overwrite = ConflictPolicy::default();
         assert_eq!(overwrite.preempt(), None);
-        assert!(overwrite.decide(ConflictChoice::OverwriteAll, None, None).unwrap());
+        assert!(
+            overwrite
+                .decide(ConflictChoice::OverwriteAll, None, None)
+                .unwrap()
+        );
         assert_eq!(overwrite.preempt(), Some(true));
 
         let mut skip = ConflictPolicy::default();
@@ -1289,7 +1321,10 @@ mod tests {
         let _ = fs::remove_dir_all(&dst);
     }
 
-    fn make_conflict_channel() -> (tokio::sync::mpsc::Sender<ConflictInfo>, tokio::sync::mpsc::Receiver<ConflictInfo>) {
+    fn make_conflict_channel() -> (
+        tokio::sync::mpsc::Sender<ConflictInfo>,
+        tokio::sync::mpsc::Receiver<ConflictInfo>,
+    ) {
         tokio::sync::mpsc::channel(4)
     }
 
@@ -1310,7 +1345,9 @@ mod tests {
         };
         let (ctxt, _crx) = make_conflict_channel();
         let mut policy = ConflictPolicy::default();
-        let record = copy_path_progress(&src, &dst_dir, &mut ctx, &ctxt, &mut policy).unwrap().unwrap();
+        let record = copy_path_progress(&src, &dst_dir, &mut ctx, &ctxt, &mut policy)
+            .unwrap()
+            .unwrap();
         match record {
             OpRecord::Copied { dst, .. } => {
                 assert!(dst.exists());
@@ -1341,7 +1378,9 @@ mod tests {
         };
         let (ctxt, _crx) = make_conflict_channel();
         let mut policy = ConflictPolicy::default();
-        let record = copy_path_progress(&src, &dst_dir, &mut ctx, &ctxt, &mut policy).unwrap().unwrap();
+        let record = copy_path_progress(&src, &dst_dir, &mut ctx, &ctxt, &mut policy)
+            .unwrap()
+            .unwrap();
         match record {
             OpRecord::Copied { dst, .. } => {
                 assert!(dst.join("inner.txt").exists());
@@ -1373,7 +1412,9 @@ mod tests {
         };
         let (ctxt, _crx) = make_conflict_channel();
         let mut policy = ConflictPolicy::default();
-        let record = copy_path_progress(&link, &dst_dir, &mut ctx, &ctxt, &mut policy).unwrap().unwrap();
+        let record = copy_path_progress(&link, &dst_dir, &mut ctx, &ctxt, &mut policy)
+            .unwrap()
+            .unwrap();
         match record {
             OpRecord::Copied { dst, .. } => {
                 assert!(fs::symlink_metadata(&dst).unwrap().is_symlink());
@@ -1401,7 +1442,9 @@ mod tests {
         };
         let (ctxt, _crx) = make_conflict_channel();
         let mut policy = ConflictPolicy::default();
-        let record = move_path_progress(&src, &dst_dir, &mut ctx, &ctxt, &mut policy).unwrap().unwrap();
+        let record = move_path_progress(&src, &dst_dir, &mut ctx, &ctxt, &mut policy)
+            .unwrap()
+            .unwrap();
         assert!(!src.exists());
         match record {
             OpRecord::Moved { dst, .. } => {
@@ -1432,7 +1475,9 @@ mod tests {
         };
         let (ctxt, _crx) = make_conflict_channel();
         let mut policy = ConflictPolicy::default();
-        let record = move_path_progress(&src, &dst_dir, &mut ctx, &ctxt, &mut policy).unwrap().unwrap();
+        let record = move_path_progress(&src, &dst_dir, &mut ctx, &ctxt, &mut policy)
+            .unwrap()
+            .unwrap();
         assert!(!src.exists());
         match record {
             OpRecord::Moved { dst, .. } => {
@@ -1563,7 +1608,14 @@ mod tests {
         fs::write(src.join("file.txt"), "data").unwrap();
 
         let (tx, _rx) = tokio::sync::mpsc::channel(64);
-        let mut ctx = ProgressCtx { tx, bytes_done: 0, bytes_total: 0, item_index: 0, item_total: 1, last_report: None };
+        let mut ctx = ProgressCtx {
+            tx,
+            bytes_done: 0,
+            bytes_total: 0,
+            item_index: 0,
+            item_total: 1,
+            last_report: None,
+        };
         let (ctxt, _crx) = make_conflict_channel();
         let mut policy = ConflictPolicy::default();
 
@@ -1584,7 +1636,14 @@ mod tests {
         fs::write(&src, "important").unwrap();
 
         let (tx, _rx) = tokio::sync::mpsc::channel(64);
-        let mut ctx = ProgressCtx { tx, bytes_done: 0, bytes_total: 0, item_index: 0, item_total: 1, last_report: None };
+        let mut ctx = ProgressCtx {
+            tx,
+            bytes_done: 0,
+            bytes_total: 0,
+            item_index: 0,
+            item_total: 1,
+            last_report: None,
+        };
         let (ctxt, _crx) = make_conflict_channel();
         let mut policy = ConflictPolicy::default();
 
@@ -1607,7 +1666,14 @@ mod tests {
         fs::create_dir_all(&dst_dir).unwrap();
 
         let (tx, _rx) = tokio::sync::mpsc::channel(64);
-        let mut ctx = ProgressCtx { tx, bytes_done: 0, bytes_total: 0, item_index: 0, item_total: 1, last_report: None };
+        let mut ctx = ProgressCtx {
+            tx,
+            bytes_done: 0,
+            bytes_total: 0,
+            item_index: 0,
+            item_total: 1,
+            last_report: None,
+        };
         let (ctxt, _crx) = make_conflict_channel();
         let mut policy = ConflictPolicy::default();
 

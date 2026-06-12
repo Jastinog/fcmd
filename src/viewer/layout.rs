@@ -51,7 +51,11 @@ impl Layout {
 
             let chars: Vec<char> = line.chars().collect();
             if chars.is_empty() {
-                rows.push(DisplayRow { logical, start: 0, end: 0 });
+                rows.push(DisplayRow {
+                    logical,
+                    start: 0,
+                    end: 0,
+                });
                 continue;
             }
 
@@ -63,7 +67,11 @@ impl Layout {
                 // Break before a char that would overflow the row — unless the row
                 // is still empty (a single too-wide char must occupy its own row).
                 if w + cw > width && idx > start {
-                    rows.push(DisplayRow { logical, start, end: idx });
+                    rows.push(DisplayRow {
+                        logical,
+                        start,
+                        end: idx,
+                    });
                     start = idx;
                     w = 0;
                     continue;
@@ -71,10 +79,19 @@ impl Layout {
                 w += cw;
                 idx += 1;
             }
-            rows.push(DisplayRow { logical, start, end: chars.len() });
+            rows.push(DisplayRow {
+                logical,
+                start,
+                end: chars.len(),
+            });
         }
 
-        Layout { width, wrap, rows, line_to_row }
+        Layout {
+            width,
+            wrap,
+            rows,
+            line_to_row,
+        }
     }
 
     pub fn total_rows(&self) -> usize {
@@ -99,7 +116,14 @@ mod tests {
     fn no_wrap_is_one_row_per_line() {
         let l = Layout::build(&lines(&["abc", "defgh", ""]), 3, false);
         assert_eq!(l.rows.len(), 3);
-        assert_eq!(l.rows[1], DisplayRow { logical: 1, start: 0, end: 5 });
+        assert_eq!(
+            l.rows[1],
+            DisplayRow {
+                logical: 1,
+                start: 0,
+                end: 5
+            }
+        );
         assert_eq!(l.line_to_row, vec![0, 1, 2]);
     }
 
@@ -108,9 +132,30 @@ mod tests {
         // width 3: "abcdefg" -> "abc","def","g"
         let l = Layout::build(&lines(&["abcdefg"]), 3, true);
         assert_eq!(l.rows.len(), 3);
-        assert_eq!(l.rows[0], DisplayRow { logical: 0, start: 0, end: 3 });
-        assert_eq!(l.rows[1], DisplayRow { logical: 0, start: 3, end: 6 });
-        assert_eq!(l.rows[2], DisplayRow { logical: 0, start: 6, end: 7 });
+        assert_eq!(
+            l.rows[0],
+            DisplayRow {
+                logical: 0,
+                start: 0,
+                end: 3
+            }
+        );
+        assert_eq!(
+            l.rows[1],
+            DisplayRow {
+                logical: 0,
+                start: 3,
+                end: 6
+            }
+        );
+        assert_eq!(
+            l.rows[2],
+            DisplayRow {
+                logical: 0,
+                start: 6,
+                end: 7
+            }
+        );
         assert_eq!(l.line_to_row, vec![0]);
     }
 
@@ -118,8 +163,22 @@ mod tests {
     fn wrap_empty_line_keeps_one_row() {
         let l = Layout::build(&lines(&["", "x"]), 5, true);
         assert_eq!(l.rows.len(), 2);
-        assert_eq!(l.rows[0], DisplayRow { logical: 0, start: 0, end: 0 });
-        assert_eq!(l.rows[1], DisplayRow { logical: 1, start: 0, end: 1 });
+        assert_eq!(
+            l.rows[0],
+            DisplayRow {
+                logical: 0,
+                start: 0,
+                end: 0
+            }
+        );
+        assert_eq!(
+            l.rows[1],
+            DisplayRow {
+                logical: 1,
+                start: 0,
+                end: 1
+            }
+        );
     }
 
     #[test]
@@ -136,7 +195,21 @@ mod tests {
         // width 1, CJK char has width 2 -> still one char per row
         let l = Layout::build(&lines(&["\u{4e16}\u{754c}"]), 1, true);
         assert_eq!(l.rows.len(), 2);
-        assert_eq!(l.rows[0], DisplayRow { logical: 0, start: 0, end: 1 });
-        assert_eq!(l.rows[1], DisplayRow { logical: 0, start: 1, end: 2 });
+        assert_eq!(
+            l.rows[0],
+            DisplayRow {
+                logical: 0,
+                start: 0,
+                end: 1
+            }
+        );
+        assert_eq!(
+            l.rows[1],
+            DisplayRow {
+                logical: 0,
+                start: 1,
+                end: 2
+            }
+        );
     }
 }

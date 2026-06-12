@@ -219,8 +219,8 @@ impl App {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
     use crate::model::tree::TreeLine;
+    use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
     fn make_tree_lines(n: usize) -> Vec<TreeLine> {
         (0..n)

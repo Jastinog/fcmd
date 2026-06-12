@@ -256,8 +256,8 @@ fn write_file_entry<R: Read + ?Sized>(
 fn list_zip(path: &Path) -> io::Result<Vec<ArchiveEntry>> {
     let file = File::open(path)?;
     let reader = BufReader::new(file);
-    let mut archive = zip::ZipArchive::new(reader)
-        .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
+    let mut archive =
+        zip::ZipArchive::new(reader).map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
 
     let mut entries = Vec::with_capacity(archive.len());
     for i in 0..archive.len() {
@@ -311,8 +311,8 @@ fn extract_zip_stream(
     } = *req;
     let file = File::open(archive_path)?;
     let reader = BufReader::new(file);
-    let mut archive = zip::ZipArchive::new(reader)
-        .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
+    let mut archive =
+        zip::ZipArchive::new(reader).map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
 
     let mut outcome = ExtractOutcome::default();
     let mut done = 0usize;
@@ -423,7 +423,9 @@ fn sanitize_archive_path(name: &str) -> String {
     for component in name.split('/') {
         match component {
             "" | "." => {}
-            ".." => { parts.pop(); }
+            ".." => {
+                parts.pop();
+            }
             c => parts.push(c),
         }
     }
@@ -468,9 +470,11 @@ fn list_tar(path: &Path, compression: TarCompression) -> io::Result<Vec<ArchiveE
         let path_str = entry.path()?.to_string_lossy().into_owned();
         let is_dir = entry.header().entry_type().is_dir();
         let size = entry.size();
-        let modified = entry.header().mtime().ok().map(|secs| {
-            SystemTime::UNIX_EPOCH + std::time::Duration::from_secs(secs)
-        });
+        let modified = entry
+            .header()
+            .mtime()
+            .ok()
+            .map(|secs| SystemTime::UNIX_EPOCH + std::time::Duration::from_secs(secs));
         entries.push(ArchiveEntry {
             path: path_str,
             size,

@@ -16,8 +16,12 @@ pub(in crate::ui) fn render_archive(f: &mut Frame, app: &App, area: Rect) {
     };
     let t = &app.theme;
 
-    let w = ((area.width as u32 * 80 / 100) as u16).max(50).min(area.width.saturating_sub(4));
-    let h = ((area.height as u32 * 75 / 100) as u16).max(12).min(area.height.saturating_sub(4));
+    let w = ((area.width as u32 * 80 / 100) as u16)
+        .max(50)
+        .min(area.width.saturating_sub(4));
+    let h = ((area.height as u32 * 75 / 100) as u16)
+        .max(12)
+        .min(area.height.saturating_sub(4));
     let x = (area.width.saturating_sub(w)) / 2;
     let y = (area.height.saturating_sub(h)) / 2;
     let popup = Rect::new(area.x + x, area.y + y, w, h);
@@ -61,10 +65,7 @@ pub(in crate::ui) fn render_archive(f: &mut Frame, app: &App, area: Rect) {
     // Render tree entries
     let size_col_w: usize = 8;
 
-    for (vi, i) in (state.scroll..state.tree.len())
-        .take(list_h)
-        .enumerate()
-    {
+    for (vi, i) in (state.scroll..state.tree.len()).take(list_h).enumerate() {
         let node = &state.tree[i];
         let is_active = i == state.cursor;
 
@@ -76,7 +77,11 @@ pub(in crate::ui) fn render_archive(f: &mut Frame, app: &App, area: Rect) {
 
         // Icon + expand indicator
         let (icon, icon_fg) = if node.is_dir {
-            let arrow = if node.expanded { "\u{f0078} " } else { "\u{f0054} " };
+            let arrow = if node.expanded {
+                "\u{f0078} "
+            } else {
+                "\u{f0054} "
+            };
             (format!("{arrow}\u{f07b} "), t.yellow)
         } else {
             let ext_icon = crate::util::icons::file_icon(&node.name, false);

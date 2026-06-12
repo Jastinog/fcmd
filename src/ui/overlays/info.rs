@@ -22,9 +22,7 @@ pub(in crate::ui) fn render_info_popup(f: &mut Frame, app: &App, area: Rect) {
     let title = lines
         .first()
         .map(|(_, v)| {
-            let is_dir = lines
-                .iter()
-                .any(|(k, v)| k == "Type" && v == "Directory");
+            let is_dir = lines.iter().any(|(k, v)| k == "Type" && v == "Directory");
             let icon = if is_dir { " " } else { " 󰈔 " };
             format!(" {icon}{v} ")
         })
@@ -34,7 +32,9 @@ pub(in crate::ui) fn render_info_popup(f: &mut Frame, app: &App, area: Rect) {
     let w = 56u16.min(area.width.saturating_sub(4)).max(30);
     // lines count minus Name (shown in title) + border(2) + separator(1) + hint(1)
     let content_lines = lines.len().saturating_sub(1);
-    let h = (content_lines as u16 + 4).min(area.height.saturating_sub(2)).max(6);
+    let h = (content_lines as u16 + 4)
+        .min(area.height.saturating_sub(2))
+        .max(6);
     let x = (area.width.saturating_sub(w)) / 2;
     let y = (area.height.saturating_sub(h)) / 2;
     let popup = Rect::new(area.x + x, area.y + y, w, h);

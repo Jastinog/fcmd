@@ -210,8 +210,16 @@ pub(in crate::ui) fn render_chown_picker(f: &mut Frame, app: &App, area: Rect) {
     // Separator showing the pending target, so the user sees what Enter will apply.
     let sep_y = inner.y + list_height as u16;
     let sep_area = Rect::new(inner.x, sep_y, inner.width, 1);
-    let user_name = picker.users.get(picker.user_cursor).map(|(n, _)| n.as_str()).unwrap_or("");
-    let group_name = picker.groups.get(picker.group_cursor).map(|(n, _)| n.as_str()).unwrap_or("");
+    let user_name = picker
+        .users
+        .get(picker.user_cursor)
+        .map(|(n, _)| n.as_str())
+        .unwrap_or("");
+    let group_name = picker
+        .groups
+        .get(picker.group_cursor)
+        .map(|(n, _)| n.as_str())
+        .unwrap_or("");
     let target = format!(" \u{2192} {user_name}:{group_name} ");
     f.render_widget(
         Paragraph::new(Line::from(Span::styled(

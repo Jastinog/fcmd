@@ -40,7 +40,10 @@ impl App {
         self.mode = Mode::Confirm;
     }
 
-    pub(super) fn request_permanent_delete_paths(&mut self, items: Vec<(std::path::PathBuf, bool)>) {
+    pub(super) fn request_permanent_delete_paths(
+        &mut self,
+        items: Vec<(std::path::PathBuf, bool)>,
+    ) {
         self.confirm_permanent = true;
         self.request_delete_paths(items);
     }
@@ -81,7 +84,9 @@ impl App {
                 // rate) must never throttle deletion throughput. Progress is lossy;
                 // the final count is delivered by DeleteMsg::Finished below.
                 let now = std::time::Instant::now();
-                if last_report.is_none_or(|t| now.duration_since(t) >= crate::fs::ops::PROGRESS_INTERVAL) {
+                if last_report
+                    .is_none_or(|t| now.duration_since(t) >= crate::fs::ops::PROGRESS_INTERVAL)
+                {
                     last_report = Some(now);
                     let _ = tx.try_send(DeleteMsg::Progress {
                         done: i,
@@ -194,8 +199,7 @@ impl App {
             let (tx, rx) = tokio::sync::oneshot::channel();
             self.file_op_rx = Some(rx);
             tokio::task::spawn_blocking(move || {
-                let result = ops::undo(&records)
-                    .map_err(|e| e.to_string());
+                let result = ops::undo(&records).map_err(|e| e.to_string());
                 let _ = tx.send(super::FileOpResult::Undo { result });
             });
         } else {
@@ -214,19 +218,27 @@ impl App {
     /// so the cursor moves to the named entry once the async load completes.
     pub(super) fn refresh_panels_select(&mut self, select_name: Option<String>) {
         let tab = &self.tabs[self.active_tab];
-        let paths: Vec<PathBuf> = tab.panels.iter().flat_map(|p| {
-            let mut v = vec![p.path.clone()];
-            if let Some(parent) = p.path.parent() {
-                v.push(parent.to_path_buf());
-            }
-            v
-        }).collect();
+        let paths: Vec<PathBuf> = tab
+            .panels
+            .iter()
+            .flat_map(|p| {
+                let mut v = vec![p.path.clone()];
+                if let Some(parent) = p.path.parent() {
+                    v.push(parent.to_path_buf());
+                }
+                v
+            })
+            .collect();
         for p in paths {
             self.dir_cache.remove(&p);
         }
         let active = self.tab().active;
         for i in 0..3 {
-            let sn = if i == active { select_name.clone() } else { None };
+            let sn = if i == active {
+                select_name.clone()
+            } else {
+                None
+            };
             self.spawn_dir_load(i, sn);
         }
         self.tree_dirty = true;
@@ -237,13 +249,17 @@ impl App {
     pub(super) fn refresh_panels(&mut self) {
         // Invalidate cache for all visible panel paths and their parents
         let tab = &self.tabs[self.active_tab];
-        let paths: Vec<PathBuf> = tab.panels.iter().flat_map(|p| {
-            let mut v = vec![p.path.clone()];
-            if let Some(parent) = p.path.parent() {
-                v.push(parent.to_path_buf());
-            }
-            v
-        }).collect();
+        let paths: Vec<PathBuf> = tab
+            .panels
+            .iter()
+            .flat_map(|p| {
+                let mut v = vec![p.path.clone()];
+                if let Some(parent) = p.path.parent() {
+                    v.push(parent.to_path_buf());
+                }
+                v
+            })
+            .collect();
         for p in paths {
             self.dir_cache.remove(&p);
         }
@@ -394,12 +410,15 @@ mod tests {
         let mut app = App::new_for_test(entries);
         let path = app.active_panel().path.clone();
         // Insert into cache
-        app.dir_cache.insert(path.clone(), crate::model::panel::DirCacheEntry {
-            entries: vec![],
-            show_hidden: false,
-            sort_mode: SortMode::Name,
-            sort_reverse: false,
-        });
+        app.dir_cache.insert(
+            path.clone(),
+            crate::model::panel::DirCacheEntry {
+                entries: vec![],
+                show_hidden: false,
+                sort_mode: SortMode::Name,
+                sort_reverse: false,
+            },
+        );
         assert!(app.dir_cache.get(&path).is_some());
         app.reload_active_panel();
         assert!(app.dir_cache.get(&path).is_none());

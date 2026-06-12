@@ -77,7 +77,11 @@ pub(in crate::ui) fn render_conflict_popup(f: &mut Frame, app: &App, area: Rect)
         Style::default().fg(t.fg_dim),
     )));
 
-    let icon = if info.is_dir { " \u{f115} " } else { " \u{f016} " };
+    let icon = if info.is_dir {
+        " \u{f115} "
+    } else {
+        " \u{f016} "
+    };
     let max_name = iw.saturating_sub(display_width(icon) + 1);
     let name_disp = truncate_to_width_left(&src_name, max_name);
     lines.push(Line::from(vec![
@@ -187,6 +191,11 @@ pub(in crate::ui) fn render_conflict_popup(f: &mut Frame, app: &App, area: Rect)
     }
 
     // Buttons pinned to the bottom.
-    let btn_area = Rect::new(inner.x, inner.y + inner.height.saturating_sub(btn_h), inner.width, btn_h);
+    let btn_area = Rect::new(
+        inner.x,
+        inner.y + inner.height.saturating_sub(btn_h),
+        inner.width,
+        btn_h,
+    );
     f.render_widget(Paragraph::new(button_lines), btn_area);
 }

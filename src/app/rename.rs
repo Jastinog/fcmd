@@ -24,8 +24,7 @@ impl App {
                 self.file_op_rx = Some(rx);
                 let new_name2 = new_name.clone();
                 tokio::task::spawn_blocking(move || {
-                    let result =
-                        ops::rename_path(&path, &new_name2).map_err(|e| e.to_string());
+                    let result = ops::rename_path(&path, &new_name2).map_err(|e| e.to_string());
                     let _ = tx.send(super::FileOpResult::Rename {
                         new_name: new_name2,
                         result,

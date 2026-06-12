@@ -1,37 +1,37 @@
-mod which_key;
-mod command;
-mod help;
-mod input;
-mod confirm;
-mod viewer;
-mod theme_picker;
-mod bookmarks;
-mod search;
-mod chmod;
-mod info;
-mod chown;
-mod conflict;
 mod archive;
+mod bookmarks;
 mod bulk_rename;
+mod chmod;
+mod chown;
+mod command;
+mod confirm;
+mod conflict;
+mod help;
+mod info;
+mod input;
+mod search;
 mod tasks;
+mod theme_picker;
+mod viewer;
+mod which_key;
 
-pub(super) use which_key::render_which_key;
+pub(super) use archive::render_archive;
+pub(super) use bookmarks::render_bookmarks;
+pub(super) use bulk_rename::render_bulk_rename;
+pub(super) use chmod::render_chmod_popup;
+pub(super) use chown::render_chown_picker;
 pub(super) use command::render_command_popup;
-pub(super) use help::render_help;
-pub(super) use input::render_input_popup;
 pub(super) use confirm::render_confirm_popup;
 pub(super) use confirm::render_quit_confirm;
-pub(super) use viewer::render_viewer;
-pub(super) use theme_picker::render_theme_picker;
-pub(super) use bookmarks::render_bookmarks;
-pub(super) use search::render_search_popup;
-pub(super) use chmod::render_chmod_popup;
-pub(super) use info::render_info_popup;
-pub(super) use chown::render_chown_picker;
 pub(super) use conflict::render_conflict_popup;
-pub(super) use archive::render_archive;
-pub(super) use bulk_rename::render_bulk_rename;
+pub(super) use help::render_help;
+pub(super) use info::render_info_popup;
+pub(super) use input::render_input_popup;
+pub(super) use search::render_search_popup;
 pub(super) use tasks::render_tasks_overlay;
+pub(super) use theme_picker::render_theme_picker;
+pub(super) use viewer::render_viewer;
+pub(super) use which_key::render_which_key;
 
 /// Render a single-line text input field: `<prefix><text>█` with the visible text
 /// scrolled to keep the tail (where the cursor sits) in view, padded to `total_cols`.
@@ -44,7 +44,10 @@ pub(in crate::ui) fn input_field_line<'a>(
     t: &crate::theme::Theme,
 ) -> ratatui::text::Line<'a> {
     use crate::ui::util::{display_width, visible_input_tail};
-    use ratatui::{style::Style, text::{Line, Span}};
+    use ratatui::{
+        style::Style,
+        text::{Line, Span},
+    };
 
     let prefix_w = display_width(prefix);
     // Reserve 1 column for the cursor block at the end.

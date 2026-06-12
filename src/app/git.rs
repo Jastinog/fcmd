@@ -58,7 +58,11 @@ impl App {
     }
 }
 
-type GitResult = (HashMap<PathBuf, char>, [Option<PathBuf>; 3], [Option<PathBuf>; 3]);
+type GitResult = (
+    HashMap<PathBuf, char>,
+    [Option<PathBuf>; 3],
+    [Option<PathBuf>; 3],
+);
 
 const GIT_TIMEOUT: Duration = Duration::from_secs(5);
 
@@ -75,17 +79,10 @@ async fn compute_git_status(dirs: [PathBuf; 3]) -> GitResult {
     let mut seen_roots = HashSet::new();
 
     for (i, dir) in dirs.iter().enumerate() {
-        let root_output = run_git_command(&[
-            "-C",
-            &dir.to_string_lossy(),
-            "rev-parse",
-            "--show-toplevel",
-        ])
-        .await;
+        let root_output =
+            run_git_command(&["-C", &dir.to_string_lossy(), "rev-parse", "--show-toplevel"]).await;
         let root = match root_output {
-            Ok(o) if o.status.success() => {
-                PathBuf::from(String::from_utf8_lossy(&o.stdout).trim())
-            }
+            Ok(o) if o.status.success() => PathBuf::from(String::from_utf8_lossy(&o.stdout).trim()),
             _ => continue,
         };
 

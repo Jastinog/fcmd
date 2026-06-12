@@ -1,5 +1,5 @@
-use super::*;
 use super::task_manager::TaskState;
+use super::*;
 
 impl App {
     pub(super) fn open_tasks(&mut self) {
@@ -106,7 +106,8 @@ mod tests {
         let mut app = App::new_for_test(entries);
         let (_tx, rx) = tokio::sync::mpsc::channel(1);
         let cancel = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
-        app.task_manager.add_copy(rx, PathBuf::from("/dst"), vec![], cancel);
+        app.task_manager
+            .add_copy(rx, PathBuf::from("/dst"), vec![], cancel);
         app.open_tasks();
         assert_eq!(app.mode, Mode::Tasks);
         assert_eq!(app.tasks_cursor, 0);
@@ -119,7 +120,8 @@ mod tests {
         let (_tx, rx) = tokio::sync::mpsc::channel(1);
         let cancel = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
         let flag = std::sync::Arc::clone(&cancel);
-        app.task_manager.add_copy(rx, PathBuf::from("/dst"), vec![], cancel);
+        app.task_manager
+            .add_copy(rx, PathBuf::from("/dst"), vec![], cancel);
         app.open_tasks();
         app.handle_tasks(KeyEvent::from(KeyCode::Char('x')));
         assert!(flag.load(std::sync::atomic::Ordering::Relaxed));
@@ -131,7 +133,8 @@ mod tests {
         let mut app = App::new_for_test(entries);
         let (_tx, rx) = tokio::sync::mpsc::channel(1);
         let cancel = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
-        app.task_manager.add_copy(rx, PathBuf::from("/dst"), vec![], cancel);
+        app.task_manager
+            .add_copy(rx, PathBuf::from("/dst"), vec![], cancel);
         app.open_tasks();
         app.handle_tasks(KeyEvent::from(KeyCode::Esc));
         assert_eq!(app.mode, Mode::Normal);
@@ -143,7 +146,8 @@ mod tests {
         let mut app = App::new_for_test(entries);
         let (_tx, rx) = tokio::sync::mpsc::channel(1);
         let cancel = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
-        app.task_manager.add_copy(rx, PathBuf::from("/dst"), vec![], cancel);
+        app.task_manager
+            .add_copy(rx, PathBuf::from("/dst"), vec![], cancel);
         app.open_tasks();
         // Mark finished, then clear.
         app.task_manager.cancel(1); // no-op flag, still running until polled

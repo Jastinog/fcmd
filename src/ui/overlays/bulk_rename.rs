@@ -6,8 +6,8 @@ use ratatui::{
     widgets::{Block, Borders, Clear, Paragraph},
 };
 
-use crate::app::bulk_rename::BulkRenameSubMode;
 use crate::app::App;
+use crate::app::bulk_rename::BulkRenameSubMode;
 use crate::ui::util::{display_width, visible_input_tail};
 
 pub(in crate::ui) fn render_bulk_rename(f: &mut Frame, app: &App, area: Rect) {
@@ -18,8 +18,12 @@ pub(in crate::ui) fn render_bulk_rename(f: &mut Frame, app: &App, area: Rect) {
     let t = &app.theme;
 
     // Popup dimensions: 80% width, 70% height
-    let w = ((area.width as u32 * 80 / 100) as u16).max(40).min(area.width.saturating_sub(4));
-    let h = ((area.height as u32 * 70 / 100) as u16).max(10).min(area.height.saturating_sub(4));
+    let w = ((area.width as u32 * 80 / 100) as u16)
+        .max(40)
+        .min(area.width.saturating_sub(4));
+    let h = ((area.height as u32 * 70 / 100) as u16)
+        .max(10)
+        .min(area.height.saturating_sub(4));
     let x = (area.width.saturating_sub(w)) / 2;
     let y = (area.height.saturating_sub(h)) / 2;
     let popup = Rect::new(area.x + x, area.y + y, w, h);
@@ -48,11 +52,12 @@ pub(in crate::ui) fn render_bulk_rename(f: &mut Frame, app: &App, area: Rect) {
     let conflicts = state.conflict_indices();
 
     // Reserve: 1 line for separator, 1 line for hints, 1 line for error/find-replace
-    let bottom_lines: u16 = if state.sub_mode == BulkRenameSubMode::FindReplace || state.error.is_some() {
-        3
-    } else {
-        2
-    };
+    let bottom_lines: u16 =
+        if state.sub_mode == BulkRenameSubMode::FindReplace || state.error.is_some() {
+            3
+        } else {
+            2
+        };
     let list_h = inner.height.saturating_sub(bottom_lines) as usize;
 
     // Render entries
@@ -61,19 +66,21 @@ pub(in crate::ui) fn render_bulk_rename(f: &mut Frame, app: &App, area: Rect) {
     let name_col_w = iw.saturating_sub(arrow_w) / 2;
     let new_col_w = iw.saturating_sub(name_col_w + arrow_w);
 
-    for (vi, i) in (state.scroll..state.entries.len())
-        .take(list_h)
-        .enumerate()
-    {
+    for (vi, i) in (state.scroll..state.entries.len()).take(list_h).enumerate() {
         let entry = &state.entries[i];
         let is_active = i == state.cursor;
         let is_changed = entry.new_name != entry.original_name;
         let is_conflict = conflicts.contains(&i);
 
-        let icon = if entry.is_dir { "\u{f07b} " } else { "\u{f15b} " };
+        let icon = if entry.is_dir {
+            "\u{f07b} "
+        } else {
+            "\u{f15b} "
+        };
 
         // Original name (left column)
-        let orig_display = truncate_with_ellipsis(&format!("{icon}{}", entry.original_name), name_col_w);
+        let orig_display =
+            truncate_with_ellipsis(&format!("{icon}{}", entry.original_name), name_col_w);
         let orig_pad = name_col_w.saturating_sub(char_width(&orig_display));
 
         let orig_fg = if is_active { t.fg } else { t.fg_dim };
@@ -101,17 +108,13 @@ pub(in crate::ui) fn render_bulk_rename(f: &mut Frame, app: &App, area: Rect) {
         let arrow_fg = if is_changed { t.yellow } else { t.fg_dim };
 
         let mut spans = vec![
-            Span::styled(
-                orig_display,
-                Style::default().fg(orig_fg).bg(orig_bg),
-            ),
-            Span::styled(
-                " ".repeat(orig_pad),
-                Style::default().bg(orig_bg),
-            ),
+            Span::styled(orig_display, Style::default().fg(orig_fg).bg(orig_bg)),
+            Span::styled(" ".repeat(orig_pad), Style::default().bg(orig_bg)),
             Span::styled(
                 arrow,
-                Style::default().fg(arrow_fg).bg(if is_active { t.bg_light } else { t.bg }),
+                Style::default()
+                    .fg(arrow_fg)
+                    .bg(if is_active { t.bg_light } else { t.bg }),
             ),
         ];
 
@@ -120,8 +123,14 @@ pub(in crate::ui) fn render_bulk_rename(f: &mut Frame, app: &App, area: Rect) {
             let visible = visible_input_tail(&state.edit_input, new_col_w.saturating_sub(1));
             let epad = new_col_w.saturating_sub(display_width(&visible) + 1);
 
-            spans.push(Span::styled(visible, Style::default().fg(new_fg).bg(new_bg)));
-            spans.push(Span::styled("\u{2588}", Style::default().fg(t.yellow).bg(new_bg)));
+            spans.push(Span::styled(
+                visible,
+                Style::default().fg(new_fg).bg(new_bg),
+            ));
+            spans.push(Span::styled(
+                "\u{2588}",
+                Style::default().fg(t.yellow).bg(new_bg),
+            ));
             spans.push(Span::styled(" ".repeat(epad), Style::default().bg(new_bg)));
         } else {
             spans.push(Span::styled(

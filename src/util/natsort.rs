@@ -225,9 +225,6 @@ mod tests {
 
     #[test]
     fn mixed_ascii_and_unicode() {
-        assert_eq!(
-            sorted(vec!["zzz", "ааа", "aaa"]),
-            vec!["aaa", "zzz", "ааа"]
-        );
+        assert_eq!(sorted(vec!["zzz", "ааа", "aaa"]), vec!["aaa", "zzz", "ааа"]);
     }
 }

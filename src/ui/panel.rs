@@ -9,14 +9,14 @@ use ratatui::{
 };
 
 use crate::app::PhantomEntry;
-use crate::model::panel::{Panel, SortMode};
-use crate::util::icons::file_icon;
-use crate::util::format_bytes;
-use crate::util::natsort::natsort;
 use crate::fs::ops::RegisterOp;
+use crate::model::panel::{Panel, SortMode};
+use crate::util::format_bytes;
+use crate::util::icons::file_icon;
+use crate::util::natsort::natsort;
 
 use super::RenderContext;
-use super::util::{display_width, truncate_to_width, pad_to_width};
+use super::util::{display_width, pad_to_width, truncate_to_width};
 
 enum DisplaySlot {
     Real(usize),
@@ -245,11 +245,11 @@ pub(super) fn render_panel(
 
                 let git_raw = ctx.git_statuses.get(&entry.path).copied().unwrap_or(' ');
                 let (git_icon, git_color) = match git_raw {
-                    'M' => ("\u{f03eb}", Some(t.yellow)),     // 󰏫 md-pencil
-                    'A' => ("\u{f0415}", Some(t.green)),      // 󰐕 md-plus
-                    '?' => ("\u{f0613}", Some(t.cyan)),       // 󰘓 md-file_hidden
-                    'D' => ("\u{f0374}", Some(t.red)),        // 󰍴 md-minus
-                    'R' => ("\u{f0455}", Some(t.magenta)),    // 󰑕 md-rename_box
+                    'M' => ("\u{f03eb}", Some(t.yellow)),  // 󰏫 md-pencil
+                    'A' => ("\u{f0415}", Some(t.green)),   // 󰐕 md-plus
+                    '?' => ("\u{f0613}", Some(t.cyan)),    // 󰘓 md-file_hidden
+                    'D' => ("\u{f0374}", Some(t.red)),     // 󰍴 md-minus
+                    'R' => ("\u{f0455}", Some(t.magenta)), // 󰑕 md-rename_box
                     _ => (" ", None),
                 };
                 let git_style = match (git_color, row_bg) {

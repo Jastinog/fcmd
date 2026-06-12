@@ -150,12 +150,13 @@ impl App {
         let show_hidden = self.active_panel().show_hidden;
 
         if let Some(cached) = self.dir_cache.get(&path)
-            && cached.show_hidden == show_hidden {
-                let mut entries = cached.entries.clone();
-                panel::resort_entries(&mut entries, sort_mode, sort_reverse, &self.dir_sizes);
-                self.active_panel_mut().apply_entries(entries, None);
-                return;
-            }
+            && cached.show_hidden == show_hidden
+        {
+            let mut entries = cached.entries.clone();
+            panel::resort_entries(&mut entries, sort_mode, sort_reverse, &self.dir_sizes);
+            self.active_panel_mut().apply_entries(entries, None);
+            return;
+        }
         self.reload_active_panel();
     }
 
@@ -169,7 +170,9 @@ impl App {
             self.dir_sorts.insert(path.clone(), (mode, rev));
         }
         let label = mode.label().to_string();
-        self.db_spawn(move |db| { let _ = db.save_dir_sort(&path, &label, rev); });
+        self.db_spawn(move |db| {
+            let _ = db.save_dir_sort(&path, &label, rev);
+        });
     }
 
     pub(super) fn refresh_current_panel(&mut self) {
@@ -213,10 +216,7 @@ impl App {
 
         tokio::task::spawn_blocking(move || {
             let preview = Preview::load(&path, vis);
-            let _ = tx.send(super::PreviewLoadResult {
-                path,
-                preview,
-            });
+            let _ = tx.send(super::PreviewLoadResult { path, preview });
         });
     }
 
@@ -260,7 +260,12 @@ impl App {
     }
 
     /// Navigate to a directory using the cache if available, then spawn a background refresh.
-    pub(super) fn navigate_cached(&mut self, path: PathBuf, panel_idx: usize, select_name: Option<String>) {
+    pub(super) fn navigate_cached(
+        &mut self,
+        path: PathBuf,
+        panel_idx: usize,
+        select_name: Option<String>,
+    ) {
         let panel = &mut self.tabs[self.active_tab].panels[panel_idx];
         panel.path = path.clone();
         panel.selected = 0;
@@ -282,16 +287,17 @@ impl App {
 
         // Try cache hit
         if let Some(cached) = self.dir_cache.get(&path)
-            && cached.show_hidden == show_hidden {
-                let mut entries = cached.entries.clone();
-                // Re-sort if sort mode differs from cached
-                if cached.sort_mode != sort_mode || cached.sort_reverse != sort_reverse {
-                    panel::resort_entries(&mut entries, sort_mode, sort_reverse, &self.dir_sizes);
-                }
-                let panel = &mut self.tabs[self.active_tab].panels[panel_idx];
-                panel.apply_entries(entries, select_name.as_deref());
-                panel.loading = false;
+            && cached.show_hidden == show_hidden
+        {
+            let mut entries = cached.entries.clone();
+            // Re-sort if sort mode differs from cached
+            if cached.sort_mode != sort_mode || cached.sort_reverse != sort_reverse {
+                panel::resort_entries(&mut entries, sort_mode, sort_reverse, &self.dir_sizes);
             }
+            let panel = &mut self.tabs[self.active_tab].panels[panel_idx];
+            panel.apply_entries(entries, select_name.as_deref());
+            panel.loading = false;
+        }
 
         // Always refresh from disk in background
         self.spawn_dir_load(panel_idx, select_name);
@@ -321,7 +327,11 @@ impl App {
     }
 
     pub(super) fn yank_name(&mut self) {
-        let name = match self.active_panel().selected_entry().filter(|e| e.name != "..") {
+        let name = match self
+            .active_panel()
+            .selected_entry()
+            .filter(|e| e.name != "..")
+        {
             Some(e) => e.name.clone(),
             None => return,
         };
@@ -350,7 +360,9 @@ impl App {
             self.theme.status_bg = self.theme.status_bg_orig;
         }
         let transparent = self.transparent;
-        self.db_spawn(move |db| { let _ = db.save_transparent(transparent); });
+        self.db_spawn(move |db| {
+            let _ = db.save_transparent(transparent);
+        });
         self.status_message = if self.transparent {
             "Background: transparent".into()
         } else {
@@ -382,9 +394,11 @@ impl App {
             ("?", "help"),
         ];
         const GOTO_HINTS: &[(&str, &str)] = &[("g", "top"), ("t", "next tab"), ("T", "prev tab")];
-        const YANK_HINTS: &[(&str, &str)] = &[("y", "yank"), ("p", "yank path"), ("n", "yank name")];
+        const YANK_HINTS: &[(&str, &str)] =
+            &[("y", "yank"), ("p", "yank path"), ("n", "yank name")];
         const DELETE_HINTS: &[(&str, &str)] = &[("d", "trash"), ("D", "permanent")];
-        const CHANGE_HINTS: &[(&str, &str)] = &[("p", "permissions"), ("o", "owner"), ("w", "bulk rename")];
+        const CHANGE_HINTS: &[(&str, &str)] =
+            &[("p", "permissions"), ("o", "owner"), ("w", "bulk rename")];
         const MARK_HINTS: &[(&str, &str)] = &[("a-z", "go to mark")];
 
         let pending = self.pending_key?;
@@ -416,20 +430,40 @@ impl App {
 
         vec![
             ("", "Sort by"),
-            ("n", m(mode == SortMode::Name,     "▍name",     " name")),
-            ("s", m(mode == SortMode::Size,     "▍size",     " size")),
-            ("m/d", m(mode == SortMode::Modified, "▍modified", " modified")),
-            ("c", m(mode == SortMode::Created,  "▍created",  " created")),
-            ("e", m(mode == SortMode::Extension,"▍extension"," extension")),
+            ("n", m(mode == SortMode::Name, "▍name", " name")),
+            ("s", m(mode == SortMode::Size, "▍size", " size")),
+            (
+                "m/d",
+                m(mode == SortMode::Modified, "▍modified", " modified"),
+            ),
+            ("c", m(mode == SortMode::Created, "▍created", " created")),
+            (
+                "e",
+                m(mode == SortMode::Extension, "▍extension", " extension"),
+            ),
             ("", "Direction"),
-            ("r", if rev { "▍reverse \u{2191}" } else { " ascending \u{2193}" }),
+            (
+                "r",
+                if rev {
+                    "▍reverse \u{2191}"
+                } else {
+                    " ascending \u{2193}"
+                },
+            ),
         ]
     }
 
     fn build_ui_hints(&self) -> Vec<(&'static str, &'static str)> {
         vec![
             ("", "UI"),
-            ("t", if self.transparent { "\u{258a} transparent" } else { "  transparent" }),
+            (
+                "t",
+                if self.transparent {
+                    "\u{258a} transparent"
+                } else {
+                    "  transparent"
+                },
+            ),
         ]
     }
 
@@ -440,7 +474,7 @@ impl App {
         };
         vec![
             ("1", m(l == PanelLayout::Single, "▍single", "  single")),
-            ("2", m(l == PanelLayout::Dual,   "▍dual",   "  dual")),
+            ("2", m(l == PanelLayout::Dual, "▍dual", "  dual")),
             ("3", m(l == PanelLayout::Triple, "▍triple", "  triple")),
         ]
     }
@@ -725,7 +759,9 @@ mod tests {
         let entries = crate::app::make_test_entries(&["a.txt", "b.txt"]);
         let mut app = App::new_for_test(entries);
         app.active_panel_mut().selected = 2;
-        app.active_panel_mut().marked.insert(PathBuf::from("/test/a.txt"));
+        app.active_panel_mut()
+            .marked
+            .insert(PathBuf::from("/test/a.txt"));
         app.navigate_cached(PathBuf::from("/new_dir"), 0, None);
         assert_eq!(app.active_panel().selected, 0);
         assert!(app.active_panel().marked.is_empty());

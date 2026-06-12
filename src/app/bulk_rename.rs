@@ -54,7 +54,11 @@ impl BulkRenameState {
     pub fn has_conflicts(&self) -> bool {
         let mut seen = HashSet::new();
         // Collect original names so we know which targets are "already taken" by the batch
-        let original_names: HashSet<&str> = self.entries.iter().map(|e| e.original_name.as_str()).collect();
+        let original_names: HashSet<&str> = self
+            .entries
+            .iter()
+            .map(|e| e.original_name.as_str())
+            .collect();
         for e in &self.entries {
             if e.new_name.is_empty() {
                 return true;
@@ -79,7 +83,11 @@ impl BulkRenameState {
     pub fn conflict_indices(&self) -> HashSet<usize> {
         let mut result = HashSet::new();
         let mut seen: HashMap<&str, usize> = HashMap::new();
-        let original_names: HashSet<&str> = self.entries.iter().map(|e| e.original_name.as_str()).collect();
+        let original_names: HashSet<&str> = self
+            .entries
+            .iter()
+            .map(|e| e.original_name.as_str())
+            .collect();
         for (i, e) in self.entries.iter().enumerate() {
             if e.new_name.is_empty() {
                 result.insert(i);
@@ -159,11 +167,7 @@ impl App {
         let entries: Vec<BulkRenameEntry> = targeted
             .into_iter()
             .filter_map(|re| {
-                let name = re
-                    .path
-                    .file_name()?
-                    .to_string_lossy()
-                    .into_owned();
+                let name = re.path.file_name()?.to_string_lossy().into_owned();
                 Some(BulkRenameEntry {
                     original_path: re.path,
                     original_name: name.clone(),
@@ -401,16 +405,20 @@ impl App {
 
             // Detect conflicts: if a target name matches an existing source,
             // use a temporary name first to avoid collisions (handles swaps).
-            let source_names: HashSet<String> = renames.iter().filter_map(|(p, _)| {
-                p.file_name().map(|n| n.to_string_lossy().into_owned())
-            }).collect();
+            let source_names: HashSet<String> = renames
+                .iter()
+                .filter_map(|(p, _)| p.file_name().map(|n| n.to_string_lossy().into_owned()))
+                .collect();
 
             // Find entries that need a temp name: their target exists as another source
             let mut temp_renames: Vec<(PathBuf, String, String)> = Vec::new(); // (path, temp_name, final_name)
             let mut direct_renames: Vec<(PathBuf, String)> = Vec::new();
 
             for (path, new_name) in &renames {
-                let old_name = path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+                let old_name = path
+                    .file_name()
+                    .map(|n| n.to_string_lossy().into_owned())
+                    .unwrap_or_default();
                 // Check if new_name collides with an existing source that hasn't been renamed yet
                 if source_names.contains(new_name) && *new_name != old_name {
                     // Use temporary name to break the cycle
@@ -553,7 +561,8 @@ mod tests {
 
     #[test]
     fn find_replace_basic() {
-        let mut state = BulkRenameState::new(make_bulk_entries(&["photo_001.jpg", "photo_002.jpg"]));
+        let mut state =
+            BulkRenameState::new(make_bulk_entries(&["photo_001.jpg", "photo_002.jpg"]));
         state.apply_find_replace("%s/photo/vacation");
         assert_eq!(state.entries[0].new_name, "vacation_001.jpg");
         assert_eq!(state.entries[1].new_name, "vacation_002.jpg");
@@ -645,7 +654,10 @@ mod tests {
             app.bulk_rename.as_ref().unwrap().sub_mode,
             BulkRenameSubMode::Nav
         );
-        assert_eq!(app.bulk_rename.as_ref().unwrap().entries[0].new_name, "b.txt");
+        assert_eq!(
+            app.bulk_rename.as_ref().unwrap().entries[0].new_name,
+            "b.txt"
+        );
     }
 
     #[tokio::test]

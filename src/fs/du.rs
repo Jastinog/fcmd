@@ -68,7 +68,9 @@ fn dir_stats_inner(p: &Path, size: &mut u64, files: &mut usize, dirs: &mut usize
         };
         if ft.is_symlink() {
             *files += 1;
-            *size += fs::symlink_metadata(entry.path()).map(|m| m.len()).unwrap_or(0);
+            *size += fs::symlink_metadata(entry.path())
+                .map(|m| m.len())
+                .unwrap_or(0);
         } else if ft.is_dir() {
             *dirs += 1;
             dir_stats_inner(&entry.path(), size, files, dirs);

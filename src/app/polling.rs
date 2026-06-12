@@ -1,5 +1,5 @@
-use super::*;
 use super::task_manager::TaskEvent;
+use super::*;
 use crate::util::format_bytes;
 
 /// How many ticks (250ms each) a finished-task notification stays on screen
@@ -26,7 +26,12 @@ impl App {
 
         for event in events {
             match event {
-                TaskEvent::PasteFinished { records, error, is_copy, summary } => {
+                TaskEvent::PasteFinished {
+                    records,
+                    error,
+                    is_copy,
+                    summary,
+                } => {
                     self.undo_stack.push(records);
                     if error.is_none() && !is_copy {
                         self.register = None;
@@ -55,10 +60,11 @@ impl App {
         // Auto-expire the completion notification after a few seconds so it stays
         // visible across keypresses but doesn't linger forever.
         if let Some(set_tick) = self.task_notification_tick
-            && self.tick_count.wrapping_sub(set_tick) >= TASK_NOTIFICATION_TICKS {
-                self.task_notification = None;
-                self.task_notification_tick = None;
-            }
+            && self.tick_count.wrapping_sub(set_tick) >= TASK_NOTIFICATION_TICKS
+        {
+            self.task_notification = None;
+            self.task_notification_tick = None;
+        }
 
         if needs_refresh {
             self.refresh_panels();
@@ -152,8 +158,11 @@ impl App {
             current,
         }) = last_progress
         {
-            self.background_progress =
-                Some(format!("Calculating sizes... [{}/{}] {current}", done + 1, total));
+            self.background_progress = Some(format!(
+                "Calculating sizes... [{}/{}] {current}",
+                done + 1,
+                total
+            ));
         }
 
         if let Some(DuMsg::Finished { sizes }) = finished {
@@ -172,7 +181,9 @@ impl App {
 
             // Save to DB (fire-and-forget)
             let sizes_clone = sizes.clone();
-            self.db_spawn(move |db| { let _ = db.save_dir_sizes(&sizes_clone); });
+            self.db_spawn(move |db| {
+                let _ = db.save_dir_sizes(&sizes_clone);
+            });
 
             let secs = elapsed.as_secs_f64();
             let total_str = format_bytes(total);
@@ -205,7 +216,9 @@ impl App {
                 self.git_checked_dirs = checked_dirs;
                 self.git_progress = None;
                 let statuses = self.git_statuses.clone();
-                self.db_spawn(move |db| { let _ = db.save_git_statuses(&statuses); });
+                self.db_spawn(move |db| {
+                    let _ = db.save_git_statuses(&statuses);
+                });
             }
             Err(tokio::sync::oneshot::error::TryRecvError::Closed) => {
                 self.git_progress = None;
@@ -213,7 +226,6 @@ impl App {
             Err(tokio::sync::oneshot::error::TryRecvError::Empty) => {}
         }
     }
-
 
     fn ensure_dir_sizes_loaded(&mut self) {
         if self.dir_sizes_load_rx.is_some() {
@@ -325,16 +337,24 @@ mod tests {
         let mut statuses = HashMap::new();
         statuses.insert(PathBuf::from("/repo/file.rs"), 'M');
         let roots = [Some(PathBuf::from("/repo")), None, None];
-        let checked = [Some(PathBuf::from("/test")), Some(PathBuf::from("/test")), Some(PathBuf::from("/test"))];
+        let checked = [
+            Some(PathBuf::from("/test")),
+            Some(PathBuf::from("/test")),
+            Some(PathBuf::from("/test")),
+        ];
         tx.send(GitMsg::Finished {
             statuses: statuses.clone(),
             roots: roots.clone(),
             checked_dirs: checked.clone(),
-        }).unwrap();
+        })
+        .unwrap();
 
         app.poll_git();
         assert!(app.git_progress.is_none());
-        assert_eq!(app.git_statuses.get(&PathBuf::from("/repo/file.rs")), Some(&'M'));
+        assert_eq!(
+            app.git_statuses.get(&PathBuf::from("/repo/file.rs")),
+            Some(&'M')
+        );
         assert_eq!(app.git_roots, roots);
     }
 
@@ -375,12 +395,17 @@ mod tests {
 
         tx.send(DuMsg::Finished {
             sizes: vec![(PathBuf::from("/test/subdir"), 4096)],
-        }).await.unwrap();
+        })
+        .await
+        .unwrap();
 
         app.background_progress = Some("Calculating...".into());
         app.poll_du();
         assert!(app.du_progress.is_none());
-        assert_eq!(app.dir_sizes.get(&PathBuf::from("/test/subdir")), Some(&4096));
+        assert_eq!(
+            app.dir_sizes.get(&PathBuf::from("/test/subdir")),
+            Some(&4096)
+        );
         // The final summary surfaces as a transient status message; progress slot clears.
         assert!(app.status_message.contains("measured"));
         assert!(app.background_progress.is_none());
@@ -400,7 +425,9 @@ mod tests {
             done: 0,
             total: 3,
             current: "subdir".into(),
-        }).await.unwrap();
+        })
+        .await
+        .unwrap();
 
         // Don't finish yet — just progress
         app.poll_du();
@@ -436,6 +463,9 @@ mod tests {
 
         app.poll_dir_sizes_load();
         assert!(app.dir_sizes_load_rx.is_none());
-        assert_eq!(app.dir_sizes.get(&PathBuf::from("/test/subdir")), Some(&1024));
+        assert_eq!(
+            app.dir_sizes.get(&PathBuf::from("/test/subdir")),
+            Some(&1024)
+        );
     }
 }

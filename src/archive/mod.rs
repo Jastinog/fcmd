@@ -226,7 +226,11 @@ mod tests {
         let mut sink: Vec<u8> = Vec::new();
         let completed = copy_with_cancel(&mut reader, &mut sink, &cancel).unwrap();
         assert!(!completed, "copy should report it was cancelled");
-        assert_eq!(sink.len(), 128 * 1024, "exactly one chunk copied before cancel");
+        assert_eq!(
+            sink.len(),
+            128 * 1024,
+            "exactly one chunk copied before cancel"
+        );
     }
 
     #[test]
@@ -378,12 +382,7 @@ mod tests {
         std::fs::write(src.join("sub/b.txt"), "bbb").unwrap();
 
         // Create archive
-        create_archive(
-            &[src.join("a.txt"), src.join("sub")],
-            &src,
-            &tar_path,
-        )
-        .unwrap();
+        create_archive(&[src.join("a.txt"), src.join("sub")], &src, &tar_path).unwrap();
 
         // List
         let (fmt, entries) = list_archive(&tar_path).unwrap();
@@ -454,7 +453,10 @@ mod tests {
 
         // The traversal must be stripped: the file lands inside `dest`, never above it.
         let escaped = dir.path().join("escape.txt");
-        assert!(!escaped.exists(), "file escaped extraction dir via Zip Slip");
+        assert!(
+            !escaped.exists(),
+            "file escaped extraction dir via Zip Slip"
+        );
         assert!(dest.join("escape.txt").exists());
         for p in &extracted {
             assert!(p.starts_with(&dest), "extracted path {p:?} escaped dest");
@@ -653,7 +655,8 @@ mod tests {
         let src = dir.path().join("src");
         std::fs::create_dir(&src).unwrap();
         std::fs::write(src.join("run.sh"), b"#!/bin/sh\necho hi\n").unwrap();
-        std::fs::set_permissions(src.join("run.sh"), std::fs::Permissions::from_mode(0o755)).unwrap();
+        std::fs::set_permissions(src.join("run.sh"), std::fs::Permissions::from_mode(0o755))
+            .unwrap();
         std::os::unix::fs::symlink("run.sh", src.join("link")).unwrap();
 
         let tar = dir.path().join("a.tar");
@@ -663,12 +666,21 @@ mod tests {
         std::fs::create_dir(&out).unwrap();
         extract_all(&tar, &out).unwrap();
 
-        let mode = std::fs::metadata(out.join("run.sh")).unwrap().permissions().mode();
+        let mode = std::fs::metadata(out.join("run.sh"))
+            .unwrap()
+            .permissions()
+            .mode();
         assert_eq!(mode & 0o777, 0o755, "executable bit lost on tar round-trip");
 
         let link_meta = std::fs::symlink_metadata(out.join("link")).unwrap();
-        assert!(link_meta.file_type().is_symlink(), "tar symlink did not survive");
-        assert_eq!(std::fs::read_link(out.join("link")).unwrap(), Path::new("run.sh"));
+        assert!(
+            link_meta.file_type().is_symlink(),
+            "tar symlink did not survive"
+        );
+        assert_eq!(
+            std::fs::read_link(out.join("link")).unwrap(),
+            Path::new("run.sh")
+        );
     }
 
     #[cfg(unix)]
@@ -679,7 +691,8 @@ mod tests {
         let src = dir.path().join("src");
         std::fs::create_dir(&src).unwrap();
         std::fs::write(src.join("run.sh"), b"#!/bin/sh\necho hi\n").unwrap();
-        std::fs::set_permissions(src.join("run.sh"), std::fs::Permissions::from_mode(0o755)).unwrap();
+        std::fs::set_permissions(src.join("run.sh"), std::fs::Permissions::from_mode(0o755))
+            .unwrap();
         std::os::unix::fs::symlink("run.sh", src.join("link")).unwrap();
 
         let zip = dir.path().join("a.zip");
@@ -689,12 +702,21 @@ mod tests {
         std::fs::create_dir(&out).unwrap();
         extract_all(&zip, &out).unwrap();
 
-        let mode = std::fs::metadata(out.join("run.sh")).unwrap().permissions().mode();
+        let mode = std::fs::metadata(out.join("run.sh"))
+            .unwrap()
+            .permissions()
+            .mode();
         assert_eq!(mode & 0o777, 0o755, "executable bit lost on zip round-trip");
 
         let link_meta = std::fs::symlink_metadata(out.join("link")).unwrap();
-        assert!(link_meta.file_type().is_symlink(), "zip symlink did not survive");
-        assert_eq!(std::fs::read_link(out.join("link")).unwrap(), Path::new("run.sh"));
+        assert!(
+            link_meta.file_type().is_symlink(),
+            "zip symlink did not survive"
+        );
+        assert_eq!(
+            std::fs::read_link(out.join("link")).unwrap(),
+            Path::new("run.sh")
+        );
     }
 
     /// Build a raw 512-byte USTAR symlink header. The safe `tar::Builder` rejects

@@ -7,8 +7,12 @@ use unicode_width::UnicodeWidthChar;
 pub(crate) fn centered_rect(percent_x: u16, percent_y: u16, area: Rect) -> Rect {
     // Compute in u32 to avoid u16 overflow on very wide/tall terminals
     // (e.g. width 656 * 100 would overflow u16).
-    let w = ((area.width as u32 * percent_x as u32 / 100) as u16).max(30).min(area.width);
-    let h = ((area.height as u32 * percent_y as u32 / 100) as u16).max(8).min(area.height);
+    let w = ((area.width as u32 * percent_x as u32 / 100) as u16)
+        .max(30)
+        .min(area.width);
+    let h = ((area.height as u32 * percent_y as u32 / 100) as u16)
+        .max(8)
+        .min(area.height);
     let x = (area.width.saturating_sub(w)) / 2;
     let y = (area.height.saturating_sub(h)) / 2;
     Rect::new(area.x + x, area.y + y, w, h)
@@ -16,7 +20,9 @@ pub(crate) fn centered_rect(percent_x: u16, percent_y: u16, area: Rect) -> Rect 
 
 /// Display width in terminal columns (CJK = 2, combining = 0, etc.)
 pub(crate) fn display_width(s: &str) -> usize {
-    s.chars().map(|c| UnicodeWidthChar::width(c).unwrap_or(0)).sum()
+    s.chars()
+        .map(|c| UnicodeWidthChar::width(c).unwrap_or(0))
+        .sum()
 }
 
 /// Truncate a string to fit within `max_cols` terminal columns.
@@ -96,7 +102,11 @@ pub(crate) fn pad_to_width(s: &str, target_cols: usize) -> String {
 /// space. Centralises the icon + truncated-name + padding arithmetic that every list
 /// overlay shares, so the off-by-one between "space reserved" and "space filled" stays
 /// consistent.
-pub(crate) fn fit_truncated(name: &str, total_cols: usize, reserved_cols: usize) -> (String, usize) {
+pub(crate) fn fit_truncated(
+    name: &str,
+    total_cols: usize,
+    reserved_cols: usize,
+) -> (String, usize) {
     let max_name = total_cols.saturating_sub(reserved_cols);
     let truncated = truncate_to_width(name, max_name);
     let pad = total_cols.saturating_sub(reserved_cols + display_width(&truncated));

@@ -94,10 +94,7 @@ pub(in crate::ui) fn render_chmod_popup(f: &mut Frame, app: &App, area: Rect) {
                     'x' => t.red,
                     _ => t.fg_dim,
                 };
-                suffix_spans.push(Span::styled(
-                    ch.to_string(),
-                    Style::default().fg(color),
-                ));
+                suffix_spans.push(Span::styled(ch.to_string(), Style::default().fg(color)));
             }
         }
         let suffix_len: usize = suffix_spans.iter().map(|s| display_width(&s.content)).sum();
@@ -138,11 +135,7 @@ pub(in crate::ui) fn render_chmod_popup(f: &mut Frame, app: &App, area: Rect) {
         // Extract the 3 octal digits (owner, group, other)
         let digits: [Option<u32>; 3] = if let Some(mode) = parsed_mode {
             match input.len() {
-                4 | 3 => [
-                    Some((mode >> 6) & 7),
-                    Some((mode >> 3) & 7),
-                    Some(mode & 7),
-                ],
+                4 | 3 => [Some((mode >> 6) & 7), Some((mode >> 3) & 7), Some(mode & 7)],
                 2 => [None, Some((mode >> 3) & 7), Some(mode & 7)],
                 1 => [None, None, Some(mode & 7)],
                 _ => [None, None, None],
@@ -177,9 +170,15 @@ pub(in crate::ui) fn render_chmod_popup(f: &mut Frame, app: &App, area: Rect) {
                 String::new()
             } else {
                 let mut parts = Vec::new();
-                if r { parts.push("read"); }
-                if w { parts.push("write"); }
-                if x { parts.push("execute"); }
+                if r {
+                    parts.push("read");
+                }
+                if w {
+                    parts.push("write");
+                }
+                if x {
+                    parts.push("execute");
+                }
                 if parts.is_empty() {
                     "  no access".to_string()
                 } else {
@@ -203,7 +202,11 @@ pub(in crate::ui) fn render_chmod_popup(f: &mut Frame, app: &App, area: Rect) {
             // Colored rwx chars
             if active {
                 spans.push(Span::styled(" ", Style::default()));
-                for ch in [if r { 'r' } else { '-' }, if w { 'w' } else { '-' }, if x { 'x' } else { '-' }] {
+                for ch in [
+                    if r { 'r' } else { '-' },
+                    if w { 'w' } else { '-' },
+                    if x { 'x' } else { '-' },
+                ] {
                     let color = match ch {
                         'r' => t.green,
                         'w' => t.yellow,

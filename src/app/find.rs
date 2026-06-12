@@ -145,10 +145,7 @@ mod tests {
     async fn handle_find_backspace_pops() {
         let entries = make_test_entries(&["a.txt"]);
         let mut app = App::new_for_test(entries);
-        let mut fs = FindState::new_test(
-            std::path::Path::new("/test"),
-            &[("file.rs", false)],
-        );
+        let mut fs = FindState::new_test(std::path::Path::new("/test"), &[("file.rs", false)]);
         fs.query = "abc".into();
         app.find_state = Some(fs);
         app.mode = Mode::Find;
@@ -198,10 +195,7 @@ mod tests {
     async fn handle_find_tab_switches_scope() {
         let entries = make_test_entries(&["a.txt"]);
         let mut app = App::new_for_test(entries);
-        let fs = FindState::new_test(
-            std::path::Path::new("/test"),
-            &[("a.rs", false)],
-        );
+        let fs = FindState::new_test(std::path::Path::new("/test"), &[("a.rs", false)]);
         app.find_state = Some(fs);
         app.mode = Mode::Find;
         app.handle_find(key(KeyCode::Tab));
@@ -215,10 +209,7 @@ mod tests {
         let entries = make_test_entries(&["a.txt"]);
         let mut app = App::new_for_test(entries);
         // Find state with no entries selected
-        app.find_state = Some(FindState::new_test(
-            std::path::Path::new("/test"),
-            &[],
-        ));
+        app.find_state = Some(FindState::new_test(std::path::Path::new("/test"), &[]));
         app.mode = Mode::Find;
         app.handle_find(key(KeyCode::Enter));
         assert_eq!(app.mode, Mode::Normal);

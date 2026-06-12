@@ -12,42 +12,174 @@ pub struct ThemeGroup {
 
 /// Static group definitions: (group name, dark themes, light themes).
 static THEME_GROUP_DEFS: &[(&str, &[&str], &[&str])] = &[
-    ("Classic",
-     &["dracula", "gruvbox-dark", "monokai", "nord", "solarized-dark"],
-     &["gruvbox-light", "nord-light", "one-light", "solarized-light", "papercolor-light"]),
-    ("Night City",
-     &["tokyo-night", "tokyonight-storm", "tokyonight-moon", "nightfox", "nightfly"],
-     &["tokyo-night-day", "dayfox", "vitesse-light", "bluloco-light", "night-owl-light"]),
-    ("Pastel",
-     &["catppuccin-mocha", "catppuccin-macchiato", "catppuccin-frappe", "carbonfox", "terafox"],
-     &["catppuccin-latte", "serendipity-light", "summerfruit-light", "fleet-light", "soft-era"]),
-    ("Forest",
-     &["everforest-dark", "bamboo", "kanagawa", "forest", "melange"],
-     &["everforest-light", "kanagawa-lotus", "melange-light", "modus-operandi", "ayu-light"]),
-    ("Minimal",
-     &["min-dark", "mellow", "noir", "lackluster", "monochrome"],
-     &["alabaster", "quiet-light", "flatwhite", "min-light", "pencil-light"]),
-    ("Neon",
-     &["synthwave84", "cyberdream", "radical", "retrowave", "poimandres"],
-     &["flexoki-light", "noctis-lux", "lucius-light", "zenbones-light", "xcode-light"]),
-    ("Retro",
-     &["phosphor", "amber", "c64", "bbs", "lcd"],
-     &["paper", "sepia", "parchment", "blueprint", "newsprint"]),
-    ("Desert",
-     &["sahara", "canyon", "dune", "mesa", "nomad"],
-     &["sandstone", "adobe", "camel", "mirage", "oasis"]),
-    ("Warm",
-     &["gruvbox-material", "earthsong", "tender", "palefire", "kanagawa-dragon"],
-     &["leuven", "cosmic-latte", "spacemacs-light", "solarized-osaka", "base16-default-light"]),
-    ("Ocean",
-     &["duskfox", "iceberg", "ayu-dark", "challenger-deep", "midnight"],
-     &["oxocarbon-light", "vs-light", "material-light", "winter-is-coming-light", "intellij-light"]),
-    ("Dusk",
-     &["rose-pine", "rose-pine-moon", "doom-one", "embark", "horizon-dark"],
-     &["rose-pine-dawn", "dawnfox", "horizon-light", "edge-light", "github-light"]),
-    ("Studio",
-     &["github-dark-default", "vscode-dark", "one-dark", "darcula", "material-ocean"],
-     &["github-light-default", "github-light-high-contrast", "vscode-light", "sublime-light", "idea-light"]),
+    (
+        "Classic",
+        &[
+            "dracula",
+            "gruvbox-dark",
+            "monokai",
+            "nord",
+            "solarized-dark",
+        ],
+        &[
+            "gruvbox-light",
+            "nord-light",
+            "one-light",
+            "solarized-light",
+            "papercolor-light",
+        ],
+    ),
+    (
+        "Night City",
+        &[
+            "tokyo-night",
+            "tokyonight-storm",
+            "tokyonight-moon",
+            "nightfox",
+            "nightfly",
+        ],
+        &[
+            "tokyo-night-day",
+            "dayfox",
+            "vitesse-light",
+            "bluloco-light",
+            "night-owl-light",
+        ],
+    ),
+    (
+        "Pastel",
+        &[
+            "catppuccin-mocha",
+            "catppuccin-macchiato",
+            "catppuccin-frappe",
+            "carbonfox",
+            "terafox",
+        ],
+        &[
+            "catppuccin-latte",
+            "serendipity-light",
+            "summerfruit-light",
+            "fleet-light",
+            "soft-era",
+        ],
+    ),
+    (
+        "Forest",
+        &["everforest-dark", "bamboo", "kanagawa", "forest", "melange"],
+        &[
+            "everforest-light",
+            "kanagawa-lotus",
+            "melange-light",
+            "modus-operandi",
+            "ayu-light",
+        ],
+    ),
+    (
+        "Minimal",
+        &["min-dark", "mellow", "noir", "lackluster", "monochrome"],
+        &[
+            "alabaster",
+            "quiet-light",
+            "flatwhite",
+            "min-light",
+            "pencil-light",
+        ],
+    ),
+    (
+        "Neon",
+        &[
+            "synthwave84",
+            "cyberdream",
+            "radical",
+            "retrowave",
+            "poimandres",
+        ],
+        &[
+            "flexoki-light",
+            "noctis-lux",
+            "lucius-light",
+            "zenbones-light",
+            "xcode-light",
+        ],
+    ),
+    (
+        "Retro",
+        &["phosphor", "amber", "c64", "bbs", "lcd"],
+        &["paper", "sepia", "parchment", "blueprint", "newsprint"],
+    ),
+    (
+        "Desert",
+        &["sahara", "canyon", "dune", "mesa", "nomad"],
+        &["sandstone", "adobe", "camel", "mirage", "oasis"],
+    ),
+    (
+        "Warm",
+        &[
+            "gruvbox-material",
+            "earthsong",
+            "tender",
+            "palefire",
+            "kanagawa-dragon",
+        ],
+        &[
+            "leuven",
+            "cosmic-latte",
+            "spacemacs-light",
+            "solarized-osaka",
+            "base16-default-light",
+        ],
+    ),
+    (
+        "Ocean",
+        &[
+            "duskfox",
+            "iceberg",
+            "ayu-dark",
+            "challenger-deep",
+            "midnight",
+        ],
+        &[
+            "oxocarbon-light",
+            "vs-light",
+            "material-light",
+            "winter-is-coming-light",
+            "intellij-light",
+        ],
+    ),
+    (
+        "Dusk",
+        &[
+            "rose-pine",
+            "rose-pine-moon",
+            "doom-one",
+            "embark",
+            "horizon-dark",
+        ],
+        &[
+            "rose-pine-dawn",
+            "dawnfox",
+            "horizon-light",
+            "edge-light",
+            "github-light",
+        ],
+    ),
+    (
+        "Studio",
+        &[
+            "github-dark-default",
+            "vscode-dark",
+            "one-dark",
+            "darcula",
+            "material-ocean",
+        ],
+        &[
+            "github-light-default",
+            "github-light-high-contrast",
+            "vscode-light",
+            "sublime-light",
+            "idea-light",
+        ],
+    ),
 ];
 
 #[derive(Deserialize)]
@@ -240,7 +372,9 @@ impl Theme {
             .filter_map(|e| {
                 let p = e.path();
                 if p.extension().is_some_and(|x| x == "toml") {
-                    p.file_stem().and_then(|s| s.to_str()).map(|s| s.to_string())
+                    p.file_stem()
+                        .and_then(|s| s.to_str())
+                        .map(|s| s.to_string())
                 } else {
                     None
                 }
@@ -254,15 +388,25 @@ impl Theme {
             let dark_themes: Vec<String> = dark_defs
                 .iter()
                 .filter(|&&n| available.contains(n))
-                .map(|&n| { assigned.insert(n.to_string()); n.to_string() })
+                .map(|&n| {
+                    assigned.insert(n.to_string());
+                    n.to_string()
+                })
                 .collect();
             let light_themes: Vec<String> = light_defs
                 .iter()
                 .filter(|&&n| available.contains(n))
-                .map(|&n| { assigned.insert(n.to_string()); n.to_string() })
+                .map(|&n| {
+                    assigned.insert(n.to_string());
+                    n.to_string()
+                })
                 .collect();
             if !dark_themes.is_empty() || !light_themes.is_empty() {
-                groups.push(ThemeGroup { name: group_name, dark_themes, light_themes });
+                groups.push(ThemeGroup {
+                    name: group_name,
+                    dark_themes,
+                    light_themes,
+                });
             }
         }
 
@@ -284,10 +428,18 @@ impl Theme {
                     .ok()
                     .map(|c| is_light_theme_content(&c))
                     .unwrap_or(false);
-                if is_light { other_light.push(name.clone()); } else { other_dark.push(name.clone()); }
+                if is_light {
+                    other_light.push(name.clone());
+                } else {
+                    other_dark.push(name.clone());
+                }
             }
             if !other_dark.is_empty() || !other_light.is_empty() {
-                groups.push(ThemeGroup { name: "Other", dark_themes: other_dark, light_themes: other_light });
+                groups.push(ThemeGroup {
+                    name: "Other",
+                    dark_themes: other_dark,
+                    light_themes: other_light,
+                });
             }
         }
 
@@ -343,9 +495,10 @@ impl Theme {
                 let path = entry.path();
                 if path.extension().is_some_and(|e| e == "toml")
                     && let Some(fname) = path.file_name().and_then(|f| f.to_str())
-                        && !builtin_names.contains(fname) {
-                            let _ = std::fs::remove_file(&path);
-                        }
+                    && !builtin_names.contains(fname)
+                {
+                    let _ = std::fs::remove_file(&path);
+                }
             }
         }
 
@@ -363,146 +516,372 @@ impl Theme {
 fn is_light_theme_content(content: &str) -> bool {
     if let Ok(table) = content.parse::<toml::Table>()
         && let Some(bg_str) = table.get("bg").and_then(|v| v.as_str())
-            && let Some(Color::Rgb(r, g, b)) = parse_hex(bg_str) {
-                let lum = 0.299 * (r as f64) + 0.587 * (g as f64) + 0.114 * (b as f64);
-                return lum > 128.0;
-            }
+        && let Some(Color::Rgb(r, g, b)) = parse_hex(bg_str)
+    {
+        let lum = 0.299 * (r as f64) + 0.587 * (g as f64) + 0.114 * (b as f64);
+        return lum > 128.0;
+    }
     false
 }
 
 const BUILTIN_THEMES: &[(&str, &str)] = &[
     // ── Classic ──
-    ("dracula.toml",        include_str!("../../themes/dracula.toml")),
-    ("gruvbox-dark.toml",   include_str!("../../themes/gruvbox-dark.toml")),
-    ("monokai.toml",        include_str!("../../themes/monokai.toml")),
-    ("nord.toml",           include_str!("../../themes/nord.toml")),
-    ("solarized-dark.toml", include_str!("../../themes/solarized-dark.toml")),
-    ("gruvbox-light.toml",  include_str!("../../themes/gruvbox-light.toml")),
-    ("nord-light.toml",     include_str!("../../themes/nord-light.toml")),
-    ("one-light.toml",      include_str!("../../themes/one-light.toml")),
-    ("solarized-light.toml",include_str!("../../themes/solarized-light.toml")),
-    ("papercolor-light.toml",include_str!("../../themes/papercolor-light.toml")),
+    ("dracula.toml", include_str!("../../themes/dracula.toml")),
+    (
+        "gruvbox-dark.toml",
+        include_str!("../../themes/gruvbox-dark.toml"),
+    ),
+    ("monokai.toml", include_str!("../../themes/monokai.toml")),
+    ("nord.toml", include_str!("../../themes/nord.toml")),
+    (
+        "solarized-dark.toml",
+        include_str!("../../themes/solarized-dark.toml"),
+    ),
+    (
+        "gruvbox-light.toml",
+        include_str!("../../themes/gruvbox-light.toml"),
+    ),
+    (
+        "nord-light.toml",
+        include_str!("../../themes/nord-light.toml"),
+    ),
+    (
+        "one-light.toml",
+        include_str!("../../themes/one-light.toml"),
+    ),
+    (
+        "solarized-light.toml",
+        include_str!("../../themes/solarized-light.toml"),
+    ),
+    (
+        "papercolor-light.toml",
+        include_str!("../../themes/papercolor-light.toml"),
+    ),
     // ── Tokyo ──
-    ("tokyo-night.toml",     include_str!("../../themes/tokyo-night.toml")),
-    ("tokyonight-storm.toml",include_str!("../../themes/tokyonight-storm.toml")),
-    ("tokyonight-moon.toml", include_str!("../../themes/tokyonight-moon.toml")),
-    ("nightfox.toml",        include_str!("../../themes/nightfox.toml")),
-    ("nightfly.toml",        include_str!("../../themes/nightfly.toml")),
-    ("tokyo-night-day.toml", include_str!("../../themes/tokyo-night-day.toml")),
-    ("dayfox.toml",          include_str!("../../themes/dayfox.toml")),
-    ("vitesse-light.toml",   include_str!("../../themes/vitesse-light.toml")),
-    ("bluloco-light.toml",   include_str!("../../themes/bluloco-light.toml")),
-    ("night-owl-light.toml", include_str!("../../themes/night-owl-light.toml")),
+    (
+        "tokyo-night.toml",
+        include_str!("../../themes/tokyo-night.toml"),
+    ),
+    (
+        "tokyonight-storm.toml",
+        include_str!("../../themes/tokyonight-storm.toml"),
+    ),
+    (
+        "tokyonight-moon.toml",
+        include_str!("../../themes/tokyonight-moon.toml"),
+    ),
+    ("nightfox.toml", include_str!("../../themes/nightfox.toml")),
+    ("nightfly.toml", include_str!("../../themes/nightfly.toml")),
+    (
+        "tokyo-night-day.toml",
+        include_str!("../../themes/tokyo-night-day.toml"),
+    ),
+    ("dayfox.toml", include_str!("../../themes/dayfox.toml")),
+    (
+        "vitesse-light.toml",
+        include_str!("../../themes/vitesse-light.toml"),
+    ),
+    (
+        "bluloco-light.toml",
+        include_str!("../../themes/bluloco-light.toml"),
+    ),
+    (
+        "night-owl-light.toml",
+        include_str!("../../themes/night-owl-light.toml"),
+    ),
     // ── Catppuccin ──
-    ("catppuccin-mocha.toml",    include_str!("../../themes/catppuccin-mocha.toml")),
-    ("catppuccin-macchiato.toml",include_str!("../../themes/catppuccin-macchiato.toml")),
-    ("catppuccin-frappe.toml",   include_str!("../../themes/catppuccin-frappe.toml")),
-    ("carbonfox.toml",           include_str!("../../themes/carbonfox.toml")),
-    ("terafox.toml",             include_str!("../../themes/terafox.toml")),
-    ("catppuccin-latte.toml",    include_str!("../../themes/catppuccin-latte.toml")),
-    ("serendipity-light.toml",   include_str!("../../themes/serendipity-light.toml")),
-    ("summerfruit-light.toml",   include_str!("../../themes/summerfruit-light.toml")),
-    ("fleet-light.toml",         include_str!("../../themes/fleet-light.toml")),
-    ("soft-era.toml",            include_str!("../../themes/soft-era.toml")),
+    (
+        "catppuccin-mocha.toml",
+        include_str!("../../themes/catppuccin-mocha.toml"),
+    ),
+    (
+        "catppuccin-macchiato.toml",
+        include_str!("../../themes/catppuccin-macchiato.toml"),
+    ),
+    (
+        "catppuccin-frappe.toml",
+        include_str!("../../themes/catppuccin-frappe.toml"),
+    ),
+    (
+        "carbonfox.toml",
+        include_str!("../../themes/carbonfox.toml"),
+    ),
+    ("terafox.toml", include_str!("../../themes/terafox.toml")),
+    (
+        "catppuccin-latte.toml",
+        include_str!("../../themes/catppuccin-latte.toml"),
+    ),
+    (
+        "serendipity-light.toml",
+        include_str!("../../themes/serendipity-light.toml"),
+    ),
+    (
+        "summerfruit-light.toml",
+        include_str!("../../themes/summerfruit-light.toml"),
+    ),
+    (
+        "fleet-light.toml",
+        include_str!("../../themes/fleet-light.toml"),
+    ),
+    ("soft-era.toml", include_str!("../../themes/soft-era.toml")),
     // ── Forest ──
-    ("everforest-dark.toml",include_str!("../../themes/everforest-dark.toml")),
-    ("bamboo.toml",         include_str!("../../themes/bamboo.toml")),
-    ("kanagawa.toml",       include_str!("../../themes/kanagawa.toml")),
-    ("forest.toml",         include_str!("../../themes/forest.toml")),
-    ("melange.toml",        include_str!("../../themes/melange.toml")),
-    ("everforest-light.toml",include_str!("../../themes/everforest-light.toml")),
-    ("kanagawa-lotus.toml", include_str!("../../themes/kanagawa-lotus.toml")),
-    ("melange-light.toml",  include_str!("../../themes/melange-light.toml")),
-    ("modus-operandi.toml", include_str!("../../themes/modus-operandi.toml")),
-    ("ayu-light.toml",      include_str!("../../themes/ayu-light.toml")),
+    (
+        "everforest-dark.toml",
+        include_str!("../../themes/everforest-dark.toml"),
+    ),
+    ("bamboo.toml", include_str!("../../themes/bamboo.toml")),
+    ("kanagawa.toml", include_str!("../../themes/kanagawa.toml")),
+    ("forest.toml", include_str!("../../themes/forest.toml")),
+    ("melange.toml", include_str!("../../themes/melange.toml")),
+    (
+        "everforest-light.toml",
+        include_str!("../../themes/everforest-light.toml"),
+    ),
+    (
+        "kanagawa-lotus.toml",
+        include_str!("../../themes/kanagawa-lotus.toml"),
+    ),
+    (
+        "melange-light.toml",
+        include_str!("../../themes/melange-light.toml"),
+    ),
+    (
+        "modus-operandi.toml",
+        include_str!("../../themes/modus-operandi.toml"),
+    ),
+    (
+        "ayu-light.toml",
+        include_str!("../../themes/ayu-light.toml"),
+    ),
     // ── Minimal ──
-    ("min-dark.toml",    include_str!("../../themes/min-dark.toml")),
-    ("mellow.toml",      include_str!("../../themes/mellow.toml")),
-    ("noir.toml",        include_str!("../../themes/noir.toml")),
-    ("lackluster.toml",  include_str!("../../themes/lackluster.toml")),
-    ("monochrome.toml",  include_str!("../../themes/monochrome.toml")),
-    ("alabaster.toml",   include_str!("../../themes/alabaster.toml")),
-    ("quiet-light.toml", include_str!("../../themes/quiet-light.toml")),
-    ("flatwhite.toml",   include_str!("../../themes/flatwhite.toml")),
-    ("min-light.toml",   include_str!("../../themes/min-light.toml")),
-    ("pencil-light.toml",include_str!("../../themes/pencil-light.toml")),
+    ("min-dark.toml", include_str!("../../themes/min-dark.toml")),
+    ("mellow.toml", include_str!("../../themes/mellow.toml")),
+    ("noir.toml", include_str!("../../themes/noir.toml")),
+    (
+        "lackluster.toml",
+        include_str!("../../themes/lackluster.toml"),
+    ),
+    (
+        "monochrome.toml",
+        include_str!("../../themes/monochrome.toml"),
+    ),
+    (
+        "alabaster.toml",
+        include_str!("../../themes/alabaster.toml"),
+    ),
+    (
+        "quiet-light.toml",
+        include_str!("../../themes/quiet-light.toml"),
+    ),
+    (
+        "flatwhite.toml",
+        include_str!("../../themes/flatwhite.toml"),
+    ),
+    (
+        "min-light.toml",
+        include_str!("../../themes/min-light.toml"),
+    ),
+    (
+        "pencil-light.toml",
+        include_str!("../../themes/pencil-light.toml"),
+    ),
     // ── Neon ──
-    ("synthwave84.toml",   include_str!("../../themes/synthwave84.toml")),
-    ("cyberdream.toml",    include_str!("../../themes/cyberdream.toml")),
-    ("radical.toml",       include_str!("../../themes/radical.toml")),
-    ("retrowave.toml",     include_str!("../../themes/retrowave.toml")),
-    ("poimandres.toml",    include_str!("../../themes/poimandres.toml")),
-    ("flexoki-light.toml", include_str!("../../themes/flexoki-light.toml")),
-    ("noctis-lux.toml",    include_str!("../../themes/noctis-lux.toml")),
-    ("lucius-light.toml",  include_str!("../../themes/lucius-light.toml")),
-    ("zenbones-light.toml",include_str!("../../themes/zenbones-light.toml")),
-    ("xcode-light.toml",   include_str!("../../themes/xcode-light.toml")),
+    (
+        "synthwave84.toml",
+        include_str!("../../themes/synthwave84.toml"),
+    ),
+    (
+        "cyberdream.toml",
+        include_str!("../../themes/cyberdream.toml"),
+    ),
+    ("radical.toml", include_str!("../../themes/radical.toml")),
+    (
+        "retrowave.toml",
+        include_str!("../../themes/retrowave.toml"),
+    ),
+    (
+        "poimandres.toml",
+        include_str!("../../themes/poimandres.toml"),
+    ),
+    (
+        "flexoki-light.toml",
+        include_str!("../../themes/flexoki-light.toml"),
+    ),
+    (
+        "noctis-lux.toml",
+        include_str!("../../themes/noctis-lux.toml"),
+    ),
+    (
+        "lucius-light.toml",
+        include_str!("../../themes/lucius-light.toml"),
+    ),
+    (
+        "zenbones-light.toml",
+        include_str!("../../themes/zenbones-light.toml"),
+    ),
+    (
+        "xcode-light.toml",
+        include_str!("../../themes/xcode-light.toml"),
+    ),
     // ── Retro ──
-    ("phosphor.toml",  include_str!("../../themes/phosphor.toml")),
-    ("amber.toml",     include_str!("../../themes/amber.toml")),
-    ("c64.toml",       include_str!("../../themes/c64.toml")),
-    ("bbs.toml",       include_str!("../../themes/bbs.toml")),
-    ("lcd.toml",       include_str!("../../themes/lcd.toml")),
-    ("paper.toml",     include_str!("../../themes/paper.toml")),
-    ("sepia.toml",     include_str!("../../themes/sepia.toml")),
-    ("parchment.toml", include_str!("../../themes/parchment.toml")),
-    ("blueprint.toml", include_str!("../../themes/blueprint.toml")),
-    ("newsprint.toml", include_str!("../../themes/newsprint.toml")),
+    ("phosphor.toml", include_str!("../../themes/phosphor.toml")),
+    ("amber.toml", include_str!("../../themes/amber.toml")),
+    ("c64.toml", include_str!("../../themes/c64.toml")),
+    ("bbs.toml", include_str!("../../themes/bbs.toml")),
+    ("lcd.toml", include_str!("../../themes/lcd.toml")),
+    ("paper.toml", include_str!("../../themes/paper.toml")),
+    ("sepia.toml", include_str!("../../themes/sepia.toml")),
+    (
+        "parchment.toml",
+        include_str!("../../themes/parchment.toml"),
+    ),
+    (
+        "blueprint.toml",
+        include_str!("../../themes/blueprint.toml"),
+    ),
+    (
+        "newsprint.toml",
+        include_str!("../../themes/newsprint.toml"),
+    ),
     // ── Desert ──
-    ("sahara.toml",    include_str!("../../themes/sahara.toml")),
-    ("canyon.toml",    include_str!("../../themes/canyon.toml")),
-    ("dune.toml",      include_str!("../../themes/dune.toml")),
-    ("mesa.toml",      include_str!("../../themes/mesa.toml")),
-    ("nomad.toml",     include_str!("../../themes/nomad.toml")),
-    ("sandstone.toml", include_str!("../../themes/sandstone.toml")),
-    ("adobe.toml",     include_str!("../../themes/adobe.toml")),
-    ("camel.toml",     include_str!("../../themes/camel.toml")),
-    ("mirage.toml",    include_str!("../../themes/mirage.toml")),
-    ("oasis.toml",     include_str!("../../themes/oasis.toml")),
+    ("sahara.toml", include_str!("../../themes/sahara.toml")),
+    ("canyon.toml", include_str!("../../themes/canyon.toml")),
+    ("dune.toml", include_str!("../../themes/dune.toml")),
+    ("mesa.toml", include_str!("../../themes/mesa.toml")),
+    ("nomad.toml", include_str!("../../themes/nomad.toml")),
+    (
+        "sandstone.toml",
+        include_str!("../../themes/sandstone.toml"),
+    ),
+    ("adobe.toml", include_str!("../../themes/adobe.toml")),
+    ("camel.toml", include_str!("../../themes/camel.toml")),
+    ("mirage.toml", include_str!("../../themes/mirage.toml")),
+    ("oasis.toml", include_str!("../../themes/oasis.toml")),
     // ── Warm ──
-    ("gruvbox-material.toml",include_str!("../../themes/gruvbox-material.toml")),
-    ("earthsong.toml",       include_str!("../../themes/earthsong.toml")),
-    ("tender.toml",          include_str!("../../themes/tender.toml")),
-    ("palefire.toml",        include_str!("../../themes/palefire.toml")),
-    ("kanagawa-dragon.toml", include_str!("../../themes/kanagawa-dragon.toml")),
-    ("leuven.toml",          include_str!("../../themes/leuven.toml")),
-    ("cosmic-latte.toml",    include_str!("../../themes/cosmic-latte.toml")),
-    ("spacemacs-light.toml", include_str!("../../themes/spacemacs-light.toml")),
-    ("solarized-osaka.toml", include_str!("../../themes/solarized-osaka.toml")),
-    ("base16-default-light.toml",include_str!("../../themes/base16-default-light.toml")),
+    (
+        "gruvbox-material.toml",
+        include_str!("../../themes/gruvbox-material.toml"),
+    ),
+    (
+        "earthsong.toml",
+        include_str!("../../themes/earthsong.toml"),
+    ),
+    ("tender.toml", include_str!("../../themes/tender.toml")),
+    ("palefire.toml", include_str!("../../themes/palefire.toml")),
+    (
+        "kanagawa-dragon.toml",
+        include_str!("../../themes/kanagawa-dragon.toml"),
+    ),
+    ("leuven.toml", include_str!("../../themes/leuven.toml")),
+    (
+        "cosmic-latte.toml",
+        include_str!("../../themes/cosmic-latte.toml"),
+    ),
+    (
+        "spacemacs-light.toml",
+        include_str!("../../themes/spacemacs-light.toml"),
+    ),
+    (
+        "solarized-osaka.toml",
+        include_str!("../../themes/solarized-osaka.toml"),
+    ),
+    (
+        "base16-default-light.toml",
+        include_str!("../../themes/base16-default-light.toml"),
+    ),
     // ── Ocean ──
-    ("duskfox.toml",          include_str!("../../themes/duskfox.toml")),
-    ("iceberg.toml",          include_str!("../../themes/iceberg.toml")),
-    ("ayu-dark.toml",         include_str!("../../themes/ayu-dark.toml")),
-    ("challenger-deep.toml",  include_str!("../../themes/challenger-deep.toml")),
-    ("midnight.toml",         include_str!("../../themes/midnight.toml")),
-    ("oxocarbon-light.toml",  include_str!("../../themes/oxocarbon-light.toml")),
-    ("vs-light.toml",         include_str!("../../themes/vs-light.toml")),
-    ("material-light.toml",   include_str!("../../themes/material-light.toml")),
-    ("winter-is-coming-light.toml",include_str!("../../themes/winter-is-coming-light.toml")),
-    ("intellij-light.toml",   include_str!("../../themes/intellij-light.toml")),
+    ("duskfox.toml", include_str!("../../themes/duskfox.toml")),
+    ("iceberg.toml", include_str!("../../themes/iceberg.toml")),
+    ("ayu-dark.toml", include_str!("../../themes/ayu-dark.toml")),
+    (
+        "challenger-deep.toml",
+        include_str!("../../themes/challenger-deep.toml"),
+    ),
+    ("midnight.toml", include_str!("../../themes/midnight.toml")),
+    (
+        "oxocarbon-light.toml",
+        include_str!("../../themes/oxocarbon-light.toml"),
+    ),
+    ("vs-light.toml", include_str!("../../themes/vs-light.toml")),
+    (
+        "material-light.toml",
+        include_str!("../../themes/material-light.toml"),
+    ),
+    (
+        "winter-is-coming-light.toml",
+        include_str!("../../themes/winter-is-coming-light.toml"),
+    ),
+    (
+        "intellij-light.toml",
+        include_str!("../../themes/intellij-light.toml"),
+    ),
     // ── Dusk ──
-    ("rose-pine.toml",      include_str!("../../themes/rose-pine.toml")),
-    ("rose-pine-moon.toml", include_str!("../../themes/rose-pine-moon.toml")),
-    ("doom-one.toml",       include_str!("../../themes/doom-one.toml")),
-    ("embark.toml",         include_str!("../../themes/embark.toml")),
-    ("horizon-dark.toml",   include_str!("../../themes/horizon-dark.toml")),
-    ("rose-pine-dawn.toml", include_str!("../../themes/rose-pine-dawn.toml")),
-    ("dawnfox.toml",        include_str!("../../themes/dawnfox.toml")),
-    ("horizon-light.toml",  include_str!("../../themes/horizon-light.toml")),
-    ("edge-light.toml",     include_str!("../../themes/edge-light.toml")),
-    ("github-light.toml",   include_str!("../../themes/github-light.toml")),
+    (
+        "rose-pine.toml",
+        include_str!("../../themes/rose-pine.toml"),
+    ),
+    (
+        "rose-pine-moon.toml",
+        include_str!("../../themes/rose-pine-moon.toml"),
+    ),
+    ("doom-one.toml", include_str!("../../themes/doom-one.toml")),
+    ("embark.toml", include_str!("../../themes/embark.toml")),
+    (
+        "horizon-dark.toml",
+        include_str!("../../themes/horizon-dark.toml"),
+    ),
+    (
+        "rose-pine-dawn.toml",
+        include_str!("../../themes/rose-pine-dawn.toml"),
+    ),
+    ("dawnfox.toml", include_str!("../../themes/dawnfox.toml")),
+    (
+        "horizon-light.toml",
+        include_str!("../../themes/horizon-light.toml"),
+    ),
+    (
+        "edge-light.toml",
+        include_str!("../../themes/edge-light.toml"),
+    ),
+    (
+        "github-light.toml",
+        include_str!("../../themes/github-light.toml"),
+    ),
     // ── Pro ──
-    ("github-dark-default.toml",       include_str!("../../themes/github-dark-default.toml")),
-    ("vscode-dark.toml",               include_str!("../../themes/vscode-dark.toml")),
-    ("one-dark.toml",                  include_str!("../../themes/one-dark.toml")),
-    ("darcula.toml",                   include_str!("../../themes/darcula.toml")),
-    ("material-ocean.toml",            include_str!("../../themes/material-ocean.toml")),
-    ("github-light-default.toml",      include_str!("../../themes/github-light-default.toml")),
-    ("github-light-high-contrast.toml",include_str!("../../themes/github-light-high-contrast.toml")),
-    ("vscode-light.toml",              include_str!("../../themes/vscode-light.toml")),
-    ("sublime-light.toml",             include_str!("../../themes/sublime-light.toml")),
-    ("idea-light.toml",                include_str!("../../themes/idea-light.toml")),
+    (
+        "github-dark-default.toml",
+        include_str!("../../themes/github-dark-default.toml"),
+    ),
+    (
+        "vscode-dark.toml",
+        include_str!("../../themes/vscode-dark.toml"),
+    ),
+    ("one-dark.toml", include_str!("../../themes/one-dark.toml")),
+    ("darcula.toml", include_str!("../../themes/darcula.toml")),
+    (
+        "material-ocean.toml",
+        include_str!("../../themes/material-ocean.toml"),
+    ),
+    (
+        "github-light-default.toml",
+        include_str!("../../themes/github-light-default.toml"),
+    ),
+    (
+        "github-light-high-contrast.toml",
+        include_str!("../../themes/github-light-high-contrast.toml"),
+    ),
+    (
+        "vscode-light.toml",
+        include_str!("../../themes/vscode-light.toml"),
+    ),
+    (
+        "sublime-light.toml",
+        include_str!("../../themes/sublime-light.toml"),
+    ),
+    (
+        "idea-light.toml",
+        include_str!("../../themes/idea-light.toml"),
+    ),
 ];
 
 #[cfg(test)]

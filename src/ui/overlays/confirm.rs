@@ -140,6 +140,11 @@ pub(in crate::ui) fn render_quit_confirm(f: &mut Frame, app: &App, area: Rect) {
 
     f.render_widget(
         Paragraph::new(vec![msg, sub, Line::from(""), hint]),
-        Rect::new(inner.x + 1, inner.y, inner.width.saturating_sub(2), inner.height),
+        Rect::new(
+            inner.x + 1,
+            inner.y,
+            inner.width.saturating_sub(2),
+            inner.height,
+        ),
     );
 }
