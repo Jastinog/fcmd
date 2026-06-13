@@ -23,6 +23,16 @@ pub struct PanelRegion {
     pub inner: Rect,
 }
 
+impl PanelRegion {
+    /// Whether the given cell falls inside this panel's content area.
+    fn contains(&self, col: u16, row: u16) -> bool {
+        col >= self.inner.x
+            && col < self.inner.x + self.inner.width
+            && row >= self.inner.y
+            && row < self.inner.y + self.inner.height
+    }
+}
+
 /// Max gap (ms) between two left-clicks at the same cell to count as a double-click.
 const DOUBLE_CLICK_MS: u128 = 400;
 /// Rows moved per scroll-wheel notch.
@@ -49,12 +59,7 @@ impl App {
         self.mouse_regions
             .panels
             .iter()
-            .find(|p| {
-                col >= p.inner.x
-                    && col < p.inner.x + p.inner.width
-                    && row >= p.inner.y
-                    && row < p.inner.y + p.inner.height
-            })
+            .find(|p| p.contains(col, row))
             .map(|p| p.index)
     }
 
@@ -108,20 +113,14 @@ impl App {
         }
 
         // Locate the clicked panel and the visible row within it.
-        let hit = self
+        let Some((pidx, vis_row)) = self
             .mouse_regions
             .panels
             .iter()
-            .find(|p| {
-                col >= p.inner.x
-                    && col < p.inner.x + p.inner.width
-                    && row >= p.inner.y
-                    && row < p.inner.y + p.inner.height
-            })
-            .map(|p| (p.index, (row - p.inner.y) as usize));
-        let (pidx, vis_row) = match hit {
-            Some(h) => h,
-            None => return,
+            .find(|p| p.contains(col, row))
+            .map(|p| (p.index, (row - p.inner.y) as usize))
+        else {
+            return;
         };
 
         // Focus the clicked panel.

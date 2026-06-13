@@ -44,16 +44,13 @@ impl App {
 
     /// Show `git diff` for the file under the cursor in the full-screen viewer.
     pub(super) fn git_diff(&mut self) {
-        let entry = match self
+        let Some(entry) = self
             .active_panel()
             .selected_entry()
             .filter(|e| e.name != "..")
-        {
-            Some(e) => e,
-            None => {
-                self.status_message = "No file under cursor".into();
-                return;
-            }
+        else {
+            self.status_message = "No file under cursor".into();
+            return;
         };
         let path = entry.path.clone();
         let title = entry.name.clone();
