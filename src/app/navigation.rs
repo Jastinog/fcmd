@@ -279,6 +279,9 @@ impl App {
         panel.selected = 0;
         panel.offset = 0;
         panel.marked.clear();
+        // A live filter belongs to the directory it was set in; drop it on navigation.
+        panel.filter.clear();
+        panel.full_entries.clear();
         panel.loading = true;
 
         // Apply sort prefs for this directory
@@ -394,6 +397,7 @@ impl App {
             ("n", "unselect"),
             ("m", "clear mark"),
             ("", "Search"),
+            ("f", "filter"),
             (",", "find"),
             (".", "find global"),
             ("", "Other"),

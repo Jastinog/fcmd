@@ -27,6 +27,7 @@ pub(super) use conflict::render_conflict_popup;
 pub(super) use help::render_help;
 pub(super) use info::render_info_popup;
 pub(super) use input::render_input_popup;
+pub(super) use search::render_filter_popup;
 pub(super) use search::render_search_popup;
 pub(super) use tasks::render_tasks_overlay;
 pub(super) use theme_picker::render_theme_picker;

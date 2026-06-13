@@ -79,6 +79,11 @@ pub struct Panel {
     pub show_hidden: bool,
     /// When true, hide cursor highlight (waiting for async load to position cursor).
     pub loading: bool,
+    /// Active live-filter query ("" = inactive). While non-empty, `entries` holds
+    /// only matching items and `full_entries` backs the complete listing.
+    pub filter: String,
+    /// Complete unfiltered listing; only populated while `filter` is active.
+    pub full_entries: Vec<FileEntry>,
 }
 
 impl Panel {
@@ -94,6 +99,8 @@ impl Panel {
             sort_reverse: false,
             show_hidden: false,
             loading: true,
+            filter: String::new(),
+            full_entries: Vec::new(),
         }
     }
 
@@ -321,15 +328,86 @@ impl Panel {
         }
     }
 
+    /// Does `name` pass the active filter? ".." always passes so the user can
+    /// still navigate up out of a narrowed listing.
+    fn filter_matches(name: &str, query_lower: &str) -> bool {
+        name == ".." || name.to_lowercase().contains(query_lower)
+    }
+
+    /// Rebuild `entries` from `full_entries` using the active `filter`.
+    /// No-op when no filter is set (`entries` already holds the full list).
+    fn apply_filter_view(&mut self) {
+        if self.filter.is_empty() {
+            return;
+        }
+        let q = self.filter.to_lowercase();
+        self.entries = self
+            .full_entries
+            .iter()
+            .filter(|e| Self::filter_matches(&e.name, &q))
+            .cloned()
+            .collect();
+    }
+
+    /// Set or clear the live filter, rebuilding the visible `entries`. An empty
+    /// `query` clears the filter and restores the full listing. The cursor is
+    /// reset to the top of the (re)built list.
+    pub fn set_filter(&mut self, query: String) {
+        self.selected = 0;
+        self.offset = 0;
+        let was_active = !self.filter.is_empty();
+        if query.is_empty() {
+            if was_active {
+                self.entries = std::mem::take(&mut self.full_entries);
+            }
+            self.filter.clear();
+            self.clamp_selected();
+            return;
+        }
+        if !was_active {
+            // Becoming active: snapshot the full list before narrowing.
+            self.full_entries = self.entries.clone();
+        }
+        self.filter = query;
+        self.apply_filter_view();
+        self.clamp_selected();
+    }
+
+    /// Clear the filter if active, restoring the full listing. Returns whether a
+    /// filter was actually cleared.
+    pub fn clear_filter(&mut self) -> bool {
+        if self.filter.is_empty() {
+            return false;
+        }
+        self.set_filter(String::new());
+        true
+    }
+
     /// Append a batch of unsorted entries during streaming load.
     pub fn append_entries(&mut self, new_entries: Vec<FileEntry>) {
-        self.entries.extend(new_entries);
+        if self.filter.is_empty() {
+            self.entries.extend(new_entries);
+        } else {
+            let q = self.filter.to_lowercase();
+            self.entries.extend(
+                new_entries
+                    .iter()
+                    .filter(|e| Self::filter_matches(&e.name, &q))
+                    .cloned(),
+            );
+            self.full_entries.extend(new_entries);
+        }
         self.clamp_selected();
     }
 
     /// Swap in entries loaded asynchronously, optionally re-selecting a named entry.
     pub fn apply_entries(&mut self, entries: Vec<FileEntry>, select_name: Option<&str>) {
-        self.entries = entries;
+        if self.filter.is_empty() {
+            self.entries = entries;
+        } else {
+            self.full_entries = entries;
+            self.apply_filter_view();
+        }
         self.clamp_visual_anchor();
         if let Some(name) = select_name {
             if let Some(pos) = self.entries.iter().position(|e| e.name == name) {
@@ -700,6 +778,8 @@ mod tests {
             sort_reverse: false,
             show_hidden: false,
             loading: false,
+            filter: String::new(),
+            full_entries: Vec::new(),
         }
     }
 

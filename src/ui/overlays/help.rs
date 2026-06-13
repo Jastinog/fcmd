@@ -142,6 +142,7 @@ fn build_help_rows() -> (Vec<Cell>, Vec<Cell>) {
             ("Sp+t", "Toggle tree sidebar"),
             ("Sp+h", "Toggle hidden files"),
             ("Sp+d", "Calculate dir sizes"),
+            ("Sp+f", "Filter listing"),
             ("Sp+, / .", "Find local / global"),
             ("Sp+a / n", "Select all / Unselect"),
             ("Sp+b", "Bookmarks list"),

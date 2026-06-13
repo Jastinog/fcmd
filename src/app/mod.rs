@@ -20,6 +20,7 @@ pub(crate) mod chmod;
 mod command;
 mod dialogs;
 mod file_ops;
+mod filter;
 mod find;
 mod git;
 mod git_ops;
@@ -51,6 +52,7 @@ pub enum Mode {
     Confirm,
     ConfirmQuit,
     Search,
+    Filter,
     Find,
     Help,
     Rename,
@@ -170,6 +172,9 @@ pub struct App {
     // Search
     pub search_query: String,
     pub search_saved_cursor: usize,
+    // Live filter (Mode::Filter input buffer + the filter active when editing began)
+    pub filter_input: String,
+    pub filter_prev: String,
     // Marks
     pub marks: HashMap<char, PathBuf>,
     // Find
@@ -393,6 +398,8 @@ impl App {
             help_scroll: 0,
             search_query: String::new(),
             search_saved_cursor: 0,
+            filter_input: String::new(),
+            filter_prev: String::new(),
             marks: HashMap::new(),
             find_state: None,
             layout,
@@ -881,6 +888,7 @@ impl App {
             Mode::Confirm => self.handle_confirm(key),
             Mode::ConfirmQuit => self.handle_confirm_quit(key),
             Mode::Search => self.handle_search(key),
+            Mode::Filter => self.handle_filter(key),
             Mode::Find => self.handle_find(key),
             Mode::Help => self.handle_help(key),
             Mode::Rename => self.handle_rename(key),
@@ -976,6 +984,8 @@ impl App {
             help_scroll: 0,
             search_query: String::new(),
             search_saved_cursor: 0,
+            filter_input: String::new(),
+            filter_prev: String::new(),
             marks: HashMap::new(),
             find_state: None,
             layout: PanelLayout::Dual,

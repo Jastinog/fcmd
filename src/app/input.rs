@@ -47,10 +47,14 @@ impl App {
                 }
             }
             KeyCode::Esc => {
-                let n = self.active_panel().marked.len();
-                if n > 0 {
-                    self.active_panel_mut().marked.clear();
-                    self.status_message = format!("Selection cleared ({n} item(s))");
+                if self.active_panel_mut().clear_filter() {
+                    self.status_message = "Filter cleared".into();
+                } else {
+                    let n = self.active_panel().marked.len();
+                    if n > 0 {
+                        self.active_panel_mut().marked.clear();
+                        self.status_message = format!("Selection cleared ({n} item(s))");
+                    }
                 }
             }
 
@@ -258,6 +262,7 @@ impl App {
                 self.pending_key_time = Some(Instant::now());
             }
             (' ', KeyCode::Char('d')) => self.start_du(),
+            (' ', KeyCode::Char('f')) => self.enter_filter(),
             (' ', KeyCode::Char(',')) => self.open_find_local(),
             (' ', KeyCode::Char('.')) => self.open_find_global(),
             (' ', KeyCode::Char('s')) => {

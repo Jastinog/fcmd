@@ -66,6 +66,10 @@ Press `i` on any file or directory to see detailed information: type, full path,
 
 `f` for local directory search, `F` for global search (macOS `mdfind`). Results appear instantly with an inline file preview.
 
+### Live Filter
+
+`Space f` narrows the current listing in place as you type — non-matching entries disappear, so the panel shows only what you care about (`..` always stays for navigation). Unlike `/` search, which just moves the cursor, the filter restricts what's visible, and operations like select-all or yank act on the visible subset. `Enter` keeps the filter (shown in the panel title), `Esc` reverts it, and the filter clears automatically when you change directory.
+
 ### Tree Sidebar
 
 `Space t` toggles a tree view on the left (20% width). Navigate with `j`/`k`, expand/collapse directories, and jump to any location.
@@ -167,6 +171,7 @@ cargo install --path .
 |-----|--------|
 | `/` | Incremental search |
 | `n` / `N` | Next / previous search match |
+| `Space f` | Live filter (narrow listing) |
 
 ### File Operations
 

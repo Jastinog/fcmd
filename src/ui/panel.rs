@@ -61,6 +61,13 @@ pub(super) fn render_panel(
         path_str.into_owned()
     };
 
+    // Append an indicator when a live filter is narrowing this panel.
+    let title = if panel.filter.is_empty() {
+        title
+    } else {
+        format!("{title}  \u{f0233} {}", panel.filter)
+    };
+
     let block = Block::default()
         .borders(Borders::ALL)
         .border_style(Style::default().fg(border_color))
