@@ -58,6 +58,22 @@ pub struct Preview {
 }
 
 impl Preview {
+    /// Build a text preview from an in-memory string (e.g. command output such as
+    /// a git diff). Lines are sanitized the same way as on-disk file content.
+    pub fn from_text(title: String, text: &str) -> Self {
+        let lines: Vec<String> = text.lines().map(sanitize_line).collect();
+        let info = Self::lines_info(lines.len(), false);
+        Preview {
+            lines,
+            scroll: 0,
+            title,
+            info,
+            is_binary: false,
+            binary_size: 0,
+            hex_bytes: Vec::new(),
+        }
+    }
+
     pub fn loading_placeholder(path: &Path) -> Self {
         let title = path
             .file_name()
@@ -530,6 +546,16 @@ mod tests {
     #[test]
     fn sanitize_plain_text() {
         assert_eq!(sanitize_line("hello world"), "hello world");
+    }
+
+    #[test]
+    fn from_text_splits_and_sanitizes_lines() {
+        let p = Preview::from_text("git diff: a".into(), "line one\n\tindented\nlast");
+        assert_eq!(p.title, "git diff: a");
+        assert!(!p.is_binary);
+        assert_eq!(p.lines.len(), 3);
+        // The leading tab is expanded to spaces by sanitize_line.
+        assert_eq!(p.lines[1], "    indented");
     }
 
     #[test]

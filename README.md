@@ -94,6 +94,8 @@ Browse themes with `T` or set directly with `:theme <name>`. The theme picker au
 
 Auto-detected per-file git status indicators directly in the file list — modified, staged, untracked, and more.
 
+Work the tree without leaving the manager: `gs` stages the file under the cursor (or the whole selection) with `git add`, `gu` unstages it (`git restore --staged`), and `gd` opens its diff in the full-screen viewer with syntax highlighting. Status icons refresh automatically after staging.
+
 ### Bookmarks & Marks
 
 ![Bookmarks popup](assets/bookmarks.png)
@@ -185,6 +187,14 @@ cargo install --path .
 | `i` | File / directory info popup |
 | `cp` | Permissions (chmod) |
 | `co` | Owner (chown) |
+
+### Git
+
+| Key | Action |
+|-----|--------|
+| `gs` | Stage file(s) (`git add`) |
+| `gu` | Unstage file(s) (`git restore --staged`) |
+| `gd` | View diff in the viewer |
 
 ### Selection
 

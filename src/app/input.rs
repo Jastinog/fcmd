@@ -223,6 +223,10 @@ impl App {
             ('g', KeyCode::Char('g')) => self.active_panel_mut().go_top(),
             ('g', KeyCode::Char('t')) => self.next_tab(),
             ('g', KeyCode::Char('T')) => self.prev_tab(),
+            // Git working-tree operations
+            ('g', KeyCode::Char('s')) => self.git_stage(),
+            ('g', KeyCode::Char('u')) => self.git_unstage(),
+            ('g', KeyCode::Char('d')) => self.git_diff(),
             ('d', KeyCode::Char('d')) => self.request_delete(),
             ('d', KeyCode::Char('D')) => self.request_permanent_delete(),
             ('y', KeyCode::Char('y')) => self.yank_targeted(),

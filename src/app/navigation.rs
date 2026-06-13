@@ -401,7 +401,15 @@ impl App {
             ("j", "tasks"),
             ("?", "help"),
         ];
-        const GOTO_HINTS: &[(&str, &str)] = &[("g", "top"), ("t", "next tab"), ("T", "prev tab")];
+        const GOTO_HINTS: &[(&str, &str)] = &[
+            ("g", "top"),
+            ("t", "next tab"),
+            ("T", "prev tab"),
+            ("", "Git"),
+            ("s", "stage"),
+            ("u", "unstage"),
+            ("d", "diff"),
+        ];
         const YANK_HINTS: &[(&str, &str)] =
             &[("y", "yank"), ("p", "yank path"), ("n", "yank name")];
         const DELETE_HINTS: &[(&str, &str)] = &[("d", "trash"), ("D", "permanent")];

@@ -22,6 +22,7 @@ mod dialogs;
 mod file_ops;
 mod find;
 mod git;
+mod git_ops;
 mod info;
 mod input;
 mod marks;
@@ -804,6 +805,27 @@ impl App {
                 }
                 self.refresh_current_panel();
                 self.tree_dirty = true;
+            }
+            FileOpResult::GitStage {
+                staged,
+                count,
+                result,
+            } => match result {
+                Ok(()) => {
+                    let verb = if staged { "Staged" } else { "Unstaged" };
+                    self.status_message = format!("{verb} {count} item(s)");
+                    self.refresh_git_status();
+                }
+                Err(e) => self.status_message = format!("git: {e}"),
+            },
+            FileOpResult::GitDiff { title, path, text } => {
+                if text.trim().is_empty() {
+                    self.status_message = format!("No changes: {title}");
+                } else {
+                    let preview =
+                        crate::preview::Preview::from_text(format!("git diff: {title}"), &text);
+                    self.open_diff_viewer(path, preview);
+                }
             }
         }
     }

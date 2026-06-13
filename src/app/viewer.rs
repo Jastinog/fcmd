@@ -11,6 +11,17 @@ impl App {
         self.spawn_viewer_load(path, false);
     }
 
+    /// Open the viewer on in-memory content (e.g. a git diff) instead of a file on
+    /// disk. `path` is synthetic — it never gets read; its extension only drives
+    /// syntax highlighting (use a `.diff` path for diff colors).
+    pub(super) fn open_diff_viewer(&mut self, path: PathBuf, preview: Preview) {
+        let mut v = Viewer::loading(path);
+        v.set_content(preview);
+        self.viewer = Some(v);
+        self.mode = Mode::Viewer;
+        self.spawn_viewer_highlight();
+    }
+
     /// Spawn the async content load for the viewer. When `force_hex` is set the
     /// content is loaded as a hex dump regardless of its detected type; otherwise
     /// the first block of text is loaded (the rest pages in on scroll).

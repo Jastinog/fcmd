@@ -198,4 +198,17 @@ pub enum FileOpResult {
         records: Vec<ops::OpRecord>,
         errors: Vec<String>,
     },
+    /// Result of `git add` (staged = true) / `git restore --staged` (false).
+    GitStage {
+        staged: bool,
+        count: usize,
+        result: Result<(), String>,
+    },
+    /// `git diff` output for a single file, to be shown in the viewer.
+    GitDiff {
+        title: String,
+        /// Synthetic `.diff` path driving syntax highlighting (not read from disk).
+        path: PathBuf,
+        text: String,
+    },
 }
