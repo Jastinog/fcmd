@@ -2,7 +2,9 @@ use std::io;
 use std::time::{Duration, Instant};
 
 use crossterm::{
-    event::{Event, EventStream, KeyEventKind},
+    event::{
+        DisableMouseCapture, EnableMouseCapture, Event, EventStream, KeyEventKind,
+    },
     execute,
     terminal::{
         self, EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode,
@@ -29,14 +31,19 @@ async fn main() -> io::Result<()> {
     let default_hook = std::panic::take_hook();
     std::panic::set_hook(Box::new(move |info| {
         let _ = disable_raw_mode();
-        let _ = execute!(io::stdout(), LeaveAlternateScreen, crossterm::cursor::Show);
+        let _ = execute!(
+            io::stdout(),
+            DisableMouseCapture,
+            LeaveAlternateScreen,
+            crossterm::cursor::Show
+        );
         default_hook(info);
     }));
 
     // Setup terminal
     enable_raw_mode()?;
     let mut stdout = io::stdout();
-    execute!(stdout, EnterAlternateScreen)?;
+    execute!(stdout, EnterAlternateScreen, EnableMouseCapture)?;
     let backend = CrosstermBackend::new(stdout);
     let mut terminal = Terminal::new(backend)?;
 
@@ -46,7 +53,11 @@ async fn main() -> io::Result<()> {
 
     // Restore terminal
     disable_raw_mode()?;
-    execute!(terminal.backend_mut(), LeaveAlternateScreen)?;
+    execute!(
+        terminal.backend_mut(),
+        DisableMouseCapture,
+        LeaveAlternateScreen
+    )?;
     terminal.show_cursor()?;
 
     if let Err(e) = result {
@@ -64,6 +75,7 @@ fn open_in_editor(
     disable_raw_mode()?;
     execute!(
         terminal.backend_mut(),
+        DisableMouseCapture,
         LeaveAlternateScreen,
         terminal::Clear(terminal::ClearType::All),
         crossterm::cursor::MoveTo(0, 0),
@@ -81,6 +93,7 @@ fn open_in_editor(
     execute!(
         terminal.backend_mut(),
         EnterAlternateScreen,
+        EnableMouseCapture,
         terminal::Clear(terminal::ClearType::All),
         crossterm::cursor::Hide,
     )?;
@@ -194,6 +207,11 @@ async fn run(
                         draw_immediately = true;
                     }
                     Some(Ok(Event::Resize(_, _))) => {
+                        app.needs_redraw = true;
+                        draw_immediately = true;
+                    }
+                    Some(Ok(Event::Mouse(mouse))) => {
+                        app.handle_mouse(mouse);
                         app.needs_redraw = true;
                         draw_immediately = true;
                     }

@@ -57,6 +57,10 @@ pub struct RenderContext<'a> {
 pub fn render(f: &mut Frame, app: &mut App) {
     let full_area = f.area();
 
+    // Reset mouse hit-testing geometry; it is rebuilt below as widgets are laid out.
+    app.mouse_regions.tabs.clear();
+    app.mouse_regions.panels.clear();
+
     if is_too_small(full_area) {
         render_too_small(f, full_area, &app.theme);
         return;
@@ -73,7 +77,8 @@ pub fn render(f: &mut Frame, app: &mut App) {
 
     let (tab_bar_area, panel_chunk, status_area) = (chunks[0], chunks[1], chunks[2]);
 
-    render_tab_bar(f, app, tab_bar_area);
+    app.mouse_regions.tab_bar_row = tab_bar_area.y;
+    app.mouse_regions.tabs = render_tab_bar(f, app, tab_bar_area);
 
     // Build horizontal layout based on panel layout + tree
     let layout = app.layout;
@@ -173,6 +178,24 @@ pub fn render(f: &mut Frame, app: &mut App) {
         let last = visible_count - 1;
         preview::render_preview(f, &app.preview, panel_areas[last], ctx.theme);
     }
+
+    // Record file-panel content areas for mouse hit-testing. The inner area mirrors
+    // the `Borders::ALL` block used in `render_panel` (1-cell border on each side).
+    let panel_regions: Vec<crate::app::PanelRegion> = panel_areas
+        .iter()
+        .take(file_panel_count)
+        .enumerate()
+        .map(|(i, a)| crate::app::PanelRegion {
+            index: i,
+            inner: ratatui::layout::Rect {
+                x: a.x.saturating_add(1),
+                y: a.y.saturating_add(1),
+                width: a.width.saturating_sub(2),
+                height: a.height.saturating_sub(2),
+            },
+        })
+        .collect();
+    app.mouse_regions.panels = panel_regions;
 
     status::render_status(f, app, status_area);
 
@@ -350,9 +373,14 @@ fn render_too_small(f: &mut Frame, area: Rect, t: &Theme) {
 
 // ── Tab bar ─────────────────────────────────────────────────────────
 
-fn render_tab_bar(f: &mut Frame, app: &App, area: Rect) {
+/// Renders the tab bar and returns the clickable span of each tab as
+/// `(x_start, x_end_exclusive, tab_index)` for mouse hit-testing.
+fn render_tab_bar(f: &mut Frame, app: &App, area: Rect) -> Vec<(u16, u16, usize)> {
     let t = &app.theme;
     let mut spans = Vec::new();
+    let mut regions: Vec<(u16, u16, usize)> = Vec::with_capacity(app.tabs.len());
+    // Running cell offset from `area.x`, kept in sync with the spans pushed below.
+    let mut col: usize = 0;
 
     for (i, tab) in app.tabs.iter().enumerate() {
         let dir_name = tab
@@ -365,17 +393,26 @@ fn render_tab_bar(f: &mut Frame, app: &App, area: Rect) {
         let is_active = i == app.active_tab;
 
         if is_active {
+            let label = format!("  {}: {dir_name} ", i + 1);
+            let w = util::display_width(&label);
+            regions.push((area.x + col as u16, area.x + (col + w) as u16, i));
+            col += w;
             spans.push(Span::styled(
-                format!("  {}: {dir_name} ", i + 1),
+                label,
                 Style::default().fg(t.bg_text).bg(t.blue),
             ));
             spans.push(Span::styled(
                 SEP_RIGHT,
                 Style::default().fg(t.blue).bg(t.status_bg),
             ));
+            col += 1; // SEP_RIGHT
         } else {
+            let label = format!(" {}: {dir_name} ", i + 1);
+            let w = util::display_width(&label);
+            regions.push((area.x + col as u16, area.x + (col + w) as u16, i));
+            col += w;
             spans.push(Span::styled(
-                format!(" {}: {dir_name} ", i + 1),
+                label,
                 Style::default().fg(t.fg_dim).bg(t.status_bg),
             ));
             if i < app.tabs.len() - 1 {
@@ -383,6 +420,7 @@ fn render_tab_bar(f: &mut Frame, app: &App, area: Rect) {
                     "\u{2502}",
                     Style::default().fg(t.border_inactive).bg(t.status_bg),
                 ));
+                col += 1; // separator
             }
         }
     }
@@ -483,6 +521,8 @@ fn render_tab_bar(f: &mut Frame, app: &App, area: Rect) {
 
     let line = Line::from(spans);
     f.render_widget(Paragraph::new(line), area);
+
+    regions
 }
 
 #[cfg(test)]

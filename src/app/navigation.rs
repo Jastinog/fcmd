@@ -56,6 +56,14 @@ impl App {
         }
     }
 
+    pub(super) fn goto_tab(&mut self, idx: usize) {
+        if idx < self.tabs.len() && idx != self.active_tab {
+            self.exit_mode_on_tab_switch();
+            self.active_tab = idx;
+            self.preview_path = None;
+        }
+    }
+
     fn exit_mode_on_tab_switch(&mut self) {
         match self.mode {
             Mode::Visual => {

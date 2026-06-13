@@ -26,6 +26,7 @@ mod info;
 mod input;
 mod marks;
 pub mod messages;
+mod mouse;
 mod navigation;
 mod polling;
 mod rename;
@@ -38,6 +39,7 @@ mod viewer;
 mod visual;
 
 pub use messages::*;
+pub use mouse::{MouseRegions, PanelRegion};
 
 #[derive(PartialEq, Eq, Clone, Copy, Debug)]
 pub enum Mode {
@@ -286,6 +288,10 @@ pub struct App {
     pub archive_load_rx: Option<tokio::sync::oneshot::Receiver<ArchiveLoadResult>>,
     /// Set to true whenever state changes that require a UI repaint.
     pub needs_redraw: bool,
+    /// Hit-testing geometry recomputed every render frame, used by mouse handling.
+    pub mouse_regions: MouseRegions,
+    /// (time, column, row) of the last left-click, for double-click detection.
+    pub(super) last_click: Option<(Instant, u16, u16)>,
 }
 
 impl App {
@@ -465,6 +471,8 @@ impl App {
             archive_state: None,
             archive_load_rx: None,
             needs_redraw: true,
+            mouse_regions: MouseRegions::default(),
+            last_click: None,
         };
         app.refresh_git_status();
         app.apply_transparency();
@@ -1025,6 +1033,8 @@ impl App {
             archive_state: None,
             archive_load_rx: None,
             needs_redraw: true,
+            mouse_regions: MouseRegions::default(),
+            last_click: None,
         }
     }
 }

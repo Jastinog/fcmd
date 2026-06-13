@@ -104,6 +104,10 @@ Auto-detected per-file git status indicators directly in the file list — modif
 
 Tabs, paths, cursor positions, theme, sort modes, directory sizes, and visual marks are saved automatically in a local SQLite database and restored on next launch.
 
+### Mouse Support
+
+Keyboard-first, but the mouse works too. Click a file to move the cursor (and focus its panel), double-click a directory to enter it or a file to open the viewer, and scroll the wheel to move through the panel under the pointer. Click a tab in the tab bar to switch to it, and use the wheel to scroll the file viewer.
+
 ---
 
 ## Installation

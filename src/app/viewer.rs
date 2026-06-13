@@ -181,7 +181,7 @@ impl App {
     }
 
     /// Effective number of content rows visible in the viewer (set during render).
-    fn viewer_visible(&self) -> usize {
+    pub(super) fn viewer_visible(&self) -> usize {
         self.viewer_visible_height.max(1)
     }
 
