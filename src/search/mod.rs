@@ -24,6 +24,8 @@ const MDFIND_LIMIT: usize = 5000;
 pub enum FindScope {
     Local,
     Global,
+    /// Content search (grep): each entry is a matching line in a file.
+    Content,
 }
 
 struct Entry {
@@ -31,6 +33,10 @@ struct Entry {
     rel_path_lower: String,
     full_path: PathBuf,
     is_dir: bool,
+    /// 1-based line number for content (grep) matches; `None` for name matches.
+    line: Option<usize>,
+    /// The matched line's text for content matches; `None` for name matches.
+    match_text: Option<String>,
 }
 
 pub struct FindState {
@@ -48,7 +54,9 @@ pub struct FindState {
     base_dir: PathBuf,
     search_task: Option<tokio::task::JoinHandle<()>>,
     pub find_preview: Option<crate::preview::Preview>,
-    find_preview_path: Option<PathBuf>,
+    // Cache key for the loaded preview: file path plus, for content matches, the
+    // target line — so moving between two matches in the same file re-scrolls.
+    find_preview_path: Option<(PathBuf, Option<usize>)>,
     find_preview_rx: Option<tokio::sync::oneshot::Receiver<(PathBuf, crate::preview::Preview)>>,
     pub search_started: Option<Instant>,
     pub tick: usize,
@@ -108,10 +116,23 @@ impl FindState {
         }
     }
 
+    /// Content (grep) search rooted at `base_dir` for `pattern`. Spawns the search
+    /// immediately so results stream in like a global search.
+    pub fn new_content(base_dir: &Path, pattern: &str) -> Self {
+        // Same idle starting state as a global search, with the grep pattern and
+        // scope set, then kick off the search right away.
+        let mut state = Self::new_global(base_dir);
+        state.scope = FindScope::Content;
+        state.query = pattern.to_string();
+        state.trigger_search();
+        state
+    }
+
     pub fn switch_scope(&self) -> Self {
         let mut new_state = match self.scope {
             FindScope::Local => Self::new_global(&self.base_dir),
-            FindScope::Global => Self::new_local(&self.base_dir),
+            // Global and Content both fall back to local name search on Tab.
+            FindScope::Global | FindScope::Content => Self::new_local(&self.base_dir),
         };
         new_state.query = self.query.clone();
         // For global, trigger search if query is non-empty
@@ -121,100 +142,113 @@ impl FindState {
         new_state
     }
 
-    /// Trigger global search (tries mdfind, falls back to find from $HOME).
+    /// Re-run the active search for the current query. Global searches names
+    /// (mdfind/fd/find); content searches file contents (rg/grep). No-op for
+    /// the in-memory local scope.
     pub fn trigger_search(&mut self) {
-        if self.scope != FindScope::Global {
-            return;
+        match self.scope {
+            FindScope::Global => self.trigger_global(),
+            FindScope::Content => self.trigger_content(),
+            FindScope::Local => {}
         }
+    }
 
+    /// Reset streaming state before (re-)launching an external search. Returns the
+    /// fresh channel sender if the query is non-empty, or `None` when it's empty
+    /// (in which case the caller should just show an empty/placeholder state).
+    fn reset_for_search(&mut self) -> Option<tokio::sync::mpsc::UnboundedSender<Entry>> {
         // Abort old search task (kills child processes via kill_on_drop)
         if let Some(handle) = self.search_task.take() {
             handle.abort();
         }
-
-        // Clear state
         self.entries.clear();
         self.filtered.clear();
         self.selected = 0;
         self.scroll = 0;
 
         if self.query.is_empty() {
-            self.loading = false;
-            self.rx = None;
-            self.search_started = None;
-            return;
+            self.clear_loading();
+            return None;
         }
-
         let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
-        let query = self.query.clone();
+        self.rx = Some(rx);
+        self.loading = true;
+        self.search_started = Some(Instant::now());
+        Some(tx)
+    }
 
-        // Sanitize: strip characters that could be interpreted by find/mdfind
-        let sanitized_query: String = query.chars().filter(|c| *c != '\0').collect();
-        let sanitized_pattern = format!("*{sanitized_query}*");
+    /// Clear the streaming/loading flags (no usable tool, or an empty query).
+    fn clear_loading(&mut self) {
+        self.loading = false;
+        self.rx = None;
+        self.search_started = None;
+    }
 
-        // Try mdfind first (Spotlight), fall back to find from $HOME
-        let child_result = tokio::process::Command::new("mdfind")
-            .args(["-name", &sanitized_query])
-            .stdout(Stdio::piped())
-            .stderr(Stdio::null())
-            .kill_on_drop(true)
-            .spawn();
-
-        let child_result = match child_result {
-            Ok(child) => {
-                // If Spotlight is disabled, mdfind exits with empty output.
-                // The reader task will detect 0 results and retry with find.
-                Ok(child)
-            }
-            Err(_) => {
-                // mdfind not available, use find from $HOME.
-                let home = std::env::var("HOME").unwrap_or_else(|_| "/".to_string());
-                tokio::process::Command::new("find")
-                    .arg("--")
-                    .args([&home, "-maxdepth", "6", "-iname", &sanitized_pattern])
-                    .stdout(Stdio::piped())
-                    .stderr(Stdio::null())
-                    .kill_on_drop(true)
-                    .spawn()
-            }
+    /// Global name search. Tries mdfind (macOS), then `fd`/`fdfind`, then
+    /// Unix `find`, searching from the user's home directory.
+    fn trigger_global(&mut self) {
+        let Some(tx) = self.reset_for_search() else {
+            return;
         };
 
-        match child_result {
-            Ok(mut child) => {
-                let Some(stdout) = child.stdout.take() else {
-                    return;
-                };
-                self.rx = Some(rx);
-                self.loading = true;
-                self.search_started = Some(Instant::now());
+        // Sanitize: strip characters that could be interpreted by find/mdfind/fd
+        let sanitized_query: String = self.query.chars().filter(|c| *c != '\0').collect();
+        let home = crate::util::home_dir_string();
 
-                let handle = tokio::spawn(async move {
-                    let count = global_search_read(stdout, &tx).await;
-                    let _ = child.wait().await;
-                    // If mdfind returned 0 results (Spotlight disabled), retry with find
-                    if count == 0 {
-                        let home = std::env::var("HOME").unwrap_or_else(|_| "/".to_string());
-                        if let Ok(mut find_child) = tokio::process::Command::new("find")
-                            .kill_on_drop(true)
-                            .arg("--")
-                            .args([&home, "-maxdepth", "6", "-iname", &sanitized_pattern])
-                            .stdout(Stdio::piped())
-                            .stderr(Stdio::null())
-                            .spawn()
-                        {
-                            if let Some(stdout) = find_child.stdout.take() {
-                                global_search_read(stdout, &tx).await;
-                            }
-                            let _ = find_child.wait().await;
-                        }
-                    }
-                });
-                self.search_task = Some(handle);
+        // Spawn the best available search tool for this platform.
+        let Some((mut child, is_mdfind)) = spawn_global_search(&sanitized_query, &home) else {
+            // No usable search tool (e.g. Windows without `fd` on PATH).
+            self.clear_loading();
+            return;
+        };
+
+        let Some(stdout) = child.stdout.take() else {
+            self.loading = false;
+            return;
+        };
+
+        let handle = tokio::spawn(async move {
+            let count = global_search_read(stdout, &tx).await;
+            let _ = child.wait().await;
+            // mdfind returns 0 results when Spotlight is disabled — retry with fd/find.
+            if is_mdfind
+                && count == 0
+                && let Some(mut fallback) = spawn_fallback_search(&sanitized_query, &home)
+            {
+                if let Some(stdout) = fallback.stdout.take() {
+                    global_search_read(stdout, &tx).await;
+                }
+                let _ = fallback.wait().await;
             }
-            Err(_) => {
-                self.loading = false;
-            }
-        }
+        });
+        self.search_task = Some(handle);
+    }
+
+    /// Content search (grep) rooted at `base_dir`. Tries `rg` (ripgrep), falling
+    /// back to `grep -rn`. Streams `path:line:text` matches into the result list.
+    fn trigger_content(&mut self) {
+        let base = self.base_dir.clone();
+        let Some(tx) = self.reset_for_search() else {
+            return;
+        };
+        let pattern = self.query.clone();
+
+        let Some(mut child) = spawn_content_search(&pattern, &base) else {
+            // Neither rg nor grep available.
+            self.clear_loading();
+            return;
+        };
+
+        let Some(stdout) = child.stdout.take() else {
+            self.loading = false;
+            return;
+        };
+
+        let handle = tokio::spawn(async move {
+            content_search_read(stdout, &tx, &base).await;
+            let _ = child.wait().await;
+        });
+        self.search_task = Some(handle);
     }
 
     /// Spinner character for the current tick.
@@ -270,7 +304,9 @@ impl FindState {
     }
 
     fn refilter(&mut self) {
-        if self.query.is_empty() {
+        // Content matches are already filtered by grep — never fuzzy-filter them
+        // by the query (the query is the grep pattern, not a path subsequence).
+        if self.query.is_empty() || self.scope == FindScope::Content {
             self.filtered = (0..self.entries.len()).collect();
         } else {
             let query_lower: Vec<char> = self.query.to_lowercase().chars().collect();
@@ -301,19 +337,32 @@ impl FindState {
     }
 
     pub fn update_find_preview(&mut self, visible_height: usize) {
-        let current = self.selected_path().map(|p| p.to_path_buf());
+        let target_line = self.selected_line();
+        let current = self
+            .selected_path()
+            .map(|p| (p.to_path_buf(), target_line));
         if current == self.find_preview_path {
             return;
         }
         self.find_preview_path = current.clone();
-        if let Some(p) = current {
+        if let Some((p, line)) = current {
             self.find_preview = Some(crate::preview::Preview::loading_placeholder(&p));
             let (tx, rx) = tokio::sync::oneshot::channel();
             self.find_preview_rx = Some(rx);
             let path = p.clone();
             let vis = visible_height;
             tokio::task::spawn_blocking(move || {
-                let prev = crate::preview::Preview::load(&path, vis);
+                let mut prev = crate::preview::Preview::load(&path, vis);
+                // For a content match, scroll so the matched line sits near the top
+                // with a little context above it.
+                if let Some(line) = line
+                    && !prev.is_binary
+                    && !prev.lines.is_empty()
+                {
+                    let last = prev.lines.len() - 1;
+                    let target = line.saturating_sub(1).min(last);
+                    prev.scroll = target.saturating_sub(vis / 3);
+                }
                 let _ = tx.send((path, prev));
             });
         } else {
@@ -328,7 +377,7 @@ impl FindState {
         };
         match rx.try_recv() {
             Ok((path, preview)) => {
-                if self.find_preview_path.as_ref() == Some(&path) {
+                if self.find_preview_path.as_ref().map(|(p, _)| p) == Some(&path) {
                     self.find_preview = Some(preview);
                 }
                 self.find_preview_rx = None;
@@ -384,11 +433,31 @@ impl FindState {
         self.filtered.len()
     }
 
-    pub fn get_item(&self, filtered_idx: usize) -> Option<(&str, bool)> {
+    /// Result row at `filtered_idx`: the relative path, whether it's a directory,
+    /// and (for content/grep results) the line number and matched text.
+    pub fn get_item_full(
+        &self,
+        filtered_idx: usize,
+    ) -> Option<(&str, bool, Option<usize>, Option<&str>)> {
         self.filtered
             .get(filtered_idx)
             .and_then(|&i| self.entries.get(i))
-            .map(|e| (e.rel_path.as_str(), e.is_dir))
+            .map(|e| {
+                (
+                    e.rel_path.as_str(),
+                    e.is_dir,
+                    e.line,
+                    e.match_text.as_deref(),
+                )
+            })
+    }
+
+    /// Line number of the selected content match, if any.
+    pub fn selected_line(&self) -> Option<usize> {
+        self.filtered
+            .get(self.selected)
+            .and_then(|&i| self.entries.get(i))
+            .and_then(|e| e.line)
     }
 }
 
@@ -403,6 +472,8 @@ impl FindState {
                 rel_path_lower: rel.to_lowercase(),
                 full_path: base_dir.join(rel),
                 is_dir,
+                line: None,
+                match_text: None,
             });
         }
         let filtered: Vec<usize> = (0..entries.len()).collect();
@@ -426,9 +497,167 @@ impl FindState {
     }
 }
 
+/// Spawn the best available global-search tool for this platform.
+///
+/// Returns the child plus a flag marking whether it is `mdfind` (which needs a
+/// fallback when Spotlight is disabled). Order: macOS Spotlight → `fd`/`fdfind`
+/// (cross-platform, incl. Windows) → Unix `find`.
+fn spawn_global_search(query: &str, home: &str) -> Option<(tokio::process::Child, bool)> {
+    #[cfg(target_os = "macos")]
+    if let Ok(child) = tokio::process::Command::new("mdfind")
+        .args(["-name", query])
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null())
+        .kill_on_drop(true)
+        .spawn()
+    {
+        return Some((child, true));
+    }
+
+    spawn_fallback_search(query, home).map(|child| (child, false))
+}
+
+/// Spawn a non-Spotlight search tool: `fd`/`fdfind` if on PATH, else Unix `find`.
+///
+/// Never falls back to the Windows `find.exe` (an unrelated text-search tool),
+/// so on Windows this yields a result only when `fd` is installed.
+fn spawn_fallback_search(query: &str, home: &str) -> Option<tokio::process::Child> {
+    for bin in ["fd", "fdfind"] {
+        if let Ok(child) = tokio::process::Command::new(bin)
+            .args(["--hidden", "--no-ignore", "--fixed-strings", "--absolute-path"])
+            .arg("--")
+            .arg(query)
+            .arg(home)
+            .stdout(Stdio::piped())
+            .stderr(Stdio::null())
+            .kill_on_drop(true)
+            .spawn()
+        {
+            return Some(child);
+        }
+    }
+
+    #[cfg(unix)]
+    {
+        let pattern = format!("*{query}*");
+        if let Ok(child) = tokio::process::Command::new("find")
+            .arg("--")
+            .args([home, "-maxdepth", "6", "-iname", &pattern])
+            .stdout(Stdio::piped())
+            .stderr(Stdio::null())
+            .kill_on_drop(true)
+            .spawn()
+        {
+            return Some(child);
+        }
+    }
+
+    None
+}
+
+/// Spawn a content (grep) search rooted at `base`. Tries `rg` (ripgrep), then
+/// `grep -rn`. Runs with `base` as the working directory and `.` as the path
+/// argument so matches are reported relative to `base`. Patterns are matched as
+/// fixed strings (no regex surprises). Returns `None` if neither tool is found.
+fn spawn_content_search(pattern: &str, base: &Path) -> Option<tokio::process::Child> {
+    if let Ok(child) = tokio::process::Command::new("rg")
+        .args([
+            "--line-number",
+            "--no-heading",
+            "--color=never",
+            "--smart-case",
+            "--fixed-strings",
+            "-e",
+        ])
+        .arg(pattern)
+        .arg(".")
+        .current_dir(base)
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null())
+        .kill_on_drop(true)
+        .spawn()
+    {
+        return Some(child);
+    }
+
+    // POSIX grep fallback: recursive (-r), line numbers (-n), skip binaries (-I),
+    // fixed strings (-F). `-e` guards patterns that start with '-'.
+    if let Ok(child) = tokio::process::Command::new("grep")
+        .args(["-rnIF", "-e"])
+        .arg(pattern)
+        .arg(".")
+        .current_dir(base)
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null())
+        .kill_on_drop(true)
+        .spawn()
+    {
+        return Some(child);
+    }
+
+    None
+}
+
+/// Read `path:line:text` grep output into result entries (capped at MDFIND_LIMIT).
+async fn content_search_read(
+    stdout: tokio::process::ChildStdout,
+    tx: &tokio::sync::mpsc::UnboundedSender<Entry>,
+    base: &Path,
+) {
+    use tokio::io::{AsyncBufReadExt, BufReader};
+    let reader = BufReader::new(stdout);
+    let mut lines = reader.lines();
+    let mut count = 0;
+    while let Ok(Some(line)) = lines.next_line().await {
+        if count >= MDFIND_LIMIT {
+            break;
+        }
+        let Some((rel, lineno, text)) = parse_grep_line(&line) else {
+            continue;
+        };
+        // Both rg and grep prefix paths with "./" when searching ".".
+        let rel = rel.strip_prefix("./").unwrap_or(rel).to_string();
+        let full_path = base.join(&rel);
+        let rel_lower = rel.to_lowercase();
+        let trimmed = text.trim_start().to_string();
+        if tx
+            .send(Entry {
+                rel_path: rel,
+                rel_path_lower: rel_lower,
+                full_path,
+                is_dir: false,
+                line: Some(lineno),
+                match_text: Some(trimmed),
+            })
+            .is_err()
+        {
+            break;
+        }
+        count += 1;
+    }
+}
+
+/// Parse a single `path:line:text` grep/rg output line. The line number is the
+/// first all-digit `:`-delimited field; everything before it is the path and
+/// everything after is the matched text. Returns `None` if no such field exists.
+fn parse_grep_line(line: &str) -> Option<(&str, usize, &str)> {
+    let mut start = 0;
+    while let Some(rel) = line[start..].find(':') {
+        let colon = start + rel;
+        let after = &line[colon + 1..];
+        if let Some(next) = after.find(':')
+            && let Ok(num) = after[..next].parse::<usize>()
+        {
+            return Some((&line[..colon], num, &after[next + 1..]));
+        }
+        start = colon + 1;
+    }
+    None
+}
+
 fn abbreviate_home(path: &str) -> String {
-    if let Ok(home) = std::env::var("HOME")
-        && let Some(rest) = path.strip_prefix(&home)
+    if let Some(home) = dirs::home_dir()
+        && let Some(rest) = path.strip_prefix(&*home.to_string_lossy())
     {
         return format!("~{rest}");
     }
@@ -457,6 +686,8 @@ async fn global_search_read(
                 rel_path_lower: display_lower,
                 full_path: path,
                 is_dir,
+                line: None,
+                match_text: None,
             })
             .is_err()
         {
@@ -515,6 +746,8 @@ fn walk_send(
                 rel_path_lower: rel_lower,
                 full_path: path.clone(),
                 is_dir,
+                line: None,
+                match_text: None,
             })
             .is_err()
         {
@@ -793,12 +1026,45 @@ mod tests {
         assert_eq!(fs.scroll, 5); // unchanged
     }
 
+    // ── parse_grep_line ────────────────────────────────────────────
+
+    #[test]
+    fn parse_grep_basic() {
+        let (path, line, text) = parse_grep_line("./src/main.rs:42:    let x = 1;").unwrap();
+        assert_eq!(path, "./src/main.rs");
+        assert_eq!(line, 42);
+        assert_eq!(text, "    let x = 1;");
+    }
+
+    #[test]
+    fn parse_grep_text_contains_colons() {
+        // Colons in the matched text must not confuse the parse.
+        let (path, line, text) = parse_grep_line("a.rs:7:foo: bar: baz").unwrap();
+        assert_eq!(path, "a.rs");
+        assert_eq!(line, 7);
+        assert_eq!(text, "foo: bar: baz");
+    }
+
+    #[test]
+    fn parse_grep_no_line_number() {
+        assert!(parse_grep_line("just some text").is_none());
+        assert!(parse_grep_line("path:not_a_number:text").is_none());
+    }
+
+    #[test]
+    fn parse_grep_empty_match_text() {
+        let (path, line, text) = parse_grep_line("file.txt:1:").unwrap();
+        assert_eq!(path, "file.txt");
+        assert_eq!(line, 1);
+        assert_eq!(text, "");
+    }
+
     // ── get_item out of bounds ─────────────────────────────────────
 
     #[test]
     fn get_item_out_of_bounds() {
         let fs = FindState::new_test(Path::new("/tmp"), &[("a.txt", false)]);
-        assert!(fs.get_item(999).is_none());
+        assert!(fs.get_item_full(999).is_none());
     }
 
     // ── selected_path with no entries ──────────────────────────────
@@ -858,11 +1124,11 @@ mod tests {
             Path::new("/tmp"),
             &[("src/main.rs", false), ("docs/", true)],
         );
-        let (rel, is_dir) = fs.get_item(0).unwrap();
+        let (rel, is_dir, _, _) = fs.get_item_full(0).unwrap();
         assert_eq!(rel, "src/main.rs");
         assert!(!is_dir);
 
-        let (rel, is_dir) = fs.get_item(1).unwrap();
+        let (rel, is_dir, _, _) = fs.get_item_full(1).unwrap();
         assert_eq!(rel, "docs/");
         assert!(is_dir);
 

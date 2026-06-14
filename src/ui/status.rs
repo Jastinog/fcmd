@@ -190,6 +190,22 @@ pub(super) fn render_status(f: &mut Frame, app: &App, area: Rect) {
         right_parts.push((format!(" {c} "), t.orange, t.bg_light));
     }
 
+    // Free disk space on the active panel's filesystem (leftmost right segment).
+    if let Some((free, total)) = crate::fs::disk_free(&panel.path) {
+        let pct = if total > 0 {
+            (free as f64 / total as f64 * 100.0).round() as u64
+        } else {
+            0
+        };
+        // Warn (red) when the volume is nearly full.
+        let fg = if pct <= 10 { t.red } else { t.fg_dim };
+        right_parts.push((
+            format!(" \u{f02ca} {} free ", crate::util::format_bytes(free)),
+            fg,
+            t.bg_light,
+        ));
+    }
+
     // Build right spans (reverse order so rightmost is last)
     let mut right_spans: Vec<Span> = Vec::new();
     for (idx, (text, fg, seg_bg)) in right_parts.iter().enumerate().rev() {

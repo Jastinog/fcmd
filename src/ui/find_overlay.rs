@@ -29,10 +29,12 @@ pub(super) fn render_find(f: &mut Frame, fs: &FindState, t: &Theme, area: Rect) 
     let scope_label = match fs.scope {
         FindScope::Local => "󰉋 Local",
         FindScope::Global => "󰖟 Global",
+        FindScope::Content => "\u{f002} Grep",
     };
     let scope_color = match fs.scope {
         FindScope::Local => t.cyan,
         FindScope::Global => t.yellow,
+        FindScope::Content => t.magenta,
     };
     let status_part = if fs.loading {
         let spinner = fs.spinner();
@@ -92,10 +94,15 @@ pub(super) fn render_find(f: &mut Frame, fs: &FindState, t: &Theme, area: Rect) 
 
     let lwidth = results_area.width as usize;
 
-    // Placeholders for global search
-    if fs.scope == FindScope::Global && fs.query.is_empty() {
+    // Placeholders for external (global / content) searches with no query yet.
+    if fs.scope != FindScope::Local && fs.query.is_empty() {
+        let prompt = if fs.scope == FindScope::Content {
+            "  󰍉 Type to grep..."
+        } else {
+            "  󰍉 Type to search..."
+        };
         let placeholder = Paragraph::new(Line::from(Span::styled(
-            "  󰍉 Type to search...",
+            prompt,
             Style::default().fg(t.fg_dim),
         )));
         f.render_widget(placeholder, results_area);
@@ -107,29 +114,20 @@ pub(super) fn render_find(f: &mut Frame, fs: &FindState, t: &Theme, area: Rect) 
         )));
         f.render_widget(placeholder, results_area);
     } else {
+        let sel_bg = match fs.scope {
+            FindScope::Local => t.cyan,
+            FindScope::Global => t.yellow,
+            FindScope::Content => t.magenta,
+        };
+
         let items: Vec<ListItem> = (fs.scroll..fs.scroll + results_height)
             .filter_map(|idx| {
-                let (rel_path, is_dir) = fs.get_item(idx)?;
+                let (rel_path, is_dir, line_no, match_text) = fs.get_item_full(idx)?;
                 let is_selected = idx == fs.selected;
 
                 let icon = file_icon(rel_path.rsplit('/').next().unwrap_or(rel_path), is_dir);
 
-                let display = if is_dir {
-                    format!("{rel_path}/")
-                } else {
-                    rel_path.to_string()
-                };
-
-                // Keep the tail (filename) when a path is too long, by display width.
-                let max_display = lwidth.saturating_sub(4 + display_width(icon));
-                let truncated = truncate_to_width_left(&display, max_display);
-
                 let prefix = if is_selected { "> " } else { "  " };
-
-                let sel_bg = match fs.scope {
-                    FindScope::Local => t.cyan,
-                    FindScope::Global => t.yellow,
-                };
 
                 let style = if is_selected {
                     Style::default().fg(t.bg_text).bg(sel_bg)
@@ -145,11 +143,42 @@ pub(super) fn render_find(f: &mut Frame, fs: &FindState, t: &Theme, area: Rect) 
                     Style::default().fg(t.fg_dim)
                 };
 
-                let line = Line::from(vec![
-                    Span::styled(prefix, style),
-                    Span::styled(icon, icon_style),
-                    Span::styled(truncated, style),
-                ]);
+                let avail = lwidth.saturating_sub(4 + display_width(icon));
+
+                // Content match: "path:line  matched text" (text dimmed). Name
+                // match: just the path, keeping the filename tail when truncated.
+                let line = if let Some(n) = line_no {
+                    let loc = format!("{rel_path}:{n}");
+                    let loc_w = display_width(&loc).min(avail.saturating_sub(2));
+                    let loc_disp = truncate_to_width_left(&loc, loc_w);
+                    let text_w = avail.saturating_sub(display_width(&loc_disp) + 2);
+                    let text = match_text.unwrap_or("");
+                    let text_disp = truncate_to_width(text, text_w);
+                    let text_style = if is_selected {
+                        style
+                    } else {
+                        Style::default().fg(t.fg_dim)
+                    };
+                    Line::from(vec![
+                        Span::styled(prefix, style),
+                        Span::styled(icon, icon_style),
+                        Span::styled(loc_disp, style),
+                        Span::styled("  ", style),
+                        Span::styled(text_disp, text_style),
+                    ])
+                } else {
+                    let display = if is_dir {
+                        format!("{rel_path}/")
+                    } else {
+                        rel_path.to_string()
+                    };
+                    let truncated = truncate_to_width_left(&display, avail);
+                    Line::from(vec![
+                        Span::styled(prefix, style),
+                        Span::styled(icon, icon_style),
+                        Span::styled(truncated, style),
+                    ])
+                };
 
                 Some(ListItem::new(line))
             })
@@ -170,7 +199,7 @@ pub(super) fn render_find(f: &mut Frame, fs: &FindState, t: &Theme, area: Rect) 
         Span::styled(" close", Style::default().fg(t.fg_dim)),
     ];
     // Show search progress on the right side of the hint bar
-    if fs.scope == FindScope::Global && !fs.query.is_empty() {
+    if fs.scope != FindScope::Local && !fs.query.is_empty() {
         let used: usize = hint_spans.iter().map(|s| s.content.chars().count()).sum();
         let elapsed = fs.elapsed_str();
         let status_text = if fs.loading {

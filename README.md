@@ -64,7 +64,11 @@ Press `i` on any file or directory to see detailed information: type, full path,
 
 ![Find with preview](assets/find-preview.png)
 
-`f` for local directory search, `F` for global search (macOS `mdfind`). Results appear instantly with an inline file preview.
+`f` for local directory search, `F` for global search. Global search uses `mdfind` (Spotlight) on macOS, [`fd`](https://github.com/sharkdp/fd) when it's on your `PATH` (any OS, including Windows), and falls back to `find` on Unix. Results appear instantly with an inline file preview.
+
+### Content Search (grep)
+
+`:grep <pattern>` searches inside files under the current directory and lists every matching line in the same telescope overlay. Each result shows `path:line` plus the matched text, and the side preview jumps straight to the matching line. Press `Enter` to open the file in the viewer at that line. Uses [`ripgrep`](https://github.com/BurntSushi/ripgrep) (`rg`) when available, falling back to `grep`. Type in the overlay to live-refine the search.
 
 ### Live Filter
 
@@ -142,7 +146,9 @@ cargo install --path .
 
 - **Rust** (2024 edition) for building
 - A [**Nerd Font**](https://www.nerdfonts.com/) for icons to render correctly
-- macOS for global find (`mdfind`); local find works on all platforms
+- Global find uses `mdfind` on macOS, [`fd`](https://github.com/sharkdp/fd) elsewhere (install it for Windows/Linux global search), or `find` on Unix; local find works on all platforms
+- Content search (`:grep`) prefers [`ripgrep`](https://github.com/BurntSushi/ripgrep) (`rg`), falling back to `grep`
+- Clipboard (`yp`/`yn`) uses `pbcopy` (macOS), `clip` (Windows), or `wl-copy`/`xclip` (Linux)
 
 ---
 
@@ -326,6 +332,7 @@ Press `:` to enter command mode.
 | `:rename <name>` | Rename selected item |
 | `:bulkrename` | Bulk rename selected files |
 | `:find <query>` | Find in current directory |
+| `:grep <pattern>` | Search file contents (ripgrep/grep) |
 | `:theme <name>` | Set color theme |
 | `:sort <mode>` | Set sort (name/size/mod/cre/ext) |
 | `:select <glob>` | Select files matching pattern |

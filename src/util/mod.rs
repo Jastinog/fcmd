@@ -8,6 +8,17 @@ pub fn config_dir() -> Option<PathBuf> {
     dirs::home_dir().map(|h| h.join(".config").join("fcmd"))
 }
 
+/// User home directory as a String, cross-platform via the `dirs` crate.
+///
+/// Reading `$HOME` directly is empty on Windows; this resolves the real home
+/// (`%USERPROFILE%` there) and falls back to `/` only when it can't be found,
+/// which is a sensible search root on Unix.
+pub fn home_dir_string() -> String {
+    dirs::home_dir()
+        .map(|p| p.to_string_lossy().into_owned())
+        .unwrap_or_else(|| "/".to_string())
+}
+
 pub fn format_bytes(b: u64) -> String {
     if b < 1024 {
         format!("{b}B")
@@ -81,6 +92,12 @@ pub async fn copy_to_clipboard(text: &str) -> std::io::Result<()> {
     use tokio::io::AsyncWriteExt;
     let mut child = if cfg!(target_os = "macos") {
         tokio::process::Command::new("pbcopy")
+            .stdin(std::process::Stdio::piped())
+            .kill_on_drop(true)
+            .spawn()?
+    } else if cfg!(target_os = "windows") {
+        // clip.exe reads stdin and sets the Windows clipboard.
+        tokio::process::Command::new("clip")
             .stdin(std::process::Stdio::piped())
             .kill_on_drop(true)
             .spawn()?

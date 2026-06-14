@@ -11,6 +11,16 @@ impl App {
         self.spawn_viewer_load(path, false);
     }
 
+    /// Open the full-screen viewer for `path` scrolled to a 1-based line (e.g.
+    /// from a grep match). The scroll is applied once the content lands.
+    pub(super) fn open_viewer_at_line(&mut self, path: PathBuf, line: usize) {
+        let mut v = Viewer::loading(path.clone());
+        v.pending_goto_line = Some(line);
+        self.viewer = Some(v);
+        self.mode = Mode::Viewer;
+        self.spawn_viewer_load(path, false);
+    }
+
     /// Open the viewer on in-memory content (e.g. a git diff) instead of a file on
     /// disk. `path` is synthetic — it never gets read; its extension only drives
     /// syntax highlighting (use a `.diff` path for diff colors).
@@ -133,6 +143,15 @@ impl App {
         }
         v.set_content(result.preview);
         v.next_byte = result.next_byte;
+        // Apply a pending goto-line (e.g. opened from a grep match). With wrap off
+        // a display row equals its logical line, so scroll = line - 1.
+        if let Some(line) = v.pending_goto_line.take()
+            && !v.content.is_binary
+            && !v.content.lines.is_empty()
+        {
+            let last = v.content.lines.len() - 1;
+            v.content.scroll = line.saturating_sub(1).min(last);
+        }
         if !v.content.is_binary {
             self.spawn_viewer_highlight();
         }

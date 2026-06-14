@@ -53,7 +53,7 @@ impl App {
             KeyCode::Backspace => {
                 if let Some(ref mut fs) = self.find_state {
                     fs.query.pop();
-                    if fs.scope == FindScope::Global {
+                    if matches!(fs.scope, FindScope::Global | FindScope::Content) {
                         fs.trigger_search();
                     } else {
                         fs.update_filter();
@@ -63,7 +63,7 @@ impl App {
             KeyCode::Char(c) if !ctrl => {
                 if let Some(ref mut fs) = self.find_state {
                     fs.query.push(c);
-                    if fs.scope == FindScope::Global {
+                    if matches!(fs.scope, FindScope::Global | FindScope::Content) {
                         fs.trigger_search();
                     } else {
                         fs.update_filter();
@@ -85,11 +85,18 @@ impl App {
             .as_ref()
             .map(|fs| fs.selected_is_dir())
             .unwrap_or(false);
+        let line = self.find_state.as_ref().and_then(|fs| fs.selected_line());
 
         self.find_state = None;
         self.mode = Mode::Normal;
 
         let Some(path) = target else { return };
+
+        // A content (grep) match opens the file in the viewer at the matched line.
+        if let Some(line) = line {
+            self.open_viewer_at_line(path, line);
+            return;
+        }
 
         let side = self.tab().active;
         if is_dir {

@@ -131,7 +131,9 @@ impl App {
                 } else if path_str == "~" || path_str.starts_with("~/") {
                     // Only expand bare "~" and "~/...". Leave "~user" untouched
                     // (we don't resolve other users' home dirs).
-                    let home = std::env::var("HOME").unwrap_or_default();
+                    let home = dirs::home_dir()
+                        .map(|p| p.to_string_lossy().into_owned())
+                        .unwrap_or_default();
                     PathBuf::from(path_str.replacen('~', &home, 1))
                 } else {
                     self.active_panel().path.join(path_str)
@@ -160,6 +162,15 @@ impl App {
                 self.find_state = Some(fs);
                 self.mode = Mode::Find;
             }
+
+            "grep" | "rg" => match arg.filter(|a| !a.is_empty()) {
+                Some(pattern) => {
+                    let base = self.active_panel().path.clone();
+                    self.find_state = Some(FindState::new_content(&base, pattern));
+                    self.mode = Mode::Find;
+                }
+                None => self.status_message = "Usage: :grep <pattern>".into(),
+            },
 
             "sort" => match arg.map(|a| a.to_lowercase()).as_deref() {
                 Some("name" | "n") => self.set_sort(SortMode::Name),

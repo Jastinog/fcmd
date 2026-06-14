@@ -60,6 +60,9 @@ pub struct Viewer {
     pub next_byte: Option<u64>,
     /// True while an incremental chunk load is in flight (de-dupes triggers).
     pub loading_more: bool,
+    /// 1-based logical line to scroll to once content lands (e.g. opened from a
+    /// grep match). Applied and cleared on the first content load.
+    pub pending_goto_line: Option<usize>,
 }
 
 impl Viewer {
@@ -83,6 +86,7 @@ impl Viewer {
             highlight: None,
             next_byte: None,
             loading_more: false,
+            pending_goto_line: None,
         }
     }
 
