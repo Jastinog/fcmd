@@ -301,6 +301,7 @@ fn copy_dir_progress(
     ctx: &mut ProgressCtx,
     conflict_tx: &tokio::sync::mpsc::Sender<ConflictInfo>,
     policy: &mut ConflictPolicy,
+    move_src: bool,
 ) -> std::io::Result<()> {
     fs::create_dir_all(dst)?;
     // Preserve source directory permissions
@@ -314,16 +315,20 @@ fn copy_dir_progress(
         if ft.is_symlink() {
             if target.exists() || target.symlink_metadata().is_ok() {
                 if !resolve_file_conflict(&entry.path(), &target, false, conflict_tx, policy)? {
+                    // Skipped: leave the source entry in place.
                     continue;
                 }
-                let _ = fs::remove_file(&target);
+                remove_overwrite_target(&target)?;
             }
             copy_symlink(&entry.path(), &target)?;
+            if move_src {
+                fs::remove_file(entry.path())?;
+            }
         } else if ft.is_dir() {
             if target.exists() {
                 if target.is_dir() {
                     // Merge: recurse into existing directory
-                    copy_dir_progress(&entry.path(), &target, ctx, conflict_tx, policy)?;
+                    copy_dir_progress(&entry.path(), &target, ctx, conflict_tx, policy, move_src)?;
                 } else {
                     // Type mismatch: dir -> existing file
                     return Err(std::io::Error::new(
@@ -332,7 +337,7 @@ fn copy_dir_progress(
                     ));
                 }
             } else {
-                copy_dir_progress(&entry.path(), &target, ctx, conflict_tx, policy)?;
+                copy_dir_progress(&entry.path(), &target, ctx, conflict_tx, policy, move_src)?;
             }
         } else {
             let size = entry.metadata().map(|m| m.len()).unwrap_or(0);
@@ -344,6 +349,7 @@ fn copy_dir_progress(
                     ));
                 }
                 if !resolve_file_conflict(&entry.path(), &target, false, conflict_tx, policy)? {
+                    // Skipped: leave the source entry in place.
                     continue;
                 }
             }
@@ -351,10 +357,20 @@ fn copy_dir_progress(
             copy_timestamps(&entry.path(), &target);
             ctx.bytes_done += size;
             ctx.report();
+            if move_src {
+                fs::remove_file(entry.path())?;
+            }
         }
     }
     // Preserve directory timestamps (after all contents are copied)
     copy_timestamps(src, dst);
+    // In move mode remove the now-empty source directory. If any entry was
+    // skipped due to a conflict the directory is not empty and remove_dir
+    // fails with NotEmpty, which we deliberately ignore to preserve the
+    // skipped source files.
+    if move_src {
+        let _ = fs::remove_dir(src);
+    }
     Ok(())
 }
 
@@ -407,7 +423,7 @@ fn copy_path_progress(
             if !resolve_file_conflict(src, &dst, false, conflict_tx, policy)? {
                 return Ok(None);
             }
-            let _ = fs::remove_file(&dst);
+            remove_overwrite_target(&dst)?;
         }
         copy_symlink(src, &dst)?;
         ctx.report();
@@ -416,7 +432,7 @@ fn copy_path_progress(
             if dst.is_dir() {
                 // Merge: recurse into existing directory
                 ctx.report();
-                copy_dir_progress(src, &dst, ctx, conflict_tx, policy)?;
+                copy_dir_progress(src, &dst, ctx, conflict_tx, policy, false)?;
             } else {
                 return Err(std::io::Error::new(
                     std::io::ErrorKind::AlreadyExists,
@@ -425,7 +441,7 @@ fn copy_path_progress(
             }
         } else {
             ctx.report();
-            copy_dir_progress(src, &dst, ctx, conflict_tx, policy)?;
+            copy_dir_progress(src, &dst, ctx, conflict_tx, policy, false)?;
         }
     } else {
         if dst.exists() {
@@ -477,10 +493,10 @@ fn move_path_progress(
     // Handle conflicts before attempting rename
     if dst.exists() {
         if meta.is_dir() && dst.is_dir() {
-            // Dir -> Dir: merge via cross-device path (copy + remove)
+            // Dir -> Dir: merge via copy, removing each source entry as it is
+            // transferred. Entries skipped on conflict stay in the source.
             ctx.report();
-            copy_dir_progress(src, &dst, ctx, conflict_tx, policy)?;
-            fs::remove_dir_all(src)?;
+            copy_dir_progress(src, &dst, ctx, conflict_tx, policy, true)?;
             return Ok(Some(OpRecord::Moved {
                 src: src.into(),
                 dst,
@@ -501,7 +517,7 @@ fn move_path_progress(
             return Ok(None);
         }
         // Remove existing before rename/copy
-        let _ = fs::remove_file(&dst);
+        remove_overwrite_target(&dst)?;
     }
 
     match fs::rename(src, &dst) {
@@ -515,8 +531,7 @@ fn move_path_progress(
                 fs::remove_file(src)?;
             } else if meta.is_dir() {
                 ctx.report();
-                copy_dir_progress(src, &dst, ctx, conflict_tx, policy)?;
-                fs::remove_dir_all(src)?;
+                copy_dir_progress(src, &dst, ctx, conflict_tx, policy, true)?;
             } else {
                 fs::copy(src, &dst)?;
                 ctx.bytes_done += src_size;
@@ -794,10 +809,24 @@ fn copy_dir(src: &Path, dst: &Path) -> std::io::Result<()> {
 }
 
 pub fn remove_path(path: &Path) -> std::io::Result<()> {
-    if path.is_dir() {
+    // Use symlink_metadata so a symlink pointing at a directory is unlinked
+    // itself rather than having its target's contents recursively deleted.
+    let meta = fs::symlink_metadata(path)?;
+    if meta.is_dir() {
         fs::remove_dir_all(path)
     } else {
         fs::remove_file(path)
+    }
+}
+
+/// Remove an existing destination entry that we are about to overwrite.
+/// A `NotFound` error is fine (already gone); other errors propagate so the
+/// real failure is surfaced instead of being masked by a later copy error.
+fn remove_overwrite_target(path: &Path) -> std::io::Result<()> {
+    match fs::remove_file(path) {
+        Ok(()) => Ok(()),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),
+        Err(e) => Err(e),
     }
 }
 
@@ -1487,6 +1516,79 @@ mod tests {
         }
         let _ = fs::remove_dir_all(&dir);
         let _ = fs::remove_dir_all(&dst_dir);
+    }
+
+    #[test]
+    fn move_dir_merge_skip_keeps_skipped_source_files() {
+        // Moving a directory onto an existing one with SkipAll must NOT delete
+        // the source files that were skipped (regression: remove_dir_all used to
+        // wipe them unconditionally).
+        let dir = tmp_dir();
+        let src = dir.join("movedir");
+        fs::create_dir(&src).unwrap();
+        fs::write(src.join("conflict.txt"), "new").unwrap();
+        fs::write(src.join("fresh.txt"), "fresh").unwrap();
+
+        let dst_dir = tmp_dir();
+        let existing = dst_dir.join("movedir");
+        fs::create_dir(&existing).unwrap();
+        fs::write(existing.join("conflict.txt"), "old").unwrap();
+
+        let (tx, _rx) = tokio::sync::mpsc::channel(64);
+        let mut ctx = ProgressCtx {
+            tx,
+            bytes_done: 0,
+            bytes_total: 100,
+            item_index: 0,
+            item_total: 1,
+            last_report: None,
+        };
+        let (ctxt, _crx) = make_conflict_channel();
+        let mut policy = ConflictPolicy {
+            overwrite_all: false,
+            skip_all: true,
+        };
+        move_path_progress(&src, &dst_dir, &mut ctx, &ctxt, &mut policy).unwrap();
+
+        // The skipped conflicting file must remain in the source, untouched.
+        assert!(
+            src.join("conflict.txt").exists(),
+            "skipped source file was deleted"
+        );
+        assert_eq!(fs::read_to_string(src.join("conflict.txt")).unwrap(), "new");
+        // The destination keeps its original version (skip).
+        assert_eq!(
+            fs::read_to_string(existing.join("conflict.txt")).unwrap(),
+            "old"
+        );
+        // The non-conflicting file was moved across.
+        assert!(!src.join("fresh.txt").exists());
+        assert!(existing.join("fresh.txt").exists());
+        let _ = fs::remove_dir_all(&dir);
+        let _ = fs::remove_dir_all(&dst_dir);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn remove_path_unlinks_symlink_without_touching_target() {
+        // Deleting a symlink that points at a directory must remove only the
+        // link, never recurse into and destroy the target's contents.
+        let dir = tmp_dir();
+        let target = dir.join("target_dir");
+        fs::create_dir(&target).unwrap();
+        fs::write(target.join("important.txt"), "keep me").unwrap();
+        let link = dir.join("link_to_dir");
+        std::os::unix::fs::symlink(&target, &link).unwrap();
+
+        remove_path(&link).unwrap();
+
+        assert!(link.symlink_metadata().is_err(), "symlink should be gone");
+        assert!(target.exists(), "target directory must survive");
+        assert!(
+            target.join("important.txt").exists(),
+            "target contents must survive"
+        );
+        let _ = fs::remove_dir_all(&dir);
     }
 
     #[test]

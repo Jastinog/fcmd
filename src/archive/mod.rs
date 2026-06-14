@@ -743,7 +743,10 @@ mod tests {
 
     #[cfg(unix)]
     #[test]
-    fn tar_symlink_entry_name_cannot_escape_dest() {
+    fn tar_symlink_with_absolute_target_is_refused() {
+        // Entry name escapes via `..` (sanitized away) AND the symlink target is
+        // an absolute path pointing outside dest. Both must be neutralized: the
+        // name is confined and the dangerous symlink is not created at all.
         let dir = tempfile::tempdir().unwrap();
         let tar = dir.path().join("evil.tar");
         {
@@ -758,13 +761,32 @@ mod tests {
 
         // The `..` is stripped: nothing lands above dest.
         assert!(!dir.path().join("escape_link").exists());
-        let landed = dest.join("escape_link");
+        // The symlink target is absolute (escapes dest), so it must be refused.
         assert!(
-            std::fs::symlink_metadata(&landed)
-                .unwrap()
-                .file_type()
-                .is_symlink(),
-            "symlink should be recreated inside dest"
+            std::fs::symlink_metadata(dest.join("escape_link")).is_err(),
+            "symlink with an absolute (escaping) target must not be created"
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn tar_symlink_with_traversing_target_is_refused() {
+        // A relative target that climbs above dest must be rejected.
+        let dir = tempfile::tempdir().unwrap();
+        let tar = dir.path().join("evil.tar");
+        {
+            let mut bytes = raw_tar_symlink_block("link", "../../../../etc/passwd");
+            bytes.extend(std::iter::repeat_n(0u8, 1024));
+            std::fs::write(&tar, &bytes).unwrap();
+        }
+
+        let dest = dir.path().join("out");
+        std::fs::create_dir(&dest).unwrap();
+        extract_all(&tar, &dest).unwrap();
+
+        assert!(
+            std::fs::symlink_metadata(dest.join("link")).is_err(),
+            "symlink whose target traverses above dest must not be created"
         );
     }
 

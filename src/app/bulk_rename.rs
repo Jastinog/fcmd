@@ -410,6 +410,19 @@ impl App {
                 .filter_map(|(p, _)| p.file_name().map(|n| n.to_string_lossy().into_owned()))
                 .collect();
 
+            // Names already present in the target directory. A temp name must
+            // avoid these so we never clobber an unrelated existing file.
+            let mut reserved: HashSet<String> = renames
+                .first()
+                .and_then(|(p, _)| p.parent().map(|d| d.to_path_buf()))
+                .and_then(|dir| std::fs::read_dir(dir).ok())
+                .map(|rd| {
+                    rd.filter_map(|e| e.ok())
+                        .map(|e| e.file_name().to_string_lossy().into_owned())
+                        .collect()
+                })
+                .unwrap_or_else(|| source_names.clone());
+
             // Find entries that need a temp name: their target exists as another source
             let mut temp_renames: Vec<(PathBuf, String, String)> = Vec::new(); // (path, temp_name, final_name)
             let mut direct_renames: Vec<(PathBuf, String)> = Vec::new();
@@ -421,8 +434,15 @@ impl App {
                     .unwrap_or_default();
                 // Check if new_name collides with an existing source that hasn't been renamed yet
                 if source_names.contains(new_name) && *new_name != old_name {
-                    // Use temporary name to break the cycle
-                    let temp = format!(".fcmd_tmp_{}", new_name);
+                    // Use a temporary name to break the cycle, guaranteed not to
+                    // collide with an existing entry or another chosen temp name.
+                    let mut temp = format!(".fcmd_tmp_{new_name}");
+                    let mut i = 0u32;
+                    while reserved.contains(&temp) {
+                        temp = format!(".fcmd_tmp_{i}_{new_name}");
+                        i += 1;
+                    }
+                    reserved.insert(temp.clone());
                     temp_renames.push((path.clone(), temp, new_name.clone()));
                 } else {
                     direct_renames.push((path.clone(), new_name.clone()));

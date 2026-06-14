@@ -219,6 +219,38 @@ fn ensure_dir_within(dest: &Path, dir: &Path) -> io::Result<bool> {
     Ok(true)
 }
 
+/// Decide whether a symlink whose link file lives at `link_path` may point at
+/// `target` without escaping `dest`. The entry *name* is sanitized elsewhere,
+/// but the symlink *target* comes verbatim from the archive header and could be
+/// absolute (`/etc/passwd`) or traverse out (`../../outside`). We resolve the
+/// target lexically against the link's parent directory and reject anything
+/// that climbs above `dest`.
+fn symlink_target_within(dest: &Path, link_path: &Path, target: &Path) -> bool {
+    use std::path::Component;
+    if target.is_absolute() {
+        return false;
+    }
+    let base = link_path.parent().unwrap_or(dest);
+    let mut resolved = base.to_path_buf();
+    for comp in target.components() {
+        match comp {
+            Component::CurDir => {}
+            Component::ParentDir => {
+                if !resolved.pop() {
+                    return false;
+                }
+            }
+            Component::Normal(c) => resolved.push(c),
+            // A non-absolute path should not contain a prefix or root component.
+            _ => return false,
+        }
+        if !resolved.starts_with(dest) {
+            return false;
+        }
+    }
+    resolved.starts_with(dest)
+}
+
 /// Remove `path` if it is itself a symlink, so a following `File::create` writes
 /// a fresh regular file instead of being redirected through the link.
 fn remove_if_symlink(path: &Path) {
@@ -337,6 +369,11 @@ fn extract_zip_stream(
         // `..` components. Path::starts_with is lexical and would NOT catch `..`,
         // so we must strip traversal components first (mirrors the tar path).
         let safe_name = sanitize_archive_path(&name);
+        // A name that reduces to nothing (e.g. "../../") would make out_path
+        // equal dest itself and slip past the starts_with guard below.
+        if safe_name.is_empty() {
+            continue;
+        }
         let out_path = dest.join(&safe_name);
         if !out_path.starts_with(dest) {
             continue;
@@ -376,6 +413,12 @@ fn extract_zip_stream(
             if entry.unix_mode().map(is_symlink_mode).unwrap_or(false) {
                 let mut target = String::new();
                 entry.read_to_string(&mut target)?;
+                // Refuse a symlink whose target would escape the destination.
+                if !symlink_target_within(dest, &out_path, Path::new(&target)) {
+                    outcome.skipped += 1;
+                    done += 1;
+                    continue;
+                }
                 create_symlink(Path::new(&target), &out_path)?;
                 outcome.extracted.push(out_path);
                 done += 1;
@@ -517,6 +560,11 @@ fn extract_tar_stream(
         }
 
         let safe_name = sanitize_archive_path(&name);
+        // A name that reduces to nothing (e.g. "../../") would make out_path
+        // equal dest itself and slip past the starts_with guard below.
+        if safe_name.is_empty() {
+            continue;
+        }
         let out_path = dest.join(&safe_name);
         if !out_path.starts_with(dest) {
             continue;
@@ -561,6 +609,12 @@ fn extract_tar_stream(
                 // the header. Without this branch it would land as an empty file.
                 #[cfg(unix)]
                 if let Some(target) = entry.link_name()? {
+                    // Refuse a symlink whose target would escape the destination.
+                    if !symlink_target_within(dest, &out_path, &target) {
+                        outcome.skipped += 1;
+                        done += 1;
+                        continue;
+                    }
                     create_symlink(&target, &out_path)?;
                 }
             } else if entry_type.is_hard_link() {
@@ -610,5 +664,38 @@ mod tests {
         assert_eq!(sanitize_archive_path("a/../b"), "b");
         assert_eq!(sanitize_archive_path("./foo/./bar"), "foo/bar");
         assert_eq!(sanitize_archive_path("dir/"), "dir/");
+    }
+
+    #[test]
+    fn sanitize_pure_traversal_reduces_to_empty() {
+        // These must be detected by the caller's is_empty() guard so the entry
+        // is skipped instead of resolving to dest itself.
+        assert_eq!(sanitize_archive_path("../../"), "");
+        assert_eq!(sanitize_archive_path("../.."), "");
+        assert_eq!(sanitize_archive_path("/"), "");
+        assert!(sanitize_archive_path(".").is_empty());
+    }
+
+    #[test]
+    fn symlink_target_within_accepts_safe_and_rejects_escaping() {
+        let dest = Path::new("/tmp/dest");
+        let link = Path::new("/tmp/dest/sub/link");
+        // Relative target staying inside dest.
+        assert!(symlink_target_within(dest, link, Path::new("sibling")));
+        assert!(symlink_target_within(dest, link, Path::new("../other")));
+        assert!(symlink_target_within(dest, link, Path::new("./deep/file")));
+        // Absolute target escapes.
+        assert!(!symlink_target_within(dest, link, Path::new("/etc/passwd")));
+        // Relative target climbing above dest.
+        assert!(!symlink_target_within(
+            dest,
+            link,
+            Path::new("../../escape")
+        ));
+        assert!(!symlink_target_within(
+            dest,
+            link,
+            Path::new("../../../etc/passwd")
+        ));
     }
 }

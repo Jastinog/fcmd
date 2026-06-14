@@ -236,7 +236,9 @@ pub struct Theme {
 
 fn parse_hex(s: &str) -> Option<Color> {
     let s = s.strip_prefix('#')?;
-    if s.len() != 6 {
+    // Guard against non-ASCII input: byte-slicing below would panic on a
+    // multi-byte char boundary (e.g. "#a€bc" has 6 bytes but is not ASCII).
+    if s.len() != 6 || !s.is_ascii() {
         return None;
     }
     let r = u8::from_str_radix(&s[0..2], 16).ok()?;
@@ -910,6 +912,9 @@ mod tests {
         assert_eq!(parse_hex("#fff"), None); // too short
         assert_eq!(parse_hex("#gggggg"), None); // not hex
         assert_eq!(parse_hex(""), None);
+        // 6 bytes but non-ASCII: must return None, not panic on a char boundary.
+        assert_eq!(parse_hex("#a€bc"), None);
+        assert_eq!(parse_hex("#€€"), None);
     }
 
     const TEST_THEME_TOML: &str = r##"
