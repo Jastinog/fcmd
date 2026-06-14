@@ -413,7 +413,7 @@ mod tests {
         app.dir_cache.insert(
             path.clone(),
             crate::model::panel::DirCacheEntry {
-                entries: vec![],
+                entries: std::sync::Arc::new(vec![]),
                 show_hidden: false,
                 sort_mode: SortMode::Name,
                 sort_reverse: false,

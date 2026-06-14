@@ -21,7 +21,7 @@ impl App {
                 }
                 let panel = self.active_panel_mut();
                 let mut count = 0;
-                for entry in &panel.entries {
+                for entry in panel.entries.iter() {
                     if entry.name != ".." && glob_match(&pattern, &entry.name) {
                         panel.marked.insert(entry.path.clone());
                         count += 1;
@@ -106,7 +106,7 @@ impl App {
     pub(super) fn invert_selection(&mut self) {
         let panel = self.active_panel_mut();
         let mut selected = 0;
-        for entry in &panel.entries {
+        for entry in panel.entries.iter() {
             if entry.name == ".." {
                 continue;
             }

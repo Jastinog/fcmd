@@ -1,6 +1,7 @@
 use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 use std::time::SystemTime;
 
 use crate::util::natsort::natsort;
@@ -69,7 +70,11 @@ impl SortMode {
 
 pub struct Panel {
     pub path: PathBuf,
-    pub entries: Vec<FileEntry>,
+    /// Visible listing. Behind an `Arc` so a freshly loaded directory can be
+    /// shared with the `DirCache` (and re-shared on a cache hit) without deep-
+    /// cloning the whole `Vec<FileEntry>` on every navigation. Reads go through
+    /// `Deref`; the few mutations use `Arc::make_mut` or replace the `Arc`.
+    pub entries: Arc<Vec<FileEntry>>,
     pub selected: usize,
     pub offset: usize,
     pub visual_anchor: Option<usize>,
@@ -83,14 +88,14 @@ pub struct Panel {
     /// only matching items and `full_entries` backs the complete listing.
     pub filter: String,
     /// Complete unfiltered listing; only populated while `filter` is active.
-    pub full_entries: Vec<FileEntry>,
+    pub full_entries: Arc<Vec<FileEntry>>,
 }
 
 impl Panel {
     pub fn new(path: PathBuf) -> Self {
         Panel {
             path,
-            entries: Vec::new(),
+            entries: Arc::new(Vec::new()),
             selected: 0,
             offset: 0,
             visual_anchor: None,
@@ -100,7 +105,7 @@ impl Panel {
             show_hidden: false,
             loading: true,
             filter: String::new(),
-            full_entries: Vec::new(),
+            full_entries: Arc::new(Vec::new()),
         }
     }
 
@@ -114,10 +119,10 @@ impl Panel {
         &mut self,
         dir_sizes: &HashMap<PathBuf, u64>,
     ) -> std::io::Result<()> {
-        self.entries.clear();
+        let mut entries: Vec<FileEntry> = Vec::new();
 
         if let Some(parent) = self.path.parent() {
-            self.entries.push(FileEntry {
+            entries.push(FileEntry {
                 name: "..".into(),
                 path: parent.to_path_buf(),
                 is_dir: true,
@@ -155,8 +160,9 @@ impl Panel {
             dir_sizes,
         );
 
-        self.entries.extend(dirs);
-        self.entries.extend(files);
+        entries.extend(dirs);
+        entries.extend(files);
+        self.entries = Arc::new(entries);
         self.clamp_selected();
         Ok(())
     }
@@ -329,9 +335,16 @@ impl Panel {
     }
 
     /// Does `name` pass the active filter? ".." always passes so the user can
-    /// still navigate up out of a narrowed listing.
-    fn filter_matches(name: &str, query_lower: &str) -> bool {
-        name == ".." || name.to_lowercase().contains(query_lower)
+    /// still navigate up out of a narrowed listing. `scratch` is reused as the
+    /// lowercasing buffer so a fresh `String` is not allocated for every entry on
+    /// each filter keystroke (the match stays Unicode case-insensitive).
+    fn filter_matches(name: &str, query_lower: &str, scratch: &mut String) -> bool {
+        if name == ".." {
+            return true;
+        }
+        scratch.clear();
+        scratch.extend(name.chars().flat_map(char::to_lowercase));
+        scratch.contains(query_lower)
     }
 
     /// Rebuild `entries` from `full_entries` using the active `filter`.
@@ -341,12 +354,14 @@ impl Panel {
             return;
         }
         let q = self.filter.to_lowercase();
-        self.entries = self
-            .full_entries
-            .iter()
-            .filter(|e| Self::filter_matches(&e.name, &q))
-            .cloned()
-            .collect();
+        let mut scratch = String::new();
+        self.entries = Arc::new(
+            self.full_entries
+                .iter()
+                .filter(|e| Self::filter_matches(&e.name, &q, &mut scratch))
+                .cloned()
+                .collect(),
+        );
     }
 
     /// Set or clear the live filter, rebuilding the visible `entries`. An empty
@@ -386,22 +401,25 @@ impl Panel {
     /// Append a batch of unsorted entries during streaming load.
     pub fn append_entries(&mut self, new_entries: Vec<FileEntry>) {
         if self.filter.is_empty() {
-            self.entries.extend(new_entries);
+            Arc::make_mut(&mut self.entries).extend(new_entries);
         } else {
             let q = self.filter.to_lowercase();
-            self.entries.extend(
+            let mut scratch = String::new();
+            Arc::make_mut(&mut self.entries).extend(
                 new_entries
                     .iter()
-                    .filter(|e| Self::filter_matches(&e.name, &q))
+                    .filter(|e| Self::filter_matches(&e.name, &q, &mut scratch))
                     .cloned(),
             );
-            self.full_entries.extend(new_entries);
+            Arc::make_mut(&mut self.full_entries).extend(new_entries);
         }
         self.clamp_selected();
     }
 
     /// Swap in entries loaded asynchronously, optionally re-selecting a named entry.
-    pub fn apply_entries(&mut self, entries: Vec<FileEntry>, select_name: Option<&str>) {
+    /// Takes a shared `Arc` so a cache hit (or the loader sharing with `DirCache`)
+    /// installs the listing with a refcount bump instead of a deep clone.
+    pub fn apply_entries(&mut self, entries: Arc<Vec<FileEntry>>, select_name: Option<&str>) {
         if self.filter.is_empty() {
             self.entries = entries;
         } else {
@@ -614,19 +632,23 @@ pub fn sort_file_entries(
         }
         SortMode::Extension => {
             sort_name(dirs);
-            files.sort_by(|a, b| {
-                let ext_a = Path::new(&a.name)
+            // Decorate each file with its lowercased extension once, so the
+            // sort does not recompute (and allocate) it on every comparison.
+            let ext_of = |name: &str| {
+                Path::new(name)
                     .extension()
                     .map(|x| x.to_string_lossy().to_lowercase())
-                    .unwrap_or_default();
-                let ext_b = Path::new(&b.name)
-                    .extension()
-                    .map(|x| x.to_string_lossy().to_lowercase())
-                    .unwrap_or_default();
-                ext_a
-                    .cmp(&ext_b)
+                    .unwrap_or_default()
+            };
+            let mut decorated: Vec<(String, FileEntry)> = std::mem::take(files)
+                .into_iter()
+                .map(|f| (ext_of(&f.name), f))
+                .collect();
+            decorated.sort_by(|(ea, a), (eb, b)| {
+                ea.cmp(eb)
                     .then_with(|| natsort(a.name.as_bytes(), b.name.as_bytes()))
             });
+            *files = decorated.into_iter().map(|(_, f)| f).collect();
         }
     }
 
@@ -671,7 +693,7 @@ pub fn resort_entries(
 }
 
 pub struct DirCacheEntry {
-    pub entries: Vec<FileEntry>,
+    pub entries: Arc<Vec<FileEntry>>,
     pub sort_mode: SortMode,
     pub sort_reverse: bool,
     pub show_hidden: bool,
@@ -769,7 +791,7 @@ mod tests {
             .collect();
         Panel {
             path: PathBuf::from("/tmp"),
-            entries,
+            entries: Arc::new(entries),
             selected: 0,
             offset: 0,
             visual_anchor: None,
@@ -779,7 +801,7 @@ mod tests {
             show_hidden: false,
             loading: false,
             filter: String::new(),
-            full_entries: Vec::new(),
+            full_entries: Arc::new(Vec::new()),
         }
     }
 
@@ -874,7 +896,7 @@ mod tests {
                 is_symlink: false,
             })
             .collect();
-        p.apply_entries(shorter, None);
+        p.apply_entries(shorter.into(), None);
 
         // Anchor must be clamped into range so visual_range()/targeted_paths()
         // cannot slice out of bounds.
@@ -889,7 +911,7 @@ mod tests {
     fn apply_entries_clears_anchor_when_empty() {
         let mut p = make_panel_with_entries(5);
         p.visual_anchor = Some(3);
-        p.apply_entries(Vec::new(), None);
+        p.apply_entries(Vec::new().into(), None);
         assert_eq!(p.visual_anchor, None);
         assert_eq!(p.visual_range(), None);
         assert!(p.targeted_paths().is_empty());
@@ -941,7 +963,7 @@ mod tests {
     fn targeted_paths_skips_dotdot() {
         let mut p = make_panel_with_entries(2);
         // Insert ".." entry at the beginning
-        p.entries.insert(
+        Arc::make_mut(&mut p.entries).insert(
             0,
             FileEntry {
                 name: "..".into(),
@@ -1166,7 +1188,7 @@ mod tests {
         cache.insert(
             path.clone(),
             DirCacheEntry {
-                entries: vec![],
+                entries: Arc::new(vec![]),
                 sort_mode: SortMode::Name,
                 sort_reverse: false,
                 show_hidden: false,
@@ -1183,7 +1205,7 @@ mod tests {
         let p2 = PathBuf::from("/b");
         let p3 = PathBuf::from("/c");
         let entry = || DirCacheEntry {
-            entries: vec![],
+            entries: Arc::new(vec![]),
             sort_mode: SortMode::Name,
             sort_reverse: false,
             show_hidden: false,
@@ -1204,7 +1226,7 @@ mod tests {
         let p2 = PathBuf::from("/b");
         let p3 = PathBuf::from("/c");
         let entry = || DirCacheEntry {
-            entries: vec![],
+            entries: Arc::new(vec![]),
             sort_mode: SortMode::Name,
             sort_reverse: false,
             show_hidden: false,
@@ -1227,7 +1249,7 @@ mod tests {
         cache.insert(
             path.clone(),
             DirCacheEntry {
-                entries: vec![],
+                entries: Arc::new(vec![]),
                 sort_mode: SortMode::Name,
                 sort_reverse: false,
                 show_hidden: false,
@@ -1241,7 +1263,7 @@ mod tests {
     fn dir_cache_clear() {
         let mut cache = DirCache::new(4);
         let entry = || DirCacheEntry {
-            entries: vec![],
+            entries: Arc::new(vec![]),
             sort_mode: SortMode::Name,
             sort_reverse: false,
             show_hidden: false,
@@ -1376,7 +1398,7 @@ mod tests {
     #[test]
     fn move_down_clamps_at_end() {
         let mut panel = Panel::new(PathBuf::from("/tmp"));
-        panel.entries = vec![
+        panel.entries = Arc::new(vec![
             FileEntry {
                 name: "..".into(),
                 path: PathBuf::from("/"),
@@ -1395,7 +1417,7 @@ mod tests {
                 created: None,
                 is_symlink: false,
             },
-        ];
+        ]);
         panel.selected = 1;
         panel.move_down();
         assert_eq!(panel.selected, 1); // can't go past end
@@ -1404,7 +1426,7 @@ mod tests {
     #[test]
     fn move_up_clamps_at_zero() {
         let mut panel = Panel::new(PathBuf::from("/tmp"));
-        panel.entries = vec![FileEntry {
+        panel.entries = Arc::new(vec![FileEntry {
             name: "..".into(),
             path: PathBuf::from("/"),
             is_dir: true,
@@ -1412,7 +1434,7 @@ mod tests {
             modified: None,
             created: None,
             is_symlink: false,
-        }];
+        }]);
         panel.selected = 0;
         panel.move_up();
         assert_eq!(panel.selected, 0);
@@ -1421,7 +1443,7 @@ mod tests {
     #[test]
     fn page_up_down_with_empty_panel() {
         let mut panel = Panel::new(PathBuf::from("/tmp"));
-        panel.entries = vec![];
+        panel.entries = Arc::new(vec![]);
         panel.page_down(10);
         assert_eq!(panel.selected, 0);
         panel.page_up(10);
@@ -1433,7 +1455,7 @@ mod tests {
     #[test]
     fn toggle_mark_skips_dotdot() {
         let mut panel = Panel::new(PathBuf::from("/tmp"));
-        panel.entries = vec![
+        panel.entries = Arc::new(vec![
             FileEntry {
                 name: "..".into(),
                 path: PathBuf::from("/"),
@@ -1452,7 +1474,7 @@ mod tests {
                 created: None,
                 is_symlink: false,
             },
-        ];
+        ]);
         panel.selected = 0; // ".."
         panel.toggle_mark();
         assert!(panel.marked.is_empty());
@@ -1462,7 +1484,7 @@ mod tests {
     #[test]
     fn targeted_count_with_marks() {
         let mut panel = Panel::new(PathBuf::from("/tmp"));
-        panel.entries = vec![
+        panel.entries = Arc::new(vec![
             FileEntry {
                 name: "..".into(),
                 path: PathBuf::from("/"),
@@ -1490,7 +1512,7 @@ mod tests {
                 created: None,
                 is_symlink: false,
             },
-        ];
+        ]);
         panel.marked.insert(PathBuf::from("/a"));
         panel.marked.insert(PathBuf::from("/b"));
         assert_eq!(panel.targeted_count(), 2);
@@ -1505,7 +1527,7 @@ mod tests {
         cache.insert(
             path.clone(),
             DirCacheEntry {
-                entries: vec![],
+                entries: Arc::new(vec![]),
                 sort_mode: SortMode::Name,
                 sort_reverse: false,
                 show_hidden: false,
@@ -1515,7 +1537,7 @@ mod tests {
         cache.insert(
             path.clone(),
             DirCacheEntry {
-                entries: vec![],
+                entries: Arc::new(vec![]),
                 sort_mode: SortMode::Size,
                 sort_reverse: true,
                 show_hidden: false,
@@ -1531,7 +1553,7 @@ mod tests {
     #[test]
     fn selected_entry_in_bounds() {
         let mut panel = Panel::new(PathBuf::from("/tmp"));
-        panel.entries = vec![FileEntry {
+        panel.entries = Arc::new(vec![FileEntry {
             name: "a".into(),
             path: PathBuf::from("/a"),
             is_dir: false,
@@ -1539,7 +1561,7 @@ mod tests {
             modified: None,
             created: None,
             is_symlink: false,
-        }];
+        }]);
         panel.selected = 0;
         assert_eq!(panel.selected_entry().unwrap().name, "a");
     }
@@ -1548,6 +1570,43 @@ mod tests {
     fn selected_entry_empty() {
         let panel = Panel::new(PathBuf::from("/tmp"));
         assert!(panel.selected_entry().is_none());
+    }
+
+    // ── live filter ──────────────────────────────────────────────
+
+    #[test]
+    fn filter_is_case_insensitive_including_non_ascii() {
+        let mk = |name: &str| FileEntry {
+            name: name.into(),
+            path: PathBuf::from(format!("/tmp/{name}")),
+            is_dir: false,
+            size: 0,
+            modified: None,
+            created: None,
+            is_symlink: false,
+        };
+        let mut panel = Panel::new(PathBuf::from("/tmp"));
+        panel.entries = Arc::new(vec![
+            mk("README.md"),
+            mk("readme.txt"),
+            mk("Папка"),
+            mk("notes"),
+        ]);
+
+        // ASCII match is case-insensitive on both sides.
+        panel.set_filter("ReAdMe".into());
+        let names: Vec<&str> = panel.entries.iter().map(|e| e.name.as_str()).collect();
+        assert_eq!(names, vec!["README.md", "readme.txt"]);
+
+        // Non-ASCII (Cyrillic) folding must still work: an uppercase query
+        // matches a capitalized name.
+        panel.set_filter("ПАПКА".into());
+        let names: Vec<&str> = panel.entries.iter().map(|e| e.name.as_str()).collect();
+        assert_eq!(names, vec!["Папка"]);
+
+        // Clearing the filter restores the full listing.
+        assert!(panel.clear_filter());
+        assert_eq!(panel.entries.len(), 4);
     }
 
     #[test]

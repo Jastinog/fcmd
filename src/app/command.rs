@@ -219,7 +219,7 @@ impl App {
                 match arg.filter(|a| !a.is_empty()) {
                     Some(pattern) => {
                         let mut count = 0;
-                        for entry in &panel.entries {
+                        for entry in panel.entries.iter() {
                             if entry.name != ".." && glob_match(pattern, &entry.name) {
                                 panel.marked.insert(entry.path.clone());
                                 count += 1;
@@ -229,7 +229,7 @@ impl App {
                     }
                     None => {
                         let mut count = 0;
-                        for entry in &panel.entries {
+                        for entry in panel.entries.iter() {
                             if entry.name != ".." {
                                 panel.marked.insert(entry.path.clone());
                                 count += 1;

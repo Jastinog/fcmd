@@ -218,8 +218,9 @@ pub struct App {
     pub conflict_rxs: Vec<tokio::sync::mpsc::Receiver<crate::fs::ops::ConflictInfo>>,
     pub conflict_info: Option<crate::fs::ops::ConflictInfo>,
     pub conflict_selected: usize,
-    // Directory sizes
-    pub dir_sizes: HashMap<PathBuf, u64>,
+    // Directory sizes. Stored behind an `Arc` so each `spawn_dir_load` shares the
+    // map with a refcount bump instead of deep-cloning it on every navigation.
+    pub dir_sizes: std::sync::Arc<HashMap<PathBuf, u64>>,
     pub du_progress: Option<DuProgress>,
     pub(super) dir_sizes_loaded: HashSet<PathBuf>,
     /// Ongoing background-work text (e.g. dir-size calculation), shown with a spinner in
@@ -428,7 +429,7 @@ impl App {
             conflict_rxs: Vec::new(),
             conflict_info: None,
             conflict_selected: 0,
-            dir_sizes: HashMap::new(),
+            dir_sizes: std::sync::Arc::new(HashMap::new()),
             du_progress: None,
             background_progress: None,
             dir_sizes_loaded: HashSet::new(),
@@ -556,7 +557,7 @@ impl App {
         let show_hidden = panel.show_hidden;
         let sort_mode = panel.sort_mode;
         let sort_reverse = panel.sort_reverse;
-        let dir_sizes = std::sync::Arc::new(self.dir_sizes.clone());
+        let dir_sizes = self.dir_sizes.clone();
         let tab_index = self.active_tab;
 
         let tx = self.dir_load_tx.clone();
@@ -618,6 +619,9 @@ impl App {
                 if panel.path != path {
                     return;
                 }
+                // Share one Arc between the cache and the panel: a refcount bump
+                // instead of deep-cloning the whole listing on every load.
+                let entries = std::sync::Arc::new(entries);
                 self.dir_cache.insert(
                     path,
                     panel::DirCacheEntry {
@@ -952,7 +956,7 @@ impl App {
         let (dir_load_tx, dir_load_rx) = tokio::sync::mpsc::channel(64);
 
         let mut panel = Panel::new(PathBuf::from("/test"));
-        panel.entries = entries;
+        panel.entries = std::sync::Arc::new(entries);
         panel.loading = false;
 
         let tab = Tab {
@@ -1014,7 +1018,7 @@ impl App {
             conflict_rxs: Vec::new(),
             conflict_info: None,
             conflict_selected: 0,
-            dir_sizes: HashMap::new(),
+            dir_sizes: std::sync::Arc::new(HashMap::new()),
             du_progress: None,
             background_progress: None,
             dir_sizes_loaded: HashSet::new(),

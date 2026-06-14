@@ -79,7 +79,7 @@ impl App {
     pub(super) fn select_all(&mut self) {
         let panel = self.active_panel_mut();
         let mut count = 0;
-        for entry in &panel.entries {
+        for entry in panel.entries.iter() {
             if entry.name != ".." {
                 panel.marked.insert(entry.path.clone());
                 count += 1;

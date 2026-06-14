@@ -175,8 +175,9 @@ impl App {
             let total: u64 = sizes.iter().map(|(_, s)| s).sum();
 
             // Update in-memory cache
+            let dir_sizes = std::sync::Arc::make_mut(&mut self.dir_sizes);
             for &(ref path, size) in &sizes {
-                self.dir_sizes.insert(path.clone(), size);
+                dir_sizes.insert(path.clone(), size);
             }
 
             // Save to DB (fire-and-forget)
@@ -267,8 +268,9 @@ impl App {
         };
         match rx.try_recv() {
             Ok(results) => {
+                let dir_sizes = std::sync::Arc::make_mut(&mut self.dir_sizes);
                 for (_, sizes) in results {
-                    self.dir_sizes.extend(sizes);
+                    dir_sizes.extend(sizes);
                 }
                 self.dir_sizes_load_rx = None;
             }

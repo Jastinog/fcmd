@@ -160,9 +160,10 @@ impl App {
         if let Some(cached) = self.dir_cache.get(&path)
             && cached.show_hidden == show_hidden
         {
-            let mut entries = cached.entries.clone();
+            let mut entries = (*cached.entries).clone();
             panel::resort_entries(&mut entries, sort_mode, sort_reverse, &self.dir_sizes);
-            self.active_panel_mut().apply_entries(entries, None);
+            self.active_panel_mut()
+                .apply_entries(std::sync::Arc::new(entries), None);
             return;
         }
         self.reload_active_panel();
@@ -281,7 +282,7 @@ impl App {
         panel.marked.clear();
         // A live filter belongs to the directory it was set in; drop it on navigation.
         panel.filter.clear();
-        panel.full_entries.clear();
+        std::sync::Arc::make_mut(&mut panel.full_entries).clear();
         panel.loading = true;
 
         // Apply sort prefs for this directory
@@ -300,11 +301,15 @@ impl App {
         if let Some(cached) = self.dir_cache.get(&path)
             && cached.show_hidden == show_hidden
         {
-            let mut entries = cached.entries.clone();
-            // Re-sort if sort mode differs from cached
-            if cached.sort_mode != sort_mode || cached.sort_reverse != sort_reverse {
-                panel::resort_entries(&mut entries, sort_mode, sort_reverse, &self.dir_sizes);
-            }
+            // Share the cached Arc when the sort already matches; only clone the
+            // underlying Vec when a re-sort into a different order is needed.
+            let entries = if cached.sort_mode != sort_mode || cached.sort_reverse != sort_reverse {
+                let mut v = (*cached.entries).clone();
+                panel::resort_entries(&mut v, sort_mode, sort_reverse, &self.dir_sizes);
+                std::sync::Arc::new(v)
+            } else {
+                cached.entries.clone()
+            };
             let panel = &mut self.tabs[self.active_tab].panels[panel_idx];
             panel.apply_entries(entries, select_name.as_deref());
             panel.loading = false;
