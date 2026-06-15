@@ -30,6 +30,10 @@
 
 Navigate two directories side-by-side with `Tab` to switch focus. Each panel maintains independent state — path, scroll position, selection, and sort mode. Swap the panels with `Space w s`, or equalize them (`=` / `Space w e`) to point the other panel(s) at the active directory.
 
+### Symlinks
+
+Create links without leaving the manager: `:ln <target> [name]` makes a symlink (name defaults to the target's basename), `:hardlink <target> [name]` makes a hard link — both undoable with `u`.
+
 ### Vim-Style Navigation
 
 Full Vim motions: `hjkl`, `gg`/`G`, `Ctrl-d`/`Ctrl-u`, `/` incremental search with `n`/`N`. Feels natural if you live in the terminal.
@@ -335,6 +339,8 @@ Press `:` to enter command mode.
 | `:bulkrename` | Bulk rename selected files |
 | `:find <query>` | Find in current directory |
 | `:grep <pattern>` | Search file contents (ripgrep/grep) |
+| `:ln <target> [name]` | Create a symlink (name defaults to target basename) |
+| `:hardlink <target> [name]` | Create a hard link |
 | `:swap` | Swap the two panels |
 | `:equalize` / `:sync` | Point other panels at the active panel's directory |
 | `:theme <name>` | Set color theme |

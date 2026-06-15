@@ -639,10 +639,62 @@ fn validate_name(name: &str) -> std::io::Result<()> {
     Ok(())
 }
 
+/// Validate `name` and resolve it to a destination path in `dir`, erroring if an
+/// entry (including a broken symlink) already occupies that path.
+fn prepare_new_link_path(dir: &Path, name: &str) -> std::io::Result<PathBuf> {
+    validate_name(name)?;
+    let path = dir.join(name);
+    if path.symlink_metadata().is_ok() {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::AlreadyExists,
+            format!("{name} already exists"),
+        ));
+    }
+    Ok(path)
+}
+
 pub fn mkdir(dir: &Path, name: &str) -> std::io::Result<OpRecord> {
     validate_name(name)?;
     let path = dir.join(name);
     fs::create_dir_all(&path)?;
+    Ok(OpRecord::Created { path })
+}
+
+/// Create a symbolic link named `name` in `dir` pointing at `target`. The target
+/// is stored verbatim, so a relative target stays relative. Fails if `name`
+/// already exists. Returns a `Created` record so the link can be undone.
+pub fn create_symlink(dir: &Path, name: &str, target: &Path) -> std::io::Result<OpRecord> {
+    let path = prepare_new_link_path(dir, name)?;
+    #[cfg(unix)]
+    std::os::unix::fs::symlink(target, &path)?;
+    #[cfg(windows)]
+    {
+        // Pick the right Windows symlink kind based on the resolved target.
+        let resolved = if target.is_absolute() {
+            target.to_path_buf()
+        } else {
+            dir.join(target)
+        };
+        if resolved.is_dir() {
+            std::os::windows::fs::symlink_dir(target, &path)?;
+        } else {
+            std::os::windows::fs::symlink_file(target, &path)?;
+        }
+    }
+    #[cfg(not(any(unix, windows)))]
+    return Err(std::io::Error::new(
+        std::io::ErrorKind::Unsupported,
+        "symlinks are not supported on this platform",
+    ));
+    #[cfg(any(unix, windows))]
+    Ok(OpRecord::Created { path })
+}
+
+/// Create a hard link named `name` in `dir` pointing at `target`. Fails if `name`
+/// already exists or `target` is missing / on another filesystem.
+pub fn create_hardlink(dir: &Path, name: &str, target: &Path) -> std::io::Result<OpRecord> {
+    let path = prepare_new_link_path(dir, name)?;
+    fs::hard_link(target, &path)?;
     Ok(OpRecord::Created { path })
 }
 
@@ -1258,6 +1310,56 @@ mod tests {
         fs::write(sub.join("f"), "").unwrap();
         remove_path(&sub).unwrap();
         assert!(!sub.exists());
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    // --- symlink / hardlink creation ---
+
+    #[cfg(unix)]
+    #[test]
+    fn create_symlink_makes_link_to_target() {
+        let dir = tmp_dir();
+        let target = dir.join("target.txt");
+        fs::write(&target, "data").unwrap();
+        let rec = create_symlink(&dir, "link", &target).unwrap();
+        let link = dir.join("link");
+        assert!(link.symlink_metadata().unwrap().is_symlink());
+        assert_eq!(fs::read_link(&link).unwrap(), target);
+        assert!(matches!(rec, OpRecord::Created { .. }));
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn create_symlink_preserves_relative_target() {
+        let dir = tmp_dir();
+        let rec = create_symlink(&dir, "rel", Path::new("../elsewhere")).unwrap();
+        assert_eq!(fs::read_link(dir.join("rel")).unwrap(), Path::new("../elsewhere"));
+        // Undo removes only the link.
+        undo(&[rec]).unwrap();
+        assert!(dir.join("rel").symlink_metadata().is_err());
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn create_symlink_rejects_existing_name() {
+        let dir = tmp_dir();
+        fs::write(dir.join("taken"), "").unwrap();
+        assert!(create_symlink(&dir, "taken", Path::new("/tmp")).is_err());
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn create_hardlink_shares_inode() {
+        let dir = tmp_dir();
+        let target = dir.join("orig.txt");
+        fs::write(&target, "data").unwrap();
+        create_hardlink(&dir, "hard", &target).unwrap();
+        let link = dir.join("hard");
+        assert!(!link.symlink_metadata().unwrap().is_symlink());
+        assert_eq!(fs::read_to_string(&link).unwrap(), "data");
         let _ = fs::remove_dir_all(&dir);
     }
 

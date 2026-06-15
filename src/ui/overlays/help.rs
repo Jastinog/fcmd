@@ -239,6 +239,7 @@ fn build_help_rows() -> (Vec<Cell>, Vec<Cell>) {
             (":sort ..", "Sort name/size/mod.."),
             (":find ..", "Open fuzzy finder"),
             (":grep ..", "Search file contents"),
+            (":ln <t> [n]", "Create symlink"),
             (":sel ..", "Select by glob"),
             (":unsel ..", "Unselect by glob"),
             (":theme ..", "Load / list themes"),

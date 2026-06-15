@@ -28,6 +28,48 @@ impl App {
         }
     }
 
+    /// Create a symlink (or hard link) in the active panel's directory.
+    /// `:ln <target> [name]` — name defaults to the target's basename.
+    fn create_link_cmd(&mut self, arg: Option<&str>, hard: bool) {
+        let usage = if hard {
+            "Usage: :hardlink <target> [name]"
+        } else {
+            "Usage: :ln <target> [name]"
+        };
+        let parts: Vec<&str> = match arg.filter(|a| !a.is_empty()) {
+            Some(a) => a.splitn(2, ' ').collect(),
+            None => {
+                self.status_message = usage.into();
+                return;
+            }
+        };
+        let target = PathBuf::from(parts[0]);
+        // Use the explicit name if given, otherwise fall back to the target's basename.
+        let explicit_name = parts.get(1).map(|s| s.trim()).filter(|s| !s.is_empty());
+        let name = match explicit_name.or_else(|| target.file_name().and_then(|n| n.to_str())) {
+            Some(n) => n.to_string(),
+            None => {
+                self.status_message = "Cannot derive link name from target".into();
+                return;
+            }
+        };
+        let dir = self.active_panel().path.clone();
+        let result = if hard {
+            ops::create_hardlink(&dir, &name, &target)
+        } else {
+            ops::create_symlink(&dir, &name, &target)
+        };
+        match result {
+            Ok(rec) => {
+                self.undo_stack.push(vec![rec]);
+                let kind = if hard { "hard link" } else { "symlink" };
+                self.status_message = format!("Created {kind}: {name} \u{2192} {}", parts[0]);
+                self.refresh_panels_select(Some(name));
+            }
+            Err(e) => self.status_message = format!("Link failed: {e}"),
+        }
+    }
+
     fn execute_command(&mut self) {
         let input = self.command_input.trim().to_string();
         self.command_input.clear();
@@ -86,6 +128,9 @@ impl App {
                     });
                 });
             }
+
+            "ln" | "link" => self.create_link_cmd(arg, false),
+            "hardlink" | "hln" => self.create_link_cmd(arg, true),
 
             "swap" => self.swap_panels(),
             "equalize" | "sync" => self.equalize_panels(),
