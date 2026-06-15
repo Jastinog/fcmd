@@ -66,6 +66,9 @@ impl App {
             KeyCode::Char('-') if !ctrl => self.enter_unselect_pattern(),
             KeyCode::Char('*') => self.invert_selection(),
 
+            // Panel ops: equalize (sync other panels to this dir), MC-style `=`
+            KeyCode::Char('=') => self.equalize_panels(),
+
             // Focus & navigation
             KeyCode::Char('l') if ctrl => self.focus_next(),
             KeyCode::Char('h') if ctrl => self.focus_prev(),
@@ -253,6 +256,8 @@ impl App {
             ('w', KeyCode::Char('1')) => self.set_layout(PanelLayout::Single),
             ('w', KeyCode::Char('2')) => self.set_layout(PanelLayout::Dual),
             ('w', KeyCode::Char('3')) => self.set_layout(PanelLayout::Triple),
+            ('w', KeyCode::Char('s')) => self.swap_panels(),
+            ('w', KeyCode::Char('e')) => self.equalize_panels(),
             // Space as leader key
             (' ', KeyCode::Char('t')) => self.toggle_tree(),
             (' ', KeyCode::Char('h')) => self.toggle_hidden(),

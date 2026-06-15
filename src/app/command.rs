@@ -87,6 +87,9 @@ impl App {
                 });
             }
 
+            "swap" => self.swap_panels(),
+            "equalize" | "sync" => self.equalize_panels(),
+
             "rename" | "rn" => {
                 let new_name = match arg.filter(|a| !a.is_empty()) {
                     Some(n) => n.to_string(),

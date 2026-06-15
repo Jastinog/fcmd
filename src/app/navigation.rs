@@ -386,6 +386,37 @@ impl App {
         };
     }
 
+    /// Swap the active panel with its neighbour (the next visible panel). Focus
+    /// stays on the same physical side, so its contents change under the cursor.
+    pub(super) fn swap_panels(&mut self) {
+        let count = self.layout.count();
+        if count < 2 {
+            self.status_message = "Swap needs at least two panels".into();
+            return;
+        }
+        let active = self.tab().active;
+        let other = (active + 1) % count;
+        self.tab_mut().panels.swap(active, other);
+        self.status_message = "Panels swapped".into();
+    }
+
+    /// Point every other visible panel at the active panel's directory.
+    pub(super) fn equalize_panels(&mut self) {
+        let count = self.layout.count();
+        if count < 2 {
+            self.status_message = "Equalize needs at least two panels".into();
+            return;
+        }
+        let active = self.tab().active;
+        let path = self.active_panel().path.clone();
+        for idx in 0..count {
+            if idx != active {
+                self.navigate_cached(path.clone(), idx, None);
+            }
+        }
+        self.status_message = format!("Synced {} panel(s) to current dir", count - 1);
+    }
+
     pub fn which_key_hints(&self) -> Option<Vec<(&'static str, &'static str)>> {
         const LEADER_HINTS: &[(&str, &str)] = &[
             ("", "Toggle"),
@@ -498,9 +529,13 @@ impl App {
             if active { label } else { inactive_label }
         };
         vec![
+            ("", "Layout"),
             ("1", m(l == PanelLayout::Single, "▍single", "  single")),
             ("2", m(l == PanelLayout::Dual, "▍dual", "  dual")),
             ("3", m(l == PanelLayout::Triple, "▍triple", "  triple")),
+            ("", "Panels"),
+            ("s", "swap"),
+            ("e", "equalize"),
         ]
     }
 }
@@ -508,6 +543,33 @@ impl App {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[tokio::test]
+    async fn swap_panels_exchanges_contents() {
+        let entries = crate::app::make_test_entries(&["a.txt"]);
+        let mut app = App::new_for_test(entries);
+        app.set_layout(PanelLayout::Dual);
+        app.tab_mut().panels[0].path = PathBuf::from("/left");
+        app.tab_mut().panels[1].path = PathBuf::from("/right");
+        app.tab_mut().active = 0;
+        app.swap_panels();
+        assert_eq!(app.tab().panels[0].path, PathBuf::from("/right"));
+        assert_eq!(app.tab().panels[1].path, PathBuf::from("/left"));
+        assert_eq!(app.tab().active, 0); // focus stays on the same side
+    }
+
+    #[tokio::test]
+    async fn equalize_points_other_panel_at_active_dir() {
+        let entries = crate::app::make_test_entries(&["a.txt"]);
+        let mut app = App::new_for_test(entries);
+        app.set_layout(PanelLayout::Dual);
+        let active_path = app.active_panel().path.clone();
+        app.tab_mut().panels[1].path = PathBuf::from("/somewhere/else");
+        app.tab_mut().active = 0;
+        app.equalize_panels();
+        // navigate_cached sets the path synchronously before the async reload.
+        assert_eq!(app.tab().panels[1].path, active_path);
+    }
 
     #[tokio::test]
     async fn toggle_tree_enables_and_focuses() {

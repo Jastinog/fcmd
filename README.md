@@ -28,7 +28,7 @@
 
 ### Dual-Panel Layout
 
-Navigate two directories side-by-side with `Tab` to switch focus. Each panel maintains independent state — path, scroll position, selection, and sort mode.
+Navigate two directories side-by-side with `Tab` to switch focus. Each panel maintains independent state — path, scroll position, selection, and sort mode. Swap the panels with `Space w s`, or equalize them (`=` / `Space w e`) to point the other panel(s) at the active directory.
 
 ### Vim-Style Navigation
 
@@ -165,6 +165,8 @@ cargo install --path .
 | `Ctrl-d` / `Ctrl-u` | Half-page down / up |
 | `Tab` | Switch panel |
 | `Ctrl-l` / `Ctrl-h` | Focus right / left panel |
+| `=` | Equalize (point other panels at current dir) |
+| `Space w s` / `Space w e` | Swap / equalize panels |
 | `gt` / `gT` | Next / previous tab |
 | `Ctrl+T` | New tab |
 | `Ctrl+W` | Close tab |
@@ -333,6 +335,8 @@ Press `:` to enter command mode.
 | `:bulkrename` | Bulk rename selected files |
 | `:find <query>` | Find in current directory |
 | `:grep <pattern>` | Search file contents (ripgrep/grep) |
+| `:swap` | Swap the two panels |
+| `:equalize` / `:sync` | Point other panels at the active panel's directory |
 | `:theme <name>` | Set color theme |
 | `:sort <mode>` | Set sort (name/size/mod/cre/ext) |
 | `:select <glob>` | Select files matching pattern |

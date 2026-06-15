@@ -47,6 +47,7 @@ fn build_help_rows() -> (Vec<Cell>, Vec<Cell>) {
             ("Ctrl-d/u", "Half page \u{2195}"),
             ("Ctrl-l/h", "Focus panel \u{2192}/\u{2190}"),
             ("Tab", "Cycle panels"),
+            ("=", "Equalize panels"),
             ("~", "Home"),
         ],
     );
@@ -151,6 +152,7 @@ fn build_help_rows() -> (Vec<Cell>, Vec<Cell>) {
             ("Sp+s..", "Sort sub-menu"),
             ("Sp+ut", "Toggle transparent"),
             ("Sp+w1/2/3", "Layout 1/2/3 panels"),
+            ("Sp+ws / we", "Swap / Equalize"),
         ],
     );
     push_section(
