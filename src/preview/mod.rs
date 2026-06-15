@@ -2,6 +2,13 @@ use std::fs;
 use std::io::{BufRead, BufReader, Read, Seek, SeekFrom};
 use std::path::Path;
 
+/// Display title for `path`: its file name, or the full path when it has none.
+fn title_of(path: &Path) -> String {
+    path.file_name()
+        .map(|n| n.to_string_lossy().into_owned())
+        .unwrap_or_else(|| path.to_string_lossy().into_owned())
+}
+
 /// Expand tabs to spaces (4-space tab stops) and strip control chars.
 fn sanitize_line(line: &str) -> String {
     let mut out = String::with_capacity(line.len());
@@ -25,9 +32,72 @@ fn sanitize_line(line: &str) -> String {
     out
 }
 
+/// Extract printable ASCII and UTF-16LE strings of at least `min_len` chars from
+/// `bytes`, returning at most `max` lines formatted as `<offset:08x>  <text>` in
+/// ascending offset order.
+///
+/// ASCII and UTF-16 are scanned in independent passes: a UTF-16 run's interleaved
+/// NUL bytes break the ASCII pass into sub-`min_len` fragments that get dropped,
+/// so the two passes describe disjoint regions and don't double-report.
+fn extract_strings(bytes: &[u8], min_len: usize, max: usize) -> Vec<String> {
+    let printable = |b: u8| (0x20..=0x7e).contains(&b);
+    let mut found: Vec<(usize, String)> = Vec::new();
+
+    // ASCII runs.
+    let mut start = 0usize;
+    let mut run = String::new();
+    for (i, &b) in bytes.iter().enumerate() {
+        if printable(b) {
+            if run.is_empty() {
+                start = i;
+            }
+            run.push(b as char);
+        } else {
+            if run.len() >= min_len {
+                found.push((start, run.clone()));
+            }
+            run.clear();
+        }
+    }
+    if run.len() >= min_len {
+        found.push((start, run));
+    }
+
+    // UTF-16LE runs: a printable byte followed by a NUL, repeated.
+    let mut i = 0usize;
+    while i + 1 < bytes.len() {
+        if printable(bytes[i]) && bytes[i + 1] == 0 {
+            let s = i;
+            let mut text = String::new();
+            while i + 1 < bytes.len() && printable(bytes[i]) && bytes[i + 1] == 0 {
+                text.push(bytes[i] as char);
+                i += 2;
+            }
+            if text.len() >= min_len {
+                found.push((s, text));
+            }
+        } else {
+            i += 1;
+        }
+    }
+
+    found.sort_by_key(|(off, _)| *off);
+    found.truncate(max);
+    found
+        .into_iter()
+        .map(|(off, s)| format!("{off:08x}  {s}"))
+        .collect()
+}
+
 pub const MAX_LINES: usize = 50_000;
 const MAX_FILE_SIZE: u64 = 50 * 1_048_576; // 50 MB
 pub const HEX_DUMP_MAX: usize = 262_144; // 256 KB
+
+/// Maximum bytes scanned when extracting printable strings (`:strings`).
+pub const STRINGS_MAX: usize = 16 * 1_048_576; // 16 MB
+
+/// Minimum run length for an extracted string (matches `strings(1)` default).
+const STRINGS_MIN_LEN: usize = 4;
 
 /// Bytes per hex row (offset granularity for binary scroll positions).
 pub const HEX_COLS: usize = 16;
@@ -58,11 +128,10 @@ pub struct Preview {
 }
 
 impl Preview {
-    /// Build a text preview from an in-memory string (e.g. command output such as
-    /// a git diff). Lines are sanitized the same way as on-disk file content.
-    pub fn from_text(title: String, text: &str) -> Self {
-        let lines: Vec<String> = text.lines().map(sanitize_line).collect();
-        let info = Self::lines_info(lines.len(), false);
+    /// Build a non-binary text preview from `lines`. The single place that fills
+    /// in the binary-only fields (`is_binary`/`binary_size`/`hex_bytes`) with
+    /// their defaults, so the many text-producing loaders don't each repeat them.
+    fn text(title: String, info: String, lines: Vec<String>) -> Self {
         Preview {
             lines,
             scroll: 0,
@@ -74,27 +143,25 @@ impl Preview {
         }
     }
 
+    /// A one-line text preview carrying a short status (errors, "too large", …).
+    fn message(title: String, line: &str, info: &str) -> Self {
+        Self::text(title, info.into(), vec![line.into()])
+    }
+
+    /// Build a text preview from an in-memory string (e.g. command output such as
+    /// a git diff). Lines are sanitized the same way as on-disk file content.
+    pub fn from_text(title: String, text: &str) -> Self {
+        let lines: Vec<String> = text.lines().map(sanitize_line).collect();
+        let info = Self::lines_info(lines.len(), false);
+        Self::text(title, info, lines)
+    }
+
     pub fn loading_placeholder(path: &Path) -> Self {
-        let title = path
-            .file_name()
-            .map(|n| n.to_string_lossy().into_owned())
-            .unwrap_or_else(|| path.to_string_lossy().into_owned());
-        Preview {
-            lines: vec![],
-            scroll: 0,
-            title,
-            info: "loading".into(),
-            is_binary: false,
-            binary_size: 0,
-            hex_bytes: Vec::new(),
-        }
+        Self::text(title_of(path), "loading".into(), vec![])
     }
 
     pub fn load(path: &Path, max_lines: usize) -> Self {
-        let title = path
-            .file_name()
-            .map(|n| n.to_string_lossy().into_owned())
-            .unwrap_or_else(|| path.to_string_lossy().into_owned());
+        let title = title_of(path);
 
         if path.is_dir() {
             return Self::load_dir(path, title);
@@ -102,29 +169,12 @@ impl Preview {
 
         let meta = match fs::metadata(path) {
             Ok(m) => m,
-            Err(_) => {
-                return Preview {
-                    lines: vec!["[Cannot read]".into()],
-                    scroll: 0,
-                    title,
-                    info: "error".into(),
-                    is_binary: false,
-                    binary_size: 0,
-                    hex_bytes: Vec::new(),
-                };
-            }
+            Err(_) => return Self::read_error(title),
         };
 
         if meta.len() > MAX_FILE_SIZE {
-            return Preview {
-                lines: vec![format!("[Too large: {} bytes]", meta.len())],
-                scroll: 0,
-                title,
-                info: format!("{} bytes", meta.len()),
-                is_binary: false,
-                binary_size: 0,
-                hex_bytes: Vec::new(),
-            };
+            let info = format!("{} bytes", meta.len());
+            return Self::message(title, &format!("[Too large: {} bytes]", meta.len()), &info);
         }
 
         let file_size = meta.len() as usize;
@@ -141,10 +191,7 @@ impl Preview {
     /// Load `path` as a hex dump regardless of its detected content type.
     /// Directories fall back to a normal listing.
     pub fn load_hex(path: &Path) -> Self {
-        let title = path
-            .file_name()
-            .map(|n| n.to_string_lossy().into_owned())
-            .unwrap_or_else(|| path.to_string_lossy().into_owned());
+        let title = title_of(path);
 
         if path.is_dir() {
             return Self::load_dir(path, title);
@@ -152,38 +199,90 @@ impl Preview {
 
         let meta = match fs::metadata(path) {
             Ok(m) => m,
-            Err(_) => {
-                return Preview {
-                    lines: vec!["[Cannot read]".into()],
-                    scroll: 0,
-                    title,
-                    info: "error".into(),
-                    is_binary: false,
-                    binary_size: 0,
-                    hex_bytes: Vec::new(),
-                };
-            }
+            Err(_) => return Self::read_error(title),
         };
 
         let total_size = meta.len() as usize;
         let file = match fs::File::open(path) {
             Ok(f) => f,
-            Err(_) => {
-                return Preview {
-                    lines: vec!["[Cannot read]".into()],
-                    scroll: 0,
-                    title,
-                    info: "error".into(),
-                    is_binary: false,
-                    binary_size: 0,
-                    hex_bytes: Vec::new(),
-                };
-            }
+            Err(_) => return Self::read_error(title),
         };
         let limit = total_size.min(HEX_DUMP_MAX);
         let mut bytes = Vec::with_capacity(limit);
         let _ = file.take(limit as u64).read_to_end(&mut bytes);
         Self::load_binary(&bytes, title, total_size)
+    }
+
+    /// Load `path`'s printable strings (ASCII + UTF-16LE runs of at least
+    /// [`STRINGS_MIN_LEN`] chars) as a text preview, in offset order. Reads at
+    /// most [`STRINGS_MAX`] bytes; larger files are scanned only up to that point
+    /// and the info line flags the truncation. Directories fall back to a listing.
+    pub fn load_strings(path: &Path) -> Self {
+        let title = title_of(path);
+
+        if path.is_dir() {
+            return Self::load_dir(path, title);
+        }
+
+        let file = match fs::File::open(path) {
+            Ok(f) => f,
+            Err(_) => return Self::read_error(title),
+        };
+        let total = fs::metadata(path).map(|m| m.len() as usize).unwrap_or(0);
+        let limit = total.min(STRINGS_MAX);
+        let mut bytes = Vec::with_capacity(limit.min(1 << 20));
+        let _ = file.take(limit as u64).read_to_end(&mut bytes);
+
+        let lines = extract_strings(&bytes, STRINGS_MIN_LEN, MAX_LINES);
+        let count = lines.len();
+        let info = if total > limit {
+            format!("{count} strings (first {limit} of {total} bytes)")
+        } else {
+            format!("{count} strings")
+        };
+        let lines = if lines.is_empty() {
+            vec!["[no printable strings]".into()]
+        } else {
+            lines
+        };
+        Self::text(title, info, lines)
+    }
+
+    /// Load `path`'s parsed executable structure (PE/ELF/Mach-O) as a text
+    /// preview: headers, sections with per-section entropy, and the import table
+    /// with suspicious APIs flagged. Reads at most [`STRINGS_MAX`] bytes. Falls
+    /// back to a one-line notice when the file isn't a recognized executable.
+    pub fn load_struct(path: &Path) -> Self {
+        let title = title_of(path);
+
+        if path.is_dir() {
+            return Self::load_dir(path, title);
+        }
+
+        let file = match fs::File::open(path) {
+            Ok(f) => f,
+            Err(_) => return Self::read_error(title),
+        };
+        let total = fs::metadata(path).map(|m| m.len() as usize).unwrap_or(0);
+        let limit = total.min(STRINGS_MAX);
+        let mut bytes = Vec::with_capacity(limit.min(1 << 20));
+        let _ = file.take(limit as u64).read_to_end(&mut bytes);
+
+        let (lines, info) = match crate::exe::report(&bytes) {
+            Some(mut lines) => {
+                let n = lines.len();
+                if total > limit {
+                    lines.push(String::new());
+                    lines.push(format!("[parsed first {limit} of {total} bytes]"));
+                }
+                (lines, format!("{n} lines"))
+            }
+            None => (
+                vec!["[not a recognized PE/ELF/Mach-O executable]".into()],
+                "not an executable".into(),
+            ),
+        };
+        Self::text(title, info, lines)
     }
 
     fn load_full(path: &Path, title: String, file_size: usize) -> Self {
@@ -202,15 +301,7 @@ impl Preview {
 
                 Self::text_preview(&bytes, title)
             }
-            Err(_) => Preview {
-                lines: vec!["[Cannot read]".into()],
-                scroll: 0,
-                title,
-                info: "error".into(),
-                is_binary: false,
-                binary_size: 0,
-                hex_bytes: Vec::new(),
-            },
+            Err(_) => Self::read_error(title),
         }
     }
 
@@ -219,15 +310,7 @@ impl Preview {
         let text = String::from_utf8_lossy(bytes);
         let lines: Vec<String> = text.lines().take(MAX_LINES).map(sanitize_line).collect();
         let info = format!("{} lines", lines.len());
-        Preview {
-            lines,
-            scroll: 0,
-            title,
-            info,
-            is_binary: false,
-            binary_size: 0,
-            hex_bytes: Vec::new(),
-        }
+        Self::text(title, info, lines)
     }
 
     /// Load the first block of a file as text for the viewer, reading at most
@@ -235,10 +318,7 @@ impl Preview {
     /// offset to resume from (incremental paging); otherwise it's `None` and the
     /// whole file is loaded. Directories fall back to a normal listing.
     pub fn load_first(path: &Path, max_lines: usize) -> ChunkLoad {
-        let title = path
-            .file_name()
-            .map(|n| n.to_string_lossy().into_owned())
-            .unwrap_or_else(|| path.to_string_lossy().into_owned());
+        let title = title_of(path);
 
         if path.is_dir() {
             return ChunkLoad {
@@ -260,15 +340,7 @@ impl Preview {
         match Self::read_lines_from(file, 0, max_lines) {
             Ok((lines, next_byte)) => {
                 let info = Self::lines_info(lines.len(), next_byte.is_some());
-                let preview = Preview {
-                    lines,
-                    scroll: 0,
-                    title,
-                    info,
-                    is_binary: false,
-                    binary_size: 0,
-                    hex_bytes: Vec::new(),
-                };
+                let preview = Self::text(title, info, lines);
                 ChunkLoad { preview, next_byte }
             }
             Err(_) => ChunkLoad {
@@ -352,15 +424,7 @@ impl Preview {
     }
 
     fn read_error(title: String) -> Self {
-        Preview {
-            lines: vec!["[Cannot read]".into()],
-            scroll: 0,
-            title,
-            info: "error".into(),
-            is_binary: false,
-            binary_size: 0,
-            hex_bytes: Vec::new(),
-        }
+        Self::message(title, "[Cannot read]", "error")
     }
 
     /// Format the line-count info string, marking partial loads with a `+`.
@@ -375,17 +439,7 @@ impl Preview {
     fn load_partial(path: &Path, title: String, file_size: usize, max_lines: usize) -> Self {
         let mut file = match fs::File::open(path) {
             Ok(f) => f,
-            Err(_) => {
-                return Preview {
-                    lines: vec!["[Cannot read]".into()],
-                    scroll: 0,
-                    title,
-                    info: "error".into(),
-                    is_binary: false,
-                    binary_size: 0,
-                    hex_bytes: Vec::new(),
-                };
-            }
+            Err(_) => return Self::read_error(title),
         };
 
         // Read sample for binary detection
@@ -421,20 +475,8 @@ impl Preview {
             }
         }
 
-        let info = if lines.len() >= max_lines {
-            format!("{}+ lines", lines.len())
-        } else {
-            format!("{} lines", lines.len())
-        };
-        Preview {
-            lines,
-            scroll: 0,
-            title,
-            info,
-            is_binary: false,
-            binary_size: 0,
-            hex_bytes: Vec::new(),
-        }
+        let info = Self::lines_info(lines.len(), lines.len() >= max_lines);
+        Self::text(title, info, lines)
     }
 
     fn load_dir(path: &Path, title: String) -> Self {
@@ -453,25 +495,9 @@ impl Preview {
                     .collect();
                 names.sort_by_key(|a| a.to_lowercase());
                 let info = format!("{} entries", names.len());
-                Preview {
-                    lines: names,
-                    scroll: 0,
-                    title,
-                    info,
-                    is_binary: false,
-                    binary_size: 0,
-                    hex_bytes: Vec::new(),
-                }
+                Self::text(title, info, names)
             }
-            Err(_) => Preview {
-                lines: vec!["[Cannot read directory]".into()],
-                scroll: 0,
-                title,
-                info: "error".into(),
-                is_binary: false,
-                binary_size: 0,
-                hex_bytes: Vec::new(),
-            },
+            Err(_) => Self::message(title, "[Cannot read directory]", "error"),
         }
     }
 
@@ -546,6 +572,38 @@ mod tests {
     #[test]
     fn sanitize_plain_text() {
         assert_eq!(sanitize_line("hello world"), "hello world");
+    }
+
+    // ── extract_strings ────────────────────────────────────────────
+
+    #[test]
+    fn extract_strings_ascii_runs_with_offsets() {
+        // 3 NUL bytes, then "hello", a NUL, then "wo" (too short to keep).
+        let bytes = b"\x00\x00\x00hello\x00wo";
+        let lines = extract_strings(bytes, 4, 1000);
+        assert_eq!(lines, vec!["00000003  hello".to_string()]);
+    }
+
+    #[test]
+    fn extract_strings_finds_utf16le() {
+        // "exe" as UTF-16LE: e\0 x\0 e\0 — broken into single chars by the ASCII
+        // pass (each NUL ends a 1-char run, below min_len), recovered by the
+        // UTF-16 pass.
+        let bytes = b"e\x00x\x00e\x00c\x00";
+        let lines = extract_strings(bytes, 4, 1000);
+        assert_eq!(lines, vec!["00000000  exec".to_string()]);
+    }
+
+    #[test]
+    fn extract_strings_respects_min_len_and_cap() {
+        let bytes = b"abc\x00def4567\x00gh";
+        // min_len 4 drops "abc" and "gh", keeps "def4567".
+        let lines = extract_strings(bytes, 4, 1000);
+        assert_eq!(lines.len(), 1);
+        assert!(lines[0].ends_with("  def4567"));
+        // The cap limits how many runs are returned.
+        let many = b"aaaa\x00bbbb\x00cccc";
+        assert_eq!(extract_strings(many, 4, 2).len(), 2);
     }
 
     #[test]

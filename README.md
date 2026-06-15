@@ -88,6 +88,18 @@ Press `i` on any file or directory to see detailed information: type, full path,
 
 ![File viewer](assets/file-preview.png)
 
+### Strings View
+
+Press `s` in the viewer (or run `:strings` on a file) to extract every printable run from a binary — the first pass over any unknown executable, dropper, or sample. It pulls both ASCII and UTF-16LE sequences of at least 4 characters (URLs, IPs, imported API names, file paths, registry keys, embedded commands) and lists them one per line, each prefixed with its hexadecimal file offset so you can jump straight to it in the hex view (`x`). Files are scanned up to 16 MB; the search (`/`) and all viewer navigation work over the results. Press `s` again to return to the text view.
+
+### Data Inspector
+
+Press `i` in the hex view to toggle a side panel that decodes the bytes at the cursor: `u8`/`i8`, `u16`/`i16`/`u32`/`i32` in both endiannesses, `u64`, `f32`/`f64`, plus Unix (32- and 64-bit) and Windows FILETIME timestamps. Move the byte cursor (`hjkl`, or `:` to jump to an offset) and the panel updates live — manual parsing of on-disk structures without leaving the dump. The hex columns reflow to make room and restore when you toggle it off.
+
+### Executable Structure (PE / ELF / Mach-O)
+
+Press `S` in the viewer (or run `:struct`) to parse an executable with [`goblin`](https://github.com/m4b/goblin) — a pure-Rust, fuzz-tested parser that handles malformed and hostile inputs without panicking. The report shows the headers (architecture, entry point, image base, compile timestamp), the section table with **per-section Shannon entropy** (high-entropy sections are flagged as likely packed or encrypted), and the full import table grouped by library. Imports matching a curated set of injection / execution / anti-analysis APIs (`VirtualAlloc`, `WriteProcessMemory`, `CreateRemoteThread`, `LoadLibrary`, `WinExec`, `ptrace`, `dlopen`, …) are marked `(!)` and summarized at the bottom — the two cheapest signals for triaging an unknown sample.
+
 ### Tabs
 
 ![Tabs](assets/tabs.png)
@@ -253,6 +265,9 @@ cargo install --path .
 | `w` | Toggle soft-wrap |
 | `#` | Toggle line numbers |
 | `x` / `Tab` | Toggle hex view |
+| `s` | Toggle strings view |
+| `S` | Toggle structure view (PE/ELF/Mach-O) |
+| `i` | Toggle data inspector (hex mode) |
 | `h` / `l` / `0` | Scroll left / right / line start (wrap off) |
 | `/` | Search within file (smart-case) |
 | `n` / `N` | Next / previous match |
@@ -340,6 +355,8 @@ Press `:` to enter command mode.
 | `:bulkrename` | Bulk rename selected files |
 | `:find <query>` | Find in current directory |
 | `:grep <pattern>` | Search file contents (ripgrep/grep) |
+| `:strings` | View printable strings of the selected file |
+| `:struct` | Parse selected file as PE/ELF/Mach-O (`:pe`/`:elf`/`:macho`) |
 | `:ln <target> [name]` | Create a symlink (name defaults to target basename) |
 | `:hardlink <target> [name]` | Create a hard link |
 | `:swap` | Swap the two panels |

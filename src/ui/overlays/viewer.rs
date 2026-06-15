@@ -15,6 +15,9 @@ use crate::viewer::HlSpan;
 /// Gutter width (line-number column) for text content, in cells: 4 digits + space.
 const GUTTER: usize = 5;
 
+/// Width in cells of the hex data-inspector side panel (borders included).
+const INSPECTOR_W: usize = 30;
+
 /// Full-screen content viewer. Takes `&mut App` so it can record the number of
 /// content rows currently visible (`viewer_visible_height`) and refresh the
 /// wrap layout for the current width — both read by the nav handlers on the next
@@ -39,15 +42,27 @@ pub(in crate::ui) fn render_viewer(f: &mut Frame, app: &mut App, area: Rect) {
     let list_height = inner.height.saturating_sub(reserved) as usize;
     let iw = inner.width as usize;
 
-    let (is_binary, show_gutter) = {
+    let (is_binary, show_gutter, inspector_on) = {
         let vw = app.viewer.as_ref().unwrap();
         (
             vw.content.is_binary,
             !vw.content.is_binary && vw.line_numbers,
+            vw.content.is_binary && vw.inspector,
         )
     };
     let gutter_cells = if show_gutter { GUTTER } else { 0 };
-    let content_width = iw.saturating_sub(gutter_cells).max(1);
+    // The data inspector steals a fixed right-hand column from the hex dump; the
+    // remaining width drives the hex column count (recomputed in refresh_layout).
+    // Suppressed on narrow terminals where it would crowd out the dump.
+    let inspector_w = if inspector_on && iw > 50 {
+        INSPECTOR_W.min(iw / 2)
+    } else {
+        0
+    };
+    let content_width = iw
+        .saturating_sub(gutter_cells)
+        .saturating_sub(inspector_w)
+        .max(1);
 
     // Record nav inputs for the next keypress, then refresh the wrap layout.
     app.viewer_visible_height = list_height;
@@ -213,8 +228,20 @@ pub(in crate::ui) fn render_viewer(f: &mut Frame, app: &mut App, area: Rect) {
             .collect()
     };
 
-    let list_area = Rect::new(inner.x, inner.y, inner.width, list_height as u16);
+    let list_w = inner.width.saturating_sub(inspector_w as u16);
+    let list_area = Rect::new(inner.x, inner.y, list_w, list_height as u16);
     f.render_widget(List::new(items), list_area);
+
+    // Data inspector: interpret the bytes at the cursor (hex mode only).
+    if inspector_w > 0 {
+        let insp_area = Rect::new(
+            inner.x + list_w,
+            inner.y,
+            inspector_w as u16,
+            list_height as u16,
+        );
+        render_inspector(f, p, v.cursor, t, insp_area);
+    }
 
     let mut row_y = inner.y + list_height as u16;
 
@@ -275,14 +302,25 @@ pub(in crate::ui) fn render_viewer(f: &mut Frame, app: &mut App, area: Rect) {
             hints.push(Span::styled("#", Style::default().fg(t.cyan)));
             hints.push(Span::styled(" numbers  ", Style::default().fg(t.fg_dim)));
         }
-        let hex_label = if v.force_hex { " text  " } else { " hex  " };
-        hints.push(Span::styled("x", Style::default().fg(t.cyan)));
-        hints.push(Span::styled(hex_label, Style::default().fg(t.fg_dim)));
+        use crate::viewer::ViewMode;
+        // Each mode key toggles back to text, so its hint reads "text" when the
+        // mode is already active and the mode name otherwise.
+        for (key, mode, name) in [
+            ("x", ViewMode::Hex, " hex  "),
+            ("s", ViewMode::Strings, " strings  "),
+            ("S", ViewMode::Struct, " struct  "),
+        ] {
+            let label = if v.mode == mode { " text  " } else { name };
+            hints.push(Span::styled(key, Style::default().fg(t.cyan)));
+            hints.push(Span::styled(label, Style::default().fg(t.fg_dim)));
+        }
         hints.push(Span::styled("/", Style::default().fg(t.cyan)));
         hints.push(Span::styled(" search  ", Style::default().fg(t.fg_dim)));
         if is_binary {
             hints.push(Span::styled(":", Style::default().fg(t.cyan)));
             hints.push(Span::styled(" goto  ", Style::default().fg(t.fg_dim)));
+            hints.push(Span::styled("i", Style::default().fg(t.cyan)));
+            hints.push(Span::styled(" inspect  ", Style::default().fg(t.fg_dim)));
         }
         if match_count.is_some() {
             hints.push(Span::styled("n/N", Style::default().fg(t.cyan)));
@@ -296,6 +334,50 @@ pub(in crate::ui) fn render_viewer(f: &mut Frame, app: &mut App, area: Rect) {
     };
     let hint_area = Rect::new(inner.x, row_y, inner.width, 1);
     f.render_widget(Paragraph::new(hint_line), hint_area);
+}
+
+/// Render the hex data-inspector side panel: the bytes at `cursor` interpreted
+/// as integers, floats, and timestamps. Shows a prompt when no cursor is placed.
+fn render_inspector(
+    f: &mut Frame,
+    p: &crate::preview::Preview,
+    cursor: Option<usize>,
+    t: &crate::theme::Theme,
+    area: Rect,
+) {
+    let block = Block::default()
+        .borders(Borders::ALL)
+        .border_style(Style::default().fg(t.border_inactive))
+        .title(Span::styled(" inspect ", Style::default().fg(t.cyan)))
+        .style(Style::default().bg(t.bg));
+    let inner = block.inner(area);
+    f.render_widget(block, area);
+
+    let Some(c) = cursor.filter(|&c| c < p.hex_bytes.len()) else {
+        f.render_widget(
+            Paragraph::new(Line::from(Span::styled(
+                "place cursor (hjkl)",
+                Style::default().fg(t.fg_dim),
+            ))),
+            inner,
+        );
+        return;
+    };
+
+    const LABEL_W: usize = 7;
+    let rows: Vec<ListItem> = crate::viewer::inspect::describe(&p.hex_bytes, c)
+        .into_iter()
+        .map(|fld| {
+            ListItem::new(Line::from(vec![
+                Span::styled(
+                    format!("{:<LABEL_W$}", fld.label),
+                    Style::default().fg(t.fg_dim),
+                ),
+                Span::styled(fld.value, Style::default().fg(t.fg)),
+            ]))
+        })
+        .collect();
+    f.render_widget(List::new(rows), inner);
 }
 
 /// Styling context shared across every rendered row: the active search query

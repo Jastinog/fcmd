@@ -15,6 +15,7 @@ use crate::preview::Preview;
 
 mod hexsearch;
 mod highlight;
+pub mod inspect;
 mod layout;
 mod search;
 
@@ -22,6 +23,21 @@ pub use hexsearch::{HexSearch, is_hex_query};
 pub use highlight::{HlCache, HlSpan, highlight};
 pub use layout::Layout;
 pub use search::Search;
+
+/// How the viewer renders the current file. Mutually exclusive; toggled with
+/// `x` (hex) and `s` (strings), each falling back to [`ViewMode::Text`].
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
+pub enum ViewMode {
+    /// Decoded text (the default), with soft-wrap and syntax highlighting.
+    #[default]
+    Text,
+    /// Raw hex + ASCII dump with a byte cursor.
+    Hex,
+    /// Extracted printable strings (ASCII + UTF-16LE), one per line.
+    Strings,
+    /// Parsed executable structure (PE/ELF/Mach-O headers, sections, imports).
+    Struct,
+}
 
 /// Interactive state for the full-screen viewer.
 pub struct Viewer {
@@ -44,8 +60,11 @@ pub struct Viewer {
     pub wrap: bool,
     /// Whether to show the line-number gutter (only applies to text content).
     pub line_numbers: bool,
-    /// Force a hex view regardless of detected content type (toggled with `x`).
-    pub force_hex: bool,
+    /// Which representation the content is currently loaded as. Drives the
+    /// reload on toggle and the title/hint labels.
+    pub mode: ViewMode,
+    /// Whether the hex data-inspector side panel is shown (hex mode only).
+    pub inspector: bool,
     /// Horizontal scroll offset in chars, used when wrap is off.
     pub hcol: usize,
     /// Display-row layout for the current width/wrap; rebuilt during render.
@@ -79,7 +98,8 @@ impl Viewer {
             hex_cols: crate::preview::HEX_COLS,
             wrap: false,
             line_numbers: true,
-            force_hex: false,
+            mode: ViewMode::Text,
+            inspector: false,
             hcol: 0,
             layout: Layout::empty(),
             layout_dirty: true,

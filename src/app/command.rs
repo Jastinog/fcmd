@@ -70,6 +70,15 @@ impl App {
         }
     }
 
+    /// Path of the selected entry when it's a real file (not a directory and not
+    /// the `..` parent link); `None` otherwise. Used by file-targeted commands.
+    fn selected_file(&self) -> Option<PathBuf> {
+        self.active_panel()
+            .selected_entry()
+            .filter(|e| !e.is_dir && e.name != "..")
+            .map(|e| e.path.clone())
+    }
+
     fn execute_command(&mut self) {
         let input = self.command_input.trim().to_string();
         self.command_input.clear();
@@ -218,6 +227,16 @@ impl App {
                     self.mode = Mode::Find;
                 }
                 None => self.status_message = "Usage: :grep <pattern>".into(),
+            },
+
+            "strings" | "str" => match self.selected_file() {
+                Some(path) => self.open_viewer_strings(path),
+                None => self.status_message = "Select a file to extract strings".into(),
+            },
+
+            "struct" | "pe" | "elf" | "macho" => match self.selected_file() {
+                Some(path) => self.open_viewer_struct(path),
+                None => self.status_message = "Select an executable to parse".into(),
             },
 
             "sort" => match arg.map(|a| a.to_lowercase()).as_deref() {

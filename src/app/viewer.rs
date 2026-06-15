@@ -1,6 +1,6 @@
 use super::*;
 
-use crate::viewer::Viewer;
+use crate::viewer::{ViewMode, Viewer};
 
 impl App {
     /// Open the full-screen viewer for `path`, showing a loading placeholder while
@@ -8,7 +8,29 @@ impl App {
     pub(super) fn open_viewer(&mut self, path: PathBuf) {
         self.viewer = Some(Viewer::loading(path.clone()));
         self.mode = Mode::Viewer;
-        self.spawn_viewer_load(path, false);
+        self.spawn_viewer_load(path, ViewMode::Text);
+    }
+
+    /// Open the full-screen viewer for `path` directly in strings mode (`:strings`),
+    /// extracting printable ASCII/UTF-16 runs instead of decoding the file as text.
+    pub(super) fn open_viewer_strings(&mut self, path: PathBuf) {
+        self.open_viewer_in_mode(path, ViewMode::Strings);
+    }
+
+    /// Open the full-screen viewer for `path` directly in structure mode
+    /// (`:struct`), parsing it as a PE/ELF/Mach-O executable.
+    pub(super) fn open_viewer_struct(&mut self, path: PathBuf) {
+        self.open_viewer_in_mode(path, ViewMode::Struct);
+    }
+
+    /// Open the viewer for `path` directly in a non-text `mode` (strings/struct),
+    /// kicking off the matching async load.
+    fn open_viewer_in_mode(&mut self, path: PathBuf, mode: ViewMode) {
+        let mut v = Viewer::loading(path.clone());
+        v.mode = mode;
+        self.viewer = Some(v);
+        self.mode = Mode::Viewer;
+        self.spawn_viewer_load(path, mode);
     }
 
     /// Open the full-screen viewer for `path` scrolled to a 1-based line (e.g.
@@ -18,7 +40,7 @@ impl App {
         v.pending_goto_line = Some(line);
         self.viewer = Some(v);
         self.mode = Mode::Viewer;
-        self.spawn_viewer_load(path, false);
+        self.spawn_viewer_load(path, ViewMode::Text);
     }
 
     /// Open the viewer on in-memory content (e.g. a git diff) instead of a file on
@@ -32,26 +54,35 @@ impl App {
         self.spawn_viewer_highlight();
     }
 
-    /// Spawn the async content load for the viewer. When `force_hex` is set the
-    /// content is loaded as a hex dump regardless of its detected type; otherwise
-    /// the first block of text is loaded (the rest pages in on scroll).
-    pub(super) fn spawn_viewer_load(&mut self, path: PathBuf, force_hex: bool) {
+    /// Spawn the async content load for the viewer in `mode`. Hex loads a dump
+    /// (paging in the rest on scroll); strings extracts printable runs (no paging);
+    /// text loads the first block (the rest pages in on scroll).
+    pub(super) fn spawn_viewer_load(&mut self, path: PathBuf, mode: ViewMode) {
         let (tx, rx) = tokio::sync::oneshot::channel();
         // Replacing the receiver drops any in-flight load (stale result is ignored).
         self.viewer_load_rx = Some(rx);
         // Also cancel any in-flight chunk load from a previous file/mode.
         self.viewer_chunk_rx = None;
         tokio::task::spawn_blocking(move || {
-            // The viewer always opens as text; hex is an explicit toggle, so the
-            // binary → hex auto-switch in `Preview::load` is intentionally bypassed.
-            let (preview, next_byte) = if force_hex {
-                let p = Preview::load_hex(&path);
-                // Page in the rest of the file as the user scrolls.
-                let next = (p.hex_bytes.len() < p.binary_size).then_some(p.hex_bytes.len() as u64);
-                (p, next)
-            } else {
-                let cl = Preview::load_first(&path, crate::preview::MAX_LINES);
-                (cl.preview, cl.next_byte)
+            // The viewer always opens as text; hex/strings are explicit toggles, so
+            // the binary → hex auto-switch in `Preview::load` is intentionally
+            // bypassed.
+            let (preview, next_byte) = match mode {
+                ViewMode::Hex => {
+                    let p = Preview::load_hex(&path);
+                    // Page in the rest of the file as the user scrolls.
+                    let next =
+                        (p.hex_bytes.len() < p.binary_size).then_some(p.hex_bytes.len() as u64);
+                    (p, next)
+                }
+                // The whole (capped) file is scanned up front, so there is nothing
+                // to page in.
+                ViewMode::Strings => (Preview::load_strings(&path), None),
+                ViewMode::Struct => (Preview::load_struct(&path), None),
+                ViewMode::Text => {
+                    let cl = Preview::load_first(&path, crate::preview::MAX_LINES);
+                    (cl.preview, cl.next_byte)
+                }
             };
             let _ = tx.send(super::ViewerLoadResult {
                 path,
@@ -121,15 +152,20 @@ impl App {
         self.viewer_maybe_load_more();
     }
 
-    /// Toggle the forced-hex view and reload the content in the new mode.
-    fn toggle_hex(&mut self) {
+    /// Switch the viewer into `target`, or back to text if it's already in
+    /// `target` (so the same key toggles the mode off). Reloads the content.
+    fn set_view_mode(&mut self, target: ViewMode) {
         let Some(v) = self.viewer.as_mut() else {
             return;
         };
-        v.force_hex = !v.force_hex;
+        let next = if v.mode == target {
+            ViewMode::Text
+        } else {
+            target
+        };
+        v.mode = next;
         let path = v.path.clone();
-        let force_hex = v.force_hex;
-        self.spawn_viewer_load(path, force_hex);
+        self.spawn_viewer_load(path, next);
     }
 
     /// Apply an async viewer content load, guarding against stale results.
@@ -152,7 +188,9 @@ impl App {
             let last = v.content.lines.len() - 1;
             v.content.scroll = line.saturating_sub(1).min(last);
         }
-        if !v.content.is_binary {
+        // Only decoded text gets syntax highlighting; strings runs are derived
+        // text whose offset prefixes would mislead the highlighter.
+        if v.mode == ViewMode::Text {
             self.spawn_viewer_highlight();
         }
         // A short first block may not fill the screen — page in more if needed.
@@ -224,7 +262,9 @@ impl App {
         // state (`self`) re-borrow the viewer themselves.
         match key.code {
             KeyCode::Esc | KeyCode::Char('q') => self.close_viewer(),
-            KeyCode::Char('x') | KeyCode::Tab => self.toggle_hex(),
+            KeyCode::Char('x') | KeyCode::Tab => self.set_view_mode(ViewMode::Hex),
+            KeyCode::Char('s') => self.set_view_mode(ViewMode::Strings),
+            KeyCode::Char('S') => self.set_view_mode(ViewMode::Struct),
             KeyCode::Char('o') => {
                 if let Some(v) = self.viewer.as_ref() {
                     let path = v.path.clone();
@@ -259,6 +299,8 @@ impl App {
                         KeyCode::Char('g') => v.move_top(),
                         KeyCode::Char('w') => v.toggle_wrap(),
                         KeyCode::Char('#') => v.toggle_line_numbers(),
+                        // Data-inspector side panel (meaningful in hex mode).
+                        KeyCode::Char('i') => v.inspector = !v.inspector,
                         KeyCode::Char('l') | KeyCode::Right => v.move_right(visible),
                         KeyCode::Char('h') | KeyCode::Left => v.move_left(visible),
                         KeyCode::Char('0') => v.scroll_line_start(),
