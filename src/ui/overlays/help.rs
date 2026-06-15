@@ -100,6 +100,7 @@ fn build_help_rows() -> (Vec<Cell>, Vec<Cell>) {
             ("u", "Undo last operation"),
             ("F3", "View file"),
             ("F5 / F6", "Copy / Move to other"),
+            ("gf", "Follow symlink target"),
             ("gs gu gd", "Git stage/unstage/diff"),
         ],
     );

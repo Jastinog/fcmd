@@ -32,7 +32,7 @@ Navigate two directories side-by-side with `Tab` to switch focus. Each panel mai
 
 ### Symlinks
 
-Create links without leaving the manager: `:ln <target> [name]` makes a symlink (name defaults to the target's basename), `:hardlink <target> [name]` makes a hard link — both undoable with `u`.
+Create links without leaving the manager: `:ln <target> [name]` makes a symlink (name defaults to the target's basename), `:hardlink <target> [name]` makes a hard link — both undoable with `u`. Press `gf` on a symlink to follow it to its target (entering the directory, or selecting the file in its parent).
 
 ### Vim-Style Navigation
 
@@ -171,6 +171,7 @@ cargo install --path .
 | `Ctrl-l` / `Ctrl-h` | Focus right / left panel |
 | `=` | Equalize (point other panels at current dir) |
 | `Space w s` / `Space w e` | Swap / equalize panels |
+| `gf` | Follow symlink under cursor to its target |
 | `gt` / `gT` | Next / previous tab |
 | `Ctrl+T` | New tab |
 | `Ctrl+W` | Close tab |

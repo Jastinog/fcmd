@@ -234,6 +234,8 @@ impl App {
             ('g', KeyCode::Char('s')) => self.git_stage(),
             ('g', KeyCode::Char('u')) => self.git_unstage(),
             ('g', KeyCode::Char('d')) => self.git_diff(),
+            // Follow the symlink under the cursor to its target.
+            ('g', KeyCode::Char('f')) => self.follow_symlink(),
             ('d', KeyCode::Char('d')) => self.request_delete(),
             ('d', KeyCode::Char('D')) => self.request_permanent_delete(),
             ('y', KeyCode::Char('y')) => self.yank_targeted(),

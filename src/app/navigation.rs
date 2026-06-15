@@ -417,6 +417,33 @@ impl App {
         self.status_message = format!("Synced {} panel(s) to current dir", count - 1);
     }
 
+    /// Follow the symlink under the cursor: enter its target directory, or select
+    /// the target file in its parent directory. Reports broken links.
+    pub(super) fn follow_symlink(&mut self) {
+        let link = match self.active_panel().selected_entry() {
+            Some(e) if e.is_symlink => e.path.clone(),
+            _ => {
+                self.status_message = "Not a symlink".into();
+                return;
+            }
+        };
+        // canonicalize follows the whole link chain to an absolute target.
+        let target = match std::fs::canonicalize(&link) {
+            Ok(t) => t,
+            Err(_) => {
+                self.status_message = "Broken symlink (target missing)".into();
+                return;
+            }
+        };
+        let idx = self.tab().active;
+        if target.is_dir() {
+            self.navigate_cached(target, idx, None);
+        } else if let Some(parent) = target.parent() {
+            let name = target.file_name().map(|n| n.to_string_lossy().into_owned());
+            self.navigate_cached(parent.to_path_buf(), idx, name);
+        }
+    }
+
     pub fn which_key_hints(&self) -> Option<Vec<(&'static str, &'static str)>> {
         const LEADER_HINTS: &[(&str, &str)] = &[
             ("", "Toggle"),
@@ -569,6 +596,15 @@ mod tests {
         app.equalize_panels();
         // navigate_cached sets the path synchronously before the async reload.
         assert_eq!(app.tab().panels[1].path, active_path);
+    }
+
+    #[tokio::test]
+    async fn follow_symlink_on_non_symlink_reports() {
+        let entries = crate::app::make_test_entries(&["a.txt"]);
+        let mut app = App::new_for_test(entries);
+        app.active_panel_mut().selected = 1; // "a.txt", not a symlink
+        app.follow_symlink();
+        assert_eq!(app.status_message, "Not a symlink");
     }
 
     #[tokio::test]
