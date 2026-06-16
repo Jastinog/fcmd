@@ -74,6 +74,8 @@ pub enum TaskEvent {
     },
     DeleteFinished {
         summary: String,
+        /// Restorable handles for items sent to the trash this operation.
+        trashed: Vec<crate::fs::trash::TrashedItem>,
     },
     ArchiveFinished {
         summary: String,
@@ -308,6 +310,7 @@ impl TaskManager {
                     if let Some(DeleteMsg::Finished {
                         deleted,
                         errors,
+                        trashed,
                         permanent,
                         cancelled,
                     }) = finished
@@ -327,7 +330,7 @@ impl TaskManager {
                             cancelled,
                             summary: summary.clone(),
                         };
-                        events.push(TaskEvent::DeleteFinished { summary });
+                        events.push(TaskEvent::DeleteFinished { summary, trashed });
                     }
                 }
                 TaskKind::Archive { rx, is_create } => {
@@ -727,6 +730,7 @@ mod tests {
         tx.send(DeleteMsg::Finished {
             deleted: 3,
             errors: vec![],
+            trashed: vec![],
             permanent: false,
             cancelled: false,
         })

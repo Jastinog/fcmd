@@ -285,6 +285,7 @@ impl App {
             (' ', KeyCode::Char('m')) => self.clear_visual_mark(),
             (' ', KeyCode::Char('b')) => self.open_bookmarks(),
             (' ', KeyCode::Char('j')) => self.open_tasks(),
+            (' ', KeyCode::Char('r')) => self.open_trash(),
             (' ', KeyCode::Char('?')) => self.mode = Mode::Help,
             _ => return false,
         }

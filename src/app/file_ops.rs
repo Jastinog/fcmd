@@ -68,6 +68,7 @@ impl App {
         tokio::task::spawn_blocking(move || {
             let mut deleted = 0usize;
             let mut errors = Vec::new();
+            let mut trashed = Vec::new();
             let mut cancelled = false;
             let mut last_report: Option<std::time::Instant> = None;
             for (i, path) in paths.iter().enumerate() {
@@ -94,19 +95,28 @@ impl App {
                         current: name.clone(),
                     });
                 }
-                let result = if permanent {
-                    ops::remove_path(path)
+                if permanent {
+                    match ops::remove_path(path) {
+                        Ok(()) => deleted += 1,
+                        Err(e) => errors.push(format!("{name}: {e}")),
+                    }
                 } else {
-                    trash::delete(path).map_err(std::io::Error::other)
-                };
-                match result {
-                    Ok(()) => deleted += 1,
-                    Err(e) => errors.push(format!("{name}: {e}")),
+                    match crate::fs::trash::trash(path) {
+                        // Trashed and tracked: keep the handle so it can be restored.
+                        Ok(Some(item)) => {
+                            deleted += 1;
+                            trashed.push(item);
+                        }
+                        // Trashed but the OS gave us no way to track it for restore.
+                        Ok(None) => deleted += 1,
+                        Err(e) => errors.push(format!("{name}: {e}")),
+                    }
                 }
             }
             let _ = tx.blocking_send(DeleteMsg::Finished {
                 deleted,
                 errors,
+                trashed,
                 permanent,
                 cancelled,
             });

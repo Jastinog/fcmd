@@ -401,6 +401,10 @@ impl App {
                 self.open_tasks();
             }
 
+            "trash" | "restore" => {
+                self.open_trash();
+            }
+
             "brename" | "bmrn" => {
                 let parts: Vec<&str> = match arg.filter(|a| !a.is_empty()) {
                     Some(a) => a.splitn(2, ' ').collect(),
