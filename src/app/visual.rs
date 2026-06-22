@@ -61,16 +61,10 @@ impl App {
                     self.status_message = format!("Yanked {n} item(s)");
                 }
             }
-            KeyCode::Char('d') => {
+            KeyCode::Char('d') | KeyCode::Char('D') => {
                 let items = self.targeted_path_types();
                 self.exit_visual();
-                self.confirm_permanent = false;
                 self.request_delete_paths(items);
-            }
-            KeyCode::Char('D') => {
-                let items = self.targeted_path_types();
-                self.exit_visual();
-                self.request_permanent_delete_paths(items);
             }
 
             KeyCode::Char('p') => {
@@ -189,14 +183,9 @@ impl App {
                     self.status_message = format!("Yanked {n} item(s)");
                 }
             }
-            KeyCode::Char('d') => {
+            KeyCode::Char('d') | KeyCode::Char('D') => {
                 let items = self.targeted_path_types();
-                self.confirm_permanent = false;
                 self.request_delete_paths(items);
-            }
-            KeyCode::Char('D') => {
-                let items = self.targeted_path_types();
-                self.request_permanent_delete_paths(items);
             }
 
             KeyCode::Char('p') => {

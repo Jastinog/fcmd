@@ -39,13 +39,7 @@ impl App {
                     last_summary = Some(summary);
                     needs_refresh = true;
                 }
-                TaskEvent::DeleteFinished { summary, trashed } => {
-                    // Record the trashed batch on the undo stack so `u` restores
-                    // it and the trash overlay can list/restore individual items.
-                    if !trashed.is_empty() {
-                        let records = trashed.into_iter().map(ops::OpRecord::Trashed).collect();
-                        self.undo_stack.push(records);
-                    }
+                TaskEvent::DeleteFinished { summary } => {
                     last_summary = Some(summary);
                     needs_refresh = true;
                 }

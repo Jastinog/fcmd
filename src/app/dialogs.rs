@@ -439,7 +439,6 @@ mod tests {
         let mut app = App::new_for_test(entries);
         // Spawn a delete task so a task is Running.
         app.confirm_paths = vec![(PathBuf::from("/tmp/nonexistent_test_file"), false)];
-        app.confirm_permanent = true;
         app.execute_delete();
         assert!(app.task_manager.active_count() > 0);
 

@@ -40,10 +40,6 @@ pub enum DeleteMsg {
     Finished {
         deleted: usize,
         errors: Vec<String>,
-        /// Restorable handles for items moved to the trash (empty for permanent
-        /// deletes or items the OS could not track).
-        trashed: Vec<crate::fs::trash::TrashedItem>,
-        permanent: bool,
         /// True when the user cancelled the delete; the items removed so far still count.
         cancelled: bool,
     },
@@ -178,12 +174,6 @@ pub enum FileOpResult {
         last_error: Option<String>,
     },
     Undo {
-        result: Result<String, String>,
-    },
-    /// Restore of trashed items finished; `restored_ids` are the items that
-    /// made it back and should be dropped from the undo history.
-    TrashRestore {
-        restored_ids: Vec<u64>,
         result: Result<String, String>,
     },
     ChmodPrefill {

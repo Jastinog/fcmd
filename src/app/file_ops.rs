@@ -20,13 +20,6 @@ impl App {
 
     pub(super) fn request_delete(&mut self) {
         let items = self.targeted_path_types();
-        self.confirm_permanent = false;
-        self.request_delete_paths(items);
-    }
-
-    pub(super) fn request_permanent_delete(&mut self) {
-        let items = self.targeted_path_types();
-        self.confirm_permanent = true;
         self.request_delete_paths(items);
     }
 
@@ -40,14 +33,6 @@ impl App {
         self.mode = Mode::Confirm;
     }
 
-    pub(super) fn request_permanent_delete_paths(
-        &mut self,
-        items: Vec<(std::path::PathBuf, bool)>,
-    ) {
-        self.confirm_permanent = true;
-        self.request_delete_paths(items);
-    }
-
     pub(super) fn targeted_path_types(&self) -> Vec<(std::path::PathBuf, bool)> {
         self.active_panel()
             .targeted_register_entries()
@@ -58,7 +43,6 @@ impl App {
 
     pub(super) fn execute_delete(&mut self) {
         let items = std::mem::take(&mut self.confirm_paths);
-        let permanent = self.confirm_permanent;
         let total = items.len();
         let paths: Vec<PathBuf> = items.into_iter().map(|(p, _)| p).collect();
         let (tx, rx) = tokio::sync::mpsc::channel(64);
@@ -68,7 +52,6 @@ impl App {
         tokio::task::spawn_blocking(move || {
             let mut deleted = 0usize;
             let mut errors = Vec::new();
-            let mut trashed = Vec::new();
             let mut cancelled = false;
             let mut last_report: Option<std::time::Instant> = None;
             for (i, path) in paths.iter().enumerate() {
@@ -95,34 +78,19 @@ impl App {
                         current: name.clone(),
                     });
                 }
-                if permanent {
-                    match ops::remove_path(path) {
-                        Ok(()) => deleted += 1,
-                        Err(e) => errors.push(format!("{name}: {e}")),
-                    }
-                } else {
-                    match crate::fs::trash::trash(path) {
-                        // Trashed and tracked: keep the handle so it can be restored.
-                        Ok(Some(item)) => {
-                            deleted += 1;
-                            trashed.push(item);
-                        }
-                        // Trashed but the OS gave us no way to track it for restore.
-                        Ok(None) => deleted += 1,
-                        Err(e) => errors.push(format!("{name}: {e}")),
-                    }
+                match ops::remove_path(path) {
+                    Ok(()) => deleted += 1,
+                    Err(e) => errors.push(format!("{name}: {e}")),
                 }
             }
             let _ = tx.blocking_send(DeleteMsg::Finished {
                 deleted,
                 errors,
-                trashed,
-                permanent,
                 cancelled,
             });
         });
 
-        self.task_manager.add_delete(rx, permanent, cancel);
+        self.task_manager.add_delete(rx, cancel);
         self.mode = Mode::Normal;
     }
 
@@ -318,13 +286,13 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn request_permanent_delete_paths_sets_permanent() {
+    async fn request_delete_paths_enters_confirm() {
         let entries = make_test_entries(&["a.txt"]);
         let mut app = App::new_for_test(entries);
         let items = vec![(PathBuf::from("/test/a.txt"), false)];
-        app.request_permanent_delete_paths(items);
-        assert!(app.confirm_permanent);
+        app.request_delete_paths(items);
         assert_eq!(app.mode, Mode::Confirm);
+        assert_eq!(app.confirm_paths.len(), 1);
     }
 
     #[tokio::test]
@@ -332,7 +300,6 @@ mod tests {
         let entries = make_test_entries(&["a.txt"]);
         let mut app = App::new_for_test(entries);
         app.confirm_paths = vec![(PathBuf::from("/tmp/nonexistent_test_file"), false)];
-        app.confirm_permanent = true;
         app.mode = Mode::Confirm;
         app.execute_delete();
         assert_eq!(app.mode, Mode::Normal);

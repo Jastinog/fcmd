@@ -8,7 +8,6 @@
 pub mod du;
 pub mod ops;
 pub mod perms;
-pub mod trash;
 
 /// Free and total bytes of the filesystem containing `path`.
 ///

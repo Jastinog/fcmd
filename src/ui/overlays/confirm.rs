@@ -11,8 +11,7 @@ use crate::ui::util::{display_width, fit_truncated};
 
 pub(in crate::ui) fn render_confirm_popup(f: &mut Frame, app: &App, area: Rect) {
     let t = &app.theme;
-    let permanent = app.confirm_permanent;
-    let accent = if permanent { t.red } else { t.yellow };
+    let accent = t.red;
     let paths = &app.confirm_paths;
     let n = paths.len();
 
@@ -27,11 +26,7 @@ pub(in crate::ui) fn render_confirm_popup(f: &mut Frame, app: &App, area: Rect) 
 
     f.render_widget(Clear, popup);
 
-    let title = if permanent {
-        format!(" 󰗨 Permanently Delete ({n}) ")
-    } else {
-        format!("  Move to Trash ({n}) ")
-    };
+    let title = format!(" 󰗨 Permanently Delete ({n}) ");
     let block = Block::default()
         .borders(Borders::ALL)
         .border_style(Style::default().fg(accent))

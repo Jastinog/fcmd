@@ -36,7 +36,6 @@ mod search;
 mod select_pattern;
 pub(crate) mod task_manager;
 mod tasks;
-mod trash;
 mod tree;
 mod viewer;
 mod visual;
@@ -74,7 +73,6 @@ pub enum Mode {
     BulkRename,
     Archive,
     Tasks,
-    Trash,
 }
 
 #[derive(PartialEq, Eq, Clone, Copy, Debug)]
@@ -169,7 +167,6 @@ pub struct App {
     pub undo_stack: UndoStack,
     pub confirm_paths: Vec<(PathBuf, bool)>, // (path, is_dir)
     pub confirm_scroll: usize,
-    pub confirm_permanent: bool,
     pub help_scroll: usize,
     // Search
     pub search_query: String,
@@ -254,9 +251,6 @@ pub struct App {
     pub bookmark_scroll: usize,
     pub bookmark_rename_old: Option<String>,
     pub bookmark_add_path: Option<PathBuf>,
-    // Trash-restore overlay
-    pub trash_cursor: usize,
-    pub trash_scroll: usize,
     // Chmod/Chown
     pub chmod_paths: Vec<PathBuf>,
     pub chown_picker: Option<chmod::ChownPicker>,
@@ -400,7 +394,6 @@ impl App {
             undo_stack: UndoStack::new(),
             confirm_paths: Vec::new(),
             confirm_scroll: 0,
-            confirm_permanent: false,
             help_scroll: 0,
             search_query: String::new(),
             search_saved_cursor: 0,
@@ -456,8 +449,6 @@ impl App {
             bookmarks,
             bookmark_cursor: 0,
             bookmark_scroll: 0,
-            trash_cursor: 0,
-            trash_scroll: 0,
             bookmark_rename_old: None,
             bookmark_add_path: None,
             chmod_paths: Vec::new(),
@@ -747,30 +738,6 @@ impl App {
                 }
                 self.refresh_panels();
             }
-            FileOpResult::TrashRestore {
-                restored_ids,
-                result,
-            } => {
-                // Drop only the items that actually came back; failed ones stay
-                // recoverable via the overlay and `u`.
-                for id in restored_ids {
-                    self.undo_stack.remove_trashed(id);
-                }
-                match result {
-                    Ok(msg) => self.status_message = msg,
-                    Err(e) => self.status_message = format!("Restore error: {e}"),
-                }
-                if self.mode == Mode::Trash {
-                    let remaining = self.undo_stack.trashed().len();
-                    if remaining == 0 {
-                        self.mode = Mode::Normal;
-                    } else {
-                        self.trash_cursor = self.trash_cursor.min(remaining - 1);
-                        self.adjust_trash_scroll();
-                    }
-                }
-                self.refresh_panels();
-            }
             FileOpResult::ChmodPrefill { prefill, paths } => {
                 if self.mode == Mode::Normal
                     || self.mode == Mode::Visual
@@ -944,7 +911,6 @@ impl App {
             Mode::BulkRename => self.handle_bulk_rename(key),
             Mode::Archive => self.handle_archive(key),
             Mode::Tasks => self.handle_tasks(key),
-            Mode::Trash => self.handle_trash(key),
         }
 
         self.update_preview();
@@ -1016,7 +982,6 @@ impl App {
             undo_stack: UndoStack::new(),
             confirm_paths: Vec::new(),
             confirm_scroll: 0,
-            confirm_permanent: false,
             help_scroll: 0,
             search_query: String::new(),
             search_saved_cursor: 0,
@@ -1072,8 +1037,6 @@ impl App {
             bookmarks: Vec::new(),
             bookmark_cursor: 0,
             bookmark_scroll: 0,
-            trash_cursor: 0,
-            trash_scroll: 0,
             bookmark_rename_old: None,
             bookmark_add_path: None,
             chmod_paths: Vec::new(),
@@ -2308,17 +2271,6 @@ mod tests {
         app.active_panel_mut().selected = 1; // "a.txt"
         app.request_delete();
         assert_eq!(app.mode, Mode::Confirm);
-        assert!(!app.confirm_permanent);
         assert_eq!(app.confirm_paths.len(), 1);
-    }
-
-    #[tokio::test]
-    async fn request_permanent_delete_sets_flag() {
-        let entries = make_test_entries(&["a.txt"]);
-        let mut app = App::new_for_test(entries);
-        app.active_panel_mut().selected = 1;
-        app.request_permanent_delete();
-        assert_eq!(app.mode, Mode::Confirm);
-        assert!(app.confirm_permanent);
     }
 }

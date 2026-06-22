@@ -479,7 +479,7 @@ impl App {
         ];
         const YANK_HINTS: &[(&str, &str)] =
             &[("y", "yank"), ("p", "yank path"), ("n", "yank name")];
-        const DELETE_HINTS: &[(&str, &str)] = &[("d", "trash"), ("D", "permanent")];
+        const DELETE_HINTS: &[(&str, &str)] = &[("d", "delete")];
         const CHANGE_HINTS: &[(&str, &str)] =
             &[("p", "permissions"), ("o", "owner"), ("w", "bulk rename")];
         const MARK_HINTS: &[(&str, &str)] = &[("a-z", "go to mark")];

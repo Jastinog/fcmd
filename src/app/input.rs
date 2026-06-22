@@ -237,7 +237,6 @@ impl App {
             // Follow the symlink under the cursor to its target.
             ('g', KeyCode::Char('f')) => self.follow_symlink(),
             ('d', KeyCode::Char('d')) => self.request_delete(),
-            ('d', KeyCode::Char('D')) => self.request_permanent_delete(),
             ('y', KeyCode::Char('y')) => self.yank_targeted(),
             ('y', KeyCode::Char('p')) => self.yank_path(),
             ('y', KeyCode::Char('n')) => self.yank_name(),
@@ -285,7 +284,6 @@ impl App {
             (' ', KeyCode::Char('m')) => self.clear_visual_mark(),
             (' ', KeyCode::Char('b')) => self.open_bookmarks(),
             (' ', KeyCode::Char('j')) => self.open_tasks(),
-            (' ', KeyCode::Char('r')) => self.open_trash(),
             (' ', KeyCode::Char('?')) => self.mode = Mode::Help,
             _ => return false,
         }

@@ -41,7 +41,6 @@ pub enum TaskKind {
     },
     Delete {
         rx: mpsc::Receiver<DeleteMsg>,
-        permanent: bool,
     },
     Archive {
         rx: mpsc::Receiver<ArchiveMsg>,
@@ -74,8 +73,6 @@ pub enum TaskEvent {
     },
     DeleteFinished {
         summary: String,
-        /// Restorable handles for items sent to the trash this operation.
-        trashed: Vec<crate::fs::trash::TrashedItem>,
     },
     ArchiveFinished {
         summary: String,
@@ -142,22 +139,16 @@ impl TaskManager {
         id
     }
 
-    pub fn add_delete(
-        &mut self,
-        rx: mpsc::Receiver<DeleteMsg>,
-        permanent: bool,
-        cancel: Arc<AtomicBool>,
-    ) -> u32 {
+    pub fn add_delete(&mut self, rx: mpsc::Receiver<DeleteMsg>, cancel: Arc<AtomicBool>) -> u32 {
         let id = self.next_id;
         self.next_id += 1;
-        let verb = if permanent { "Deleting" } else { "Trashing" };
         self.tasks.push(Task {
             id,
-            kind: TaskKind::Delete { rx, permanent },
+            kind: TaskKind::Delete { rx },
             started_at: Instant::now(),
             state: TaskState::Running {
                 progress_pct: 0,
-                status_text: format!("{verb}..."),
+                status_text: "Deleting...".into(),
             },
             cancel,
         });
@@ -271,8 +262,7 @@ impl TaskManager {
                         });
                     }
                 }
-                TaskKind::Delete { rx, permanent } => {
-                    let permanent = *permanent;
+                TaskKind::Delete { rx } => {
                     let mut last_progress = None;
                     let mut finished = None;
 
@@ -300,37 +290,33 @@ impl TaskManager {
                         } else {
                             0
                         };
-                        let verb = if permanent { "Deleting" } else { "Trashing" };
                         task.state = TaskState::Running {
                             progress_pct: pct,
-                            status_text: format!("{verb} [{}/{}] {current}", done + 1, total),
+                            status_text: format!("Deleting [{}/{}] {current}", done + 1, total),
                         };
                     }
 
                     if let Some(DeleteMsg::Finished {
                         deleted,
                         errors,
-                        trashed,
-                        permanent,
                         cancelled,
                     }) = finished
                     {
-                        let verb = if permanent { "Deleted" } else { "Trashed" };
                         let summary = if cancelled && errors.is_empty() {
-                            format!("Cancelled \u{2014} {verb} {deleted} item(s) before stop")
+                            format!("Cancelled \u{2014} Deleted {deleted} item(s) before stop")
                         } else if errors.is_empty() {
-                            format!("{verb} {deleted} item(s)")
+                            format!("Deleted {deleted} item(s)")
                         } else if deleted == 0 {
-                            format!("{verb} failed: {}", errors[0])
+                            format!("Deleted failed: {}", errors[0])
                         } else {
-                            format!("{verb} {deleted}, {} failed: {}", errors.len(), errors[0])
+                            format!("Deleted {deleted}, {} failed: {}", errors.len(), errors[0])
                         };
                         task.state = TaskState::Finished {
                             success: errors.is_empty() && !cancelled,
                             cancelled,
                             summary: summary.clone(),
                         };
-                        events.push(TaskEvent::DeleteFinished { summary, trashed });
+                        events.push(TaskEvent::DeleteFinished { summary });
                     }
                 }
                 TaskKind::Archive { rx, is_create } => {
@@ -470,12 +456,7 @@ impl TaskManager {
         match task.kind {
             TaskKind::Copy { .. } => "Copy",
             TaskKind::Move { .. } => "Move",
-            TaskKind::Delete {
-                permanent: true, ..
-            } => "Delete",
-            TaskKind::Delete {
-                permanent: false, ..
-            } => "Trash",
+            TaskKind::Delete { .. } => "Delete",
             TaskKind::Archive {
                 is_create: true, ..
             } => "Archive",
@@ -546,7 +527,7 @@ mod tests {
     fn add_delete_creates_task() {
         let mut tm = TaskManager::new();
         let (_tx, rx) = mpsc::channel(1);
-        let _id = tm.add_delete(rx, false, flag());
+        let _id = tm.add_delete(rx, flag());
         assert_eq!(tm.tasks().len(), 1);
         assert_eq!(tm.active_count(), 1);
     }
@@ -725,13 +706,11 @@ mod tests {
     async fn poll_all_delete_finished() {
         let mut tm = TaskManager::new();
         let (tx, rx) = mpsc::channel(4);
-        tm.add_delete(rx, false, flag());
+        tm.add_delete(rx, flag());
 
         tx.send(DeleteMsg::Finished {
             deleted: 3,
             errors: vec![],
-            trashed: vec![],
-            permanent: false,
             cancelled: false,
         })
         .await

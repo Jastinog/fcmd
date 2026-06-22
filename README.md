@@ -48,7 +48,7 @@ Full Vim motions: `hjkl`, `gg`/`G`, `Ctrl-d`/`Ctrl-u`, `/` incremental search wi
 
 ### File Operations with Undo
 
-Yank (`yy`), delete (`dd` to trash / `dD` permanently), paste (`p`/`P`), rename (`r`), create (`a`). All destructive operations are undoable (`u`) with a 50-step stack. Paste runs in the background with a progress indicator.
+Yank (`yy`), delete (`dd`, permanent with confirmation), paste (`p`/`P`), rename (`r`), create (`a`). Paste, move, rename and create are undoable (`u`) with a 50-step stack; permanent deletion is not. Paste runs in the background with a progress indicator.
 
 ![Delete confirmation](assets/delete-confirm.png)
 
@@ -203,8 +203,7 @@ cargo install --path .
 | Key | Action |
 |-----|--------|
 | `yy` | Yank (copy to register) |
-| `dd` | Move to trash (with confirmation) |
-| `dD` | Permanently delete (with confirmation) |
+| `dd` | Permanently delete (with confirmation) |
 | `p` | Paste into active panel |
 | `P` | Paste (overwrite existing) |
 | `r` | Rename in-place |

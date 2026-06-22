@@ -12,7 +12,6 @@ mod input;
 mod search;
 mod tasks;
 mod theme_picker;
-mod trash;
 mod viewer;
 mod which_key;
 
@@ -32,7 +31,6 @@ pub(super) use search::render_filter_popup;
 pub(super) use search::render_search_popup;
 pub(super) use tasks::render_tasks_overlay;
 pub(super) use theme_picker::render_theme_picker;
-pub(super) use trash::render_trash;
 pub(super) use viewer::render_viewer;
 pub(super) use which_key::render_which_key;
 

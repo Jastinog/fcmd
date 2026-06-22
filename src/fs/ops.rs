@@ -29,8 +29,6 @@ pub enum OpRecord {
     Moved { src: PathBuf, dst: PathBuf },
     Created { path: PathBuf },
     Renamed { from: PathBuf, to: PathBuf },
-    /// An item moved to the system trash; undo restores it to its origin.
-    Trashed(crate::fs::trash::TrashedItem),
 }
 
 const MAX_UNDO: usize = 50;
@@ -57,41 +55,6 @@ impl UndoStack {
 
     pub fn pop(&mut self) -> Option<Vec<OpRecord>> {
         self.entries.pop_back()
-    }
-
-    /// All trashed items still recoverable through the undo history, newest
-    /// first. Backs the trash-restore overlay (the undo stack is the single
-    /// source of truth, so restoring here and via `u` can never desync).
-    pub fn trashed(&self) -> Vec<crate::fs::trash::TrashedItem> {
-        self.entries
-            .iter()
-            .rev()
-            .flat_map(|batch| batch.iter())
-            .filter_map(|rec| match rec {
-                OpRecord::Trashed(item) => Some(item.clone()),
-                _ => None,
-            })
-            .collect()
-    }
-
-    /// Remove and return the trashed item with the given id, dropping any batch
-    /// it leaves empty. Used when the overlay restores a single item so a later
-    /// `u` won't try to restore it again.
-    pub fn remove_trashed(&mut self, id: u64) -> Option<crate::fs::trash::TrashedItem> {
-        for bi in 0..self.entries.len() {
-            if let Some(ri) = self.entries[bi].iter().position(
-                |rec| matches!(rec, OpRecord::Trashed(item) if item.id == id),
-            ) {
-                let OpRecord::Trashed(item) = self.entries[bi].remove(ri) else {
-                    unreachable!()
-                };
-                if self.entries[bi].is_empty() {
-                    self.entries.remove(bi);
-                }
-                return Some(item);
-            }
-        }
-        None
     }
 }
 
@@ -808,7 +771,6 @@ pub fn undo(records: &[OpRecord]) -> std::io::Result<String> {
             OpRecord::Renamed { from, to } => {
                 fs::rename(to, from)?;
             }
-            OpRecord::Trashed(item) => crate::fs::trash::restore(item)?,
         }
     }
     Ok(format!("Undone {count} operation(s)"))
